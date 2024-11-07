@@ -1,0 +1,76 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django stuff:
+*.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+
+# Ignore the database file
+# db.sqlite3
+
+# Local environment settings
+.env
+.env.*
+
+# Django migrations
+# */migrations/*
+
+# Virtual environments
+venv/
+env/
+*.env
+*.venv
+venv.bak/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.cursor-temp/
+.zedstate/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# PyCharm and other IDE-specific files
+__pycache__/
+*.swp
+*.swo
+*.bak
+*.backup
+.idea/
+*.sublime-*
+
+# Coverage reports
+htmlcov/
+.coverage
+.tox/
+.pytest_cache/
+
+# Test and build artifacts
+.coverage
+coverage.xml
+*.cover
+.cache
+nosetests.xml
+pip-log.txt
+build/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Profiling data
+.prof
+
+# Sphinx documentation
+docs/_build/
