@@ -74,7 +74,7 @@ This model ensures compatibility with ActivityStreams and generates JSON-LD for 
 The Note model represents textual content authored by an Actor. It includes:
 
 * **content**: The main text of the note.
-* **linked_to**: A reference to the Actor who created the note.
+* **actor**: A reference to the Actor who created the note.
 * **visibility**: Controls the audience for the note (public, private, etc.).
 
 Notes are a core content type in ActivityPub and can be linked to activities like Create or Announce.
