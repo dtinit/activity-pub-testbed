@@ -1,0 +1,6 @@
+<form method="POST">
+    {% csrf_token %}
+    <label for="activity">Describe the activity:</label><br>
+    <textarea name="activity" rows="4" cols="50"></textarea><br>
+    <button type="submit">Report Activity</button>
+</form>
