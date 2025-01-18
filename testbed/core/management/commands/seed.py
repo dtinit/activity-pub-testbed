@@ -90,10 +90,23 @@ class Command(BaseCommand):
 
             # Create PortabilityOutbox
             # Each outbox is linked to an actor
+            """
             outbox, created = PortabilityOutbox.objects.get_or_create(actor=actor)
             if created:
                 self.stdout.write(self.style.SUCCESS(f'Created outbox for actor: {username}'))
             # outbox.notes.set(notes)
             outbox.activities.set(activities)
+            """
+
+            outbox, created = PortabilityOutbox.objects.get_or_create(actor=actor)
+
+            if created:
+                self.stdout.write(self.style.SUCCESS(f'Created outbox for actor: {username}'))
+            
+            # Add activities one by one
+            for activity in activities:
+                outbox.activities.add(activity)
+                self.stdout.write(self.style.SUCCESS(f'Added activity {activity.id} to outbox for actor: {username}'))
 
         self.stdout.write(self.style.SUCCESS('Database seeding completed.'))
+    
