@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from testbed.core.models import Actor, PortabilityOutbox, Activity, Note
 from faker import Faker
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 
 class Command(BaseCommand):
@@ -45,12 +45,13 @@ class Command(BaseCommand):
             
             # Creating Actor
             full_name = fake.name()
-            created_at = fake.date_time_last_year()
+            last_day_last_year = datetime(date.today().year, 1, 1) - timedelta(days=1)
+            created_at = fake.date_time_between(start_date='-2y', end_date=last_day_last_year)            
             updated_at = fake.date_time_this_year()
             previously = {} # TODO: Check how to generate data for this field
             actor, created = Actor.objects.get_or_create(
                 user=user,
-                usernam=username,
+                username=username,
                 defaults={
                     'full_name': full_name,
                     'created_at': created_at,
@@ -84,5 +85,15 @@ class Command(BaseCommand):
                     timestamp=datetime.now(),
                     visibility='public' # We could change this to random.choices
                 )
-                self.stdout.write(f'Create activity for actor: {username}')
+                self.stdout.write(f'Created activity for actor: {username}')
                 activities.append(activity)
+
+            # Create PortabilityOutbox
+            # Each outbox is linked to an actor
+            outbox, created = PortabilityOutbox.objects.get_or_create(actor=actor)
+            if created:
+                self.stdout.write(self.style.SUCCESS(f'Created outbox for actor: {username}'))
+            # outbox.notes.set(notes)
+            outbox.activities.set(activities)
+
+        self.stdout.write(self.style.SUCCESS('Database seeding completed.'))
