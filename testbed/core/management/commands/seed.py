@@ -2,6 +2,8 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from testbed.core.models import Actor, PortabilityOutbox, Activity, Note
 from faker import Faker
+from datetime import datetime
+
 
 class Command(BaseCommand):
     help = 'Seed the database with testing data'
@@ -24,5 +26,63 @@ class Command(BaseCommand):
                     email='admin@testing.com',
                     # password='admin123'
                 )
-            
+            else:
+                self.stdout.write(self.style.WARNING('Skipping admin user creation.'))
+        else:
+            self.stdout.write(self.style.SUCCESS('Admin user already exists.'))
 
+        # Create multiple tests actors and associated data
+        for _ in range(10):
+            # Creating User
+            username = fake.user_name()
+            email = fake.email()
+            user, created = User.objects.get_or_create(
+                username=username,
+                defaults={'email': email}
+            )
+            if created:
+                self.stdout.write(f'Created user: {username}')
+            
+            # Creating Actor
+            full_name = fake.name()
+            created_at = fake.date_time_last_year()
+            updated_at = fake.date_time_this_year()
+            previously = {} # TODO: Check how to generate data for this field
+            actor, created = Actor.objects.get_or_create(
+                user=user,
+                usernam=username,
+                defaults={
+                    'full_name': full_name,
+                    'created_at': created_at,
+                    'updated_at': updated_at,
+                    'previously': previously
+                }
+            )
+
+            if created:
+                self.stdout.write(f'Created actor: {actor}')
+
+            # Create Notes and Activities
+            # Each note is linked to an activity
+            notes = []
+            activities = []
+
+            for _ in range(5):
+                note = Note.objects.create(
+                    actor=actor,
+                    content=fake.text(),
+                    published=datetime.now(),
+                    visibility='public' # We could change this to random.choices
+                )
+                self.stdout.write(f'Created note for actor: {username}')
+                notes.append(note)
+
+                activity = Activity.objects.create(
+                    actor=actor,
+                    type='Create', # Could be fake.random_element(elements=('Create', 'Like', 'Update', 'Follow', 'Announce', 'Delete', 'Undo', 'Flag')),
+                    note=note,
+                    timestamp=datetime.now(),
+                    visibility='public' # We could change this to random.choices
+                )
+                self.stdout.write(f'Create activity for actor: {username}')
+                activities.append(activity)
