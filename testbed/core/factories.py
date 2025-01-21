@@ -23,22 +23,6 @@ class ActorFactory(DjangoModelFactory):
     full_name = factory.Faker('name')
     previously = factory.Dict({})
 
-    """
-    Check if username failes any validation:
-        1. Contains non-alphanumeric characters
-        2. Contains spaces
-        3. Is less than 3 characters
-    """
-    @factory.post_generation
-    def validate_username(self, create, extracted, **kwargs):
-        if not self.username.isalnum() or ' ' in self.username or len(self.username) < 3:
-            # Remove non-alphanumeric characters
-            self.username = ''.join(c for c in self.username if c.isalnum())
-            # If resulting username is too short, 
-            if len(self.username) < 3:
-                self.username += 'x' * (3 - len(self.username))
-            self.save()
-
 class NoteFactory(DjangoModelFactory):
     class Meta:
         model = Note
