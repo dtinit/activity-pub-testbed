@@ -1,7 +1,7 @@
 import factory
 from factory.django import DjangoModelFactory
 from django.contrib.auth.models import User
-from core.models import Actor, Note, Activity, PortabilityOutbox
+from testbed.core.models import Actor, Note, Activity, PortabilityOutbox
 
 
 class UserFactory(DjangoModelFactory):
