@@ -14,6 +14,11 @@ class UserFactory(DjangoModelFactory):
     is_staff = False
     is_active = True
 
+    @classmethod
+    def _after_postgeneration(cls, instance, create, results=None):
+        if create:
+            instance.save()
+
 class ActorFactory(DjangoModelFactory):
     class Meta:
         model = Actor
