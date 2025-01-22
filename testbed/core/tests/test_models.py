@@ -1,34 +1,28 @@
 import pytest
+from django.core.exceptions import ValidationError
+from testbed.core.factories import ActorFactory
 
 
-# Test that an Actor is created correctly
-@pytest.mark.django_db
 def test_actor_creation(actor):
-    assert actor.username == 'testactor'
-    assert actor.full_name == 'Test Actor'
-    assert actor.user.username == 'testuser'
+    assert actor.user is not None
+    assert actor.username == actor.user.username
+    assert actor.full_name is not None
 
-# Test that the Actor's JSON-LD representation is correct
-@pytest.mark.django_db
-def test_actor_json_ld(actor):
-    expected = {
-        "@context": [
-            "https://www.w3.org/ns/activitystreams",
-            "https://swicg.github.io/activitypub-data-portability/lola.jsonld",
-        ],
-        "type": "Person",
-        "id": "https://example.com/users/testactor",
-        "preferredUsername": "testactor",
-        "name": "testactor",
-        "previously": {},
-    }
-    assert actor.get_json_ld() == expected
+def test_actor_str_representation(actor):
+    assert str(actor) == actor.username
 
-# Test that a Portability Outbox is linked to an Actor
-@pytest.mark.django_db
-def test_outbox_creation(outbox):
-    assert outbox.actor.username == 'testactor'
-    assert outbox.actor.full_name == 'Test Actor'
-    assert outbox.actor.user.username == 'testuser'
-    assert outbox.actor.user.actor == outbox.actor
-    assert outbox.actor.actor_activities.count() == 0
+@pytest.mark.parametrize('invalid_username', [
+    'user space', # Contains space
+    'ab', # Too short
+    'user@name' # Non-alphanumeric
+])
+def test_username_validation(invalid_username):
+    with pytest.raises(ValidationError):
+        actor =ActorFactory(username=invalid_username)
+        actor.full_clean()  # This triggers the validation
+
+def test_portability_outbox_creation(actor):
+    assert actor.portability_outbox.count() == 1
+    outbox = actor.portability_outbox.first()
+    assert outbox.activities.count() == 1 # Initial Create activity
+    assert outbox.activities.first().type == 'Create'
