@@ -39,20 +39,3 @@ class ActivityFactory(DjangoModelFactory):
     type = factory.Iterator(['Create', 'Like', 'Update', 'Follow', 'Announce', 'Delete', 'Undo', 'Flag'])
     note = factory.SubFactory(NoteFactory)
     visibility = factory.Iterator(['public', 'private', 'followers-only'])
-
-class PortabilityOutboxFactory(DjangoModelFactory):
-    class Meta:
-        model = PortabilityOutbox
-
-    actor = factory.SubFactory(ActorFactory)
-
-    @factory.post_generation
-    def activities(self, create, extracted, **kwargs):
-        if not create:
-            return
-        
-        if extracted:
-            for activity in extracted:
-                self.activities.add(activity)
-        else:
-            self.activities.add(ActivityFactory(actor=self.actor))

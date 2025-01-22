@@ -19,7 +19,25 @@ class Actor(models.Model):
 
     def __str__(self):
         return self.username
+    
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        super().save(*args, **kwargs)
 
+        if is_new:
+            # Create a PortabilityOutbox for new actor
+            outbox = PortabilityOutbox.objects.create(actor=self)
+
+            # Create an initial Activity for the Actor
+            activity = Activity.objects.create(
+                actor=self,
+                type='Create',
+                visibility='public'
+            )
+
+            outbox.activities.add(activity)
+
+            
     def get_json_ld(self):
         # Return a LOLA-compliant JSON-LD representation of the account
         return {
