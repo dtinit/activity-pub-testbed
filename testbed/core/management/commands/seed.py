@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
-from core.factories import ActorFactory, ActivityFactory
+from testbed.core.factories import ActorFactory, ActivityFactory
 
 
 class Command(BaseCommand):
@@ -39,7 +39,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS(
                     f'Successfully created:\n'
-                    f'- {len(actors)} actors\n'
+                    f'- {len(actors)} actors and their outboxes\n'
                     f'- {len(actors) * 5} activities with their notes'
                 )
             )
