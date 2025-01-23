@@ -28,14 +28,26 @@ class Actor(models.Model):
             # Create a PortabilityOutbox for new actor
             outbox = PortabilityOutbox.objects.create(actor=self)
 
-            # Create an initial Activity for the Actor
+            # Create an initial Activity announcing the Actor's creation
             activity = Activity.objects.create(
                 actor=self,
                 type='Create',
                 visibility='public'
             )
 
+            # Add to Outbox before modifying get_json_ld() to maintain relationship
             outbox.activities.add(activity)
+
+            # Store the original get_json_ld() output
+            original_get_json_ld = activity.get_json_ld()
+
+            # Override the activity's get_json_ld() method to include the actor as the object
+            def get_modified_json_ld():
+                base_json = original_get_json_ld()
+                base_json['object'] = self.get_json_ld()
+                return base_json
+            
+            activity.get_json_ld = get_modified_json_ld
 
             
     def get_json_ld(self):
