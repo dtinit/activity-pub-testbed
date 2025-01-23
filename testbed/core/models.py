@@ -1,6 +1,10 @@
+import logging
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+
+logger = logging.getLogger(__name__)
+
 
 def validate_username(value):
     if " " in value or not value.isalnum():
@@ -51,7 +55,7 @@ class Actor(models.Model):
             
                     activity.get_json_ld = get_modified_json_ld
             except Exception as e:
-                print(f'Error creating outbox/activity for actor: {e}')
+                logger.error(f'Error creating outbox/activity for actor: {e}')
 
             
     def get_json_ld(self):
