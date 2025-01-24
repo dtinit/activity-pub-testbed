@@ -37,7 +37,7 @@ class Actor(models.Model):
                 activity = Activity.objects.create(
                     actor=self,
                     type='Create',
-                    visibility='public'
+                    # note is left as None for Actor creation
                 )
 
                 # Add to Outbox
@@ -62,21 +62,7 @@ class Actor(models.Model):
 
 
 class Activity(models.Model):
-    # TODO: Check ActivityStreams and ActivityPub specifications
-    TYPE_CHOICES = [
-        ("Create", "Create"),
-        ("Like", "Like"),
-        ("Update", "Update"),
-        ("Follow", "Follow"),
-        ("Announce", "Announce"),
-        ("Delete", "Delete"),
-        ("Undo", "Undo"),
-        ("Flag", "Flag"),
-    ]
-
     actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="actor_activities")
-    type = models.CharField(max_length=100, choices=TYPE_CHOICES)
-    note = models.OneToOneField("Note", on_delete=models.CASCADE, related_name="note_activities", null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     visibility = models.CharField(max_length=20, default="public", choices=[
         ("public", "Public"),
@@ -84,28 +70,73 @@ class Activity(models.Model):
         ("followers-only", "Followers only")
     ])
 
-    def __str__(self):
-        return f"{self.actor.username} - {self.type} at {self.timestamp}"
+    class Meta:
+        abstract = True # This makes it a base clas that won't create its own table
+
+class CreateActivity(Activity):
+    note = models.OneToOneField(
+        "Note",
+        on_delete=models.CASCADE,
+        related_name="create_activities",
+        null=True,
+        blank=True
+    )
 
     def get_json_ld(self):
         json_ld = {
             "@context": "https://www.w3.org/ns/activitystreams",
-            "type": self.type,
+            "type": "Create",
             "id": f"https://example.com/activities/{self.id}",
             "actor": f"https://example.com/users/{self.actor.username}",
             "published": self.timestamp.isoformat(),
             "visibility": self.visibility,
         }
 
-        # Determine the object based on activity type and context
-        if self.type == 'Create':
-            if self.note:
-                json_ld['object'] = self.note.get_json_ld()
-            else:
-                # If no note, this is an Actor creation activity
-                json_ld['object'] = self.actor.get_json_ld()
-                
+        if self.note:
+            json_ld['object'] = self.note.get_json_ld()
+        else:
+            json_ld['object'] = self.actor.get_json_ld()
+
         return json_ld
+    
+
+class LikeActivity(Activity):
+    note = models.OneToOneField(
+        "Note",
+        on_delete=models.CASCADE,
+        related_name="like_activities"
+    )
+
+    def get_json_ld(self):
+        return {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Like",
+            "id": f"https://example.com/activities/{self.id}",
+            "actor": f"https://example.com/users/{self.actor.username}",
+            "object": self.note.get_json_ld(),
+            "published": self.timestamp.isoformat(),
+            "visibility": self.visibility,
+        }
+    
+
+class FollowActivity(Activity):
+    target_actor = models.ForeignKey(
+        Actor,
+        on_delete=models.CASCADE,
+        related_name="follow_activities_received"
+    )
+
+    def get_json_ld(self):
+        return {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Follow",
+            "id": f"https://example.com/activities/{self.id}",
+            "actor": f"https://example.com/users/{self.actor.username}",
+            "object": self.target_actor.get_json_ld(),
+            "published": self.timestamp.isoformat(),
+            "visibility": self.visibility,
+        }
+
 
 
 class Note(models.Model):
