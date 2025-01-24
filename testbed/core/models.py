@@ -62,7 +62,8 @@ class Actor(models.Model):
 
 
 class Activity(models.Model):
-    actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="actor_activities")
+    # actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="actor_activities") 
+    actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="%(class)s_activities") # This makes each subclass have its own related_name 
     timestamp = models.DateTimeField(auto_now_add=True)
     visibility = models.CharField(max_length=20, default="public", choices=[
         ("public", "Public"),
@@ -166,17 +167,41 @@ class Note(models.Model):
 
 class PortabilityOutbox(models.Model):
     actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="portability_outbox")
-    activities = models.ManyToManyField(Activity, related_name="portability_outbox")
+    # activities = models.ManyToManyField(Activity, related_name="portability_outbox")
+    # Update to use GenericForeignKey for different activity types
+    activities_create = models.ManyToManyField(CreateActivity, related_name="outboxes")
+    activities_like = models.ManyToManyField(LikeActivity, related_name="outboxes")
+    activities_follow = models.ManyToManyField(FollowActivity, related_name="outboxes")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"Outbox for {self.actor.username}"
 
     def get_json_ld(self):
+        # Combine all activity types
+        all_activities = list(self.activities_create.all() + \
+                              self.activities_like.all() + \
+                              self.activities_follow.all())
+        
+        # Sort by timestamp
+        all_activities.sort(key=lambda x: x.timestamp, reverse=True)
+
         return {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "OrderedCollection",
             "id": f"https://example.com/users/{self.actor.username}/outbox",
-            "totalItems": self.activities.count(),
-            "items": [activity.get_json_ld() for activity in self.activities.all()],
+            # "totalItems": self.activities.count(),
+            "totalItems": len(all_activities),
+            # "items": [activity.get_json_ld() for activity in self.activities.all()],
+            "items": [activity.get_json_ld() for activity in all_activities],
         }
+    
+    # Helper method to add any type of activity
+    def add_activity(self, activity):
+        if isinstance(activity, CreateActivity):
+            self.activities_create.add(activity)
+        elif isinstance(activity, LikeActivity):
+            self.activities_like.add(activity)
+        elif isinstance(activity, FollowActivity):
+            self.activities_follow.add(activity)
+
