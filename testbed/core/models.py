@@ -40,24 +40,12 @@ class Actor(models.Model):
                     visibility='public'
                 )
 
-                # Add to Outbox before modifying get_json_ld() to maintain relationship
+                # Add to Outbox
                 outbox.activities.add(activity)
 
-                if hasattr(activity, 'get_json_ld'):
-                    # Store the original get_json_ld() output
-                    original_get_json_ld = activity.get_json_ld()
-
-                    # Override the activity's get_json_ld() method to include the actor as the object
-                    def get_modified_json_ld():
-                        base_json = original_get_json_ld()
-                        base_json['object'] = self.get_json_ld()
-                        return base_json
-            
-                    activity.get_json_ld = get_modified_json_ld
             except Exception as e:
-                logger.error(f'Error creating outbox/activity for actor: {e}')
+                logger.error(f'Error creating outbox/activity for actor {self.username}: {e}') 
 
-            
     def get_json_ld(self):
         # Return a LOLA-compliant JSON-LD representation of the account
         return {
@@ -109,9 +97,14 @@ class Activity(models.Model):
             "visibility": self.visibility,
         }
 
-        # Note's get_json_ld() method
-        if self.note:
-            json_ld["object"] = self.note.get_json_ld()
+        # Determine the object based on activity type and context
+        if self.type == 'Create':
+            if self.note:
+                json_ld['object'] = self.note.get_json_ld()
+            else:
+                # If no note, this is an Actor creation activity
+                json_ld['object'] = self.actor.get_json_ld()
+                
         return json_ld
 
 
