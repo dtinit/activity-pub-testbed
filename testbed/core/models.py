@@ -34,14 +34,13 @@ class Actor(models.Model):
                 outbox = PortabilityOutbox.objects.create(actor=self)
 
                 # Create an initial Activity announcing the Actor's creation
-                activity = Activity.objects.create(
+                activity = CreateActivity.objects.create(
                     actor=self,
-                    type='Create',
-                    # note is left as None for Actor creation
+                    visibility='public'
                 )
 
                 # Add to Outbox
-                outbox.activities.add(activity)
+                outbox.add_activity(activity)
 
             except Exception as e:
                 logger.error(f'Error creating outbox/activity for actor {self.username}: {e}') 
@@ -62,7 +61,6 @@ class Actor(models.Model):
 
 
 class Activity(models.Model):
-    # actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="actor_activities") 
     actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="%(class)s_activities") # This makes each subclass have its own related_name 
     timestamp = models.DateTimeField(auto_now_add=True)
     visibility = models.CharField(max_length=20, default="public", choices=[
@@ -167,8 +165,6 @@ class Note(models.Model):
 
 class PortabilityOutbox(models.Model):
     actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="portability_outbox")
-    # activities = models.ManyToManyField(Activity, related_name="portability_outbox")
-    # Update to use GenericForeignKey for different activity types
     activities_create = models.ManyToManyField(CreateActivity, related_name="outboxes")
     activities_like = models.ManyToManyField(LikeActivity, related_name="outboxes")
     activities_follow = models.ManyToManyField(FollowActivity, related_name="outboxes")
@@ -176,25 +172,6 @@ class PortabilityOutbox(models.Model):
 
     def __str__(self):
         return f"Outbox for {self.actor.username}"
-
-    def get_json_ld(self):
-        # Combine all activity types
-        all_activities = list(self.activities_create.all() + \
-                              self.activities_like.all() + \
-                              self.activities_follow.all())
-        
-        # Sort by timestamp
-        all_activities.sort(key=lambda x: x.timestamp, reverse=True)
-
-        return {
-            "@context": "https://www.w3.org/ns/activitystreams",
-            "type": "OrderedCollection",
-            "id": f"https://example.com/users/{self.actor.username}/outbox",
-            # "totalItems": self.activities.count(),
-            "totalItems": len(all_activities),
-            # "items": [activity.get_json_ld() for activity in self.activities.all()],
-            "items": [activity.get_json_ld() for activity in all_activities],
-        }
     
     # Helper method to add any type of activity
     def add_activity(self, activity):
@@ -205,3 +182,21 @@ class PortabilityOutbox(models.Model):
         elif isinstance(activity, FollowActivity):
             self.activities_follow.add(activity)
 
+    def get_json_ld(self):
+        # Combine all activity types
+        create_activities = list(self.activities_create.all())
+        like_activities = list(self.activities_like.all())
+        follow_activities = list(self.activities_follow.all())
+
+        all_activities = create_activities + like_activities + follow_activities
+        
+        # Sort by timestamp
+        all_activities.sort(key=lambda x: x.timestamp, reverse=True)
+
+        return {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "OrderedCollection",
+            "id": f"https://example.com/users/{self.actor.username}/outbox",
+            "totalItems": len(all_activities),
+            "items": [activity.get_json_ld() for activity in all_activities],
+        }
