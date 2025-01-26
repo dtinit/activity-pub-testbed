@@ -1,6 +1,10 @@
+import logging
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+
+logger = logging.getLogger(__name__)
+
 
 def validate_username(value):
     if " " in value or not value.isalnum():
@@ -25,19 +29,22 @@ class Actor(models.Model):
         super().save(*args, **kwargs)
 
         if is_new:
-            # Create a PortabilityOutbox for new actor
-            outbox = PortabilityOutbox.objects.create(actor=self)
+            try:
+                # Create a PortabilityOutbox for new actor
+                outbox = PortabilityOutbox.objects.create(actor=self)
 
-            # Create an initial Activity for the Actor
-            activity = Activity.objects.create(
-                actor=self,
-                type='Create',
-                visibility='public'
-            )
+                # Create an initial Activity announcing the Actor's creation
+                activity = CreateActivity.objects.create(
+                    actor=self,
+                    visibility='public'
+                )
 
-            outbox.activities.add(activity)
+                # Add to Outbox
+                outbox.add_activity(activity)
 
-            
+            except Exception as e:
+                logger.error(f'Error creating outbox/activity for actor {self.username}: {e}') 
+
     def get_json_ld(self):
         # Return a LOLA-compliant JSON-LD representation of the account
         return {
@@ -54,21 +61,7 @@ class Actor(models.Model):
 
 
 class Activity(models.Model):
-    # TODO: Check ActivityStreams and ActivityPub specifications
-    TYPE_CHOICES = [
-        ("Create", "Create"),
-        ("Like", "Like"),
-        ("Update", "Update"),
-        ("Follow", "Follow"),
-        ("Announce", "Announce"),
-        ("Delete", "Delete"),
-        ("Undo", "Undo"),
-        ("Flag", "Flag"),
-    ]
-
-    actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="actor_activities")
-    type = models.CharField(max_length=100, choices=TYPE_CHOICES)
-    note = models.OneToOneField("Note", on_delete=models.CASCADE, related_name="note_activities", null=True, blank=True)
+    actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="%(class)s_activities") # This makes each subclass have its own related_name 
     timestamp = models.DateTimeField(auto_now_add=True)
     visibility = models.CharField(max_length=20, default="public", choices=[
         ("public", "Public"),
@@ -76,23 +69,73 @@ class Activity(models.Model):
         ("followers-only", "Followers only")
     ])
 
-    def __str__(self):
-        return f"{self.actor.username} - {self.type} at {self.timestamp}"
+    class Meta:
+        abstract = True # This makes it a base clas that won't create its own table
+
+class CreateActivity(Activity):
+    note = models.OneToOneField(
+        "Note",
+        on_delete=models.CASCADE,
+        related_name="create_activities",
+        null=True,
+        blank=True
+    )
 
     def get_json_ld(self):
         json_ld = {
             "@context": "https://www.w3.org/ns/activitystreams",
-            "type": self.type,
+            "type": "Create",
             "id": f"https://example.com/activities/{self.id}",
             "actor": f"https://example.com/users/{self.actor.username}",
             "published": self.timestamp.isoformat(),
             "visibility": self.visibility,
         }
 
-        # Note's get_json_ld() method
         if self.note:
-            json_ld["object"] = self.note.get_json_ld()
+            json_ld['object'] = self.note.get_json_ld()
+        else:
+            json_ld['object'] = self.actor.get_json_ld()
+
         return json_ld
+    
+
+class LikeActivity(Activity):
+    note = models.OneToOneField(
+        "Note",
+        on_delete=models.CASCADE,
+        related_name="like_activities"
+    )
+
+    def get_json_ld(self):
+        return {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Like",
+            "id": f"https://example.com/activities/{self.id}",
+            "actor": f"https://example.com/users/{self.actor.username}",
+            "object": self.note.get_json_ld(),
+            "published": self.timestamp.isoformat(),
+            "visibility": self.visibility,
+        }
+    
+
+class FollowActivity(Activity):
+    target_actor = models.ForeignKey(
+        Actor,
+        on_delete=models.CASCADE,
+        related_name="follow_activities_received"
+    )
+
+    def get_json_ld(self):
+        return {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Follow",
+            "id": f"https://example.com/activities/{self.id}",
+            "actor": f"https://example.com/users/{self.actor.username}",
+            "object": self.target_actor.get_json_ld(),
+            "published": self.timestamp.isoformat(),
+            "visibility": self.visibility,
+        }
+
 
 
 class Note(models.Model):
@@ -122,17 +165,38 @@ class Note(models.Model):
 
 class PortabilityOutbox(models.Model):
     actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="portability_outbox")
-    activities = models.ManyToManyField(Activity, related_name="portability_outbox")
+    activities_create = models.ManyToManyField(CreateActivity, related_name="outboxes")
+    activities_like = models.ManyToManyField(LikeActivity, related_name="outboxes")
+    activities_follow = models.ManyToManyField(FollowActivity, related_name="outboxes")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"Outbox for {self.actor.username}"
+    
+    # Helper method to add any type of activity
+    def add_activity(self, activity):
+        if isinstance(activity, CreateActivity):
+            self.activities_create.add(activity)
+        elif isinstance(activity, LikeActivity):
+            self.activities_like.add(activity)
+        elif isinstance(activity, FollowActivity):
+            self.activities_follow.add(activity)
 
     def get_json_ld(self):
+        # Combine all activity types
+        create_activities = list(self.activities_create.all())
+        like_activities = list(self.activities_like.all())
+        follow_activities = list(self.activities_follow.all())
+
+        all_activities = create_activities + like_activities + follow_activities
+        
+        # Sort by timestamp
+        all_activities.sort(key=lambda x: x.timestamp, reverse=True)
+
         return {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "OrderedCollection",
             "id": f"https://example.com/users/{self.actor.username}/outbox",
-            "totalItems": self.activities.count(),
-            "items": [activity.get_json_ld() for activity in self.activities.all()],
+            "totalItems": len(all_activities),
+            "items": [activity.get_json_ld() for activity in all_activities],
         }
