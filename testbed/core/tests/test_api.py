@@ -21,7 +21,12 @@ def test_outbox_detail_api(outbox):
     response = client.get(url)
 
     assert response.status_code == status.HTTP_200_OK
-    assert response.data['type'] == 'OrderedCollection'
-    assert 'items' in response.data
-    assert isinstance(response.data['items'], list)
-    assert response.data['totalItems'] >= 0
+    assert 'json_ld' in response.data
+
+    # Check JSON-LD structure
+    json_ld = response.data['json_ld']
+    assert json_ld['type'] == 'OrderedCollection'
+    assert json_ld['@context'] == 'https://www.w3.org/ns/activitystreams'
+    assert json_ld['id'] == f'https://example.com/users/{outbox.actor.username}/outbox'
+    assert json_ld['totalItems'] >= 0
+    assert 'items' in json_ld

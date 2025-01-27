@@ -18,6 +18,10 @@ def actor():
     return ActorFactory()
 
 @pytest.fixture
+def note(actor):
+    return NoteFactory(actor=actor)
+
+@pytest.fixture
 def create_activity(actor, note):
     return CreateActivityFactory(actor=actor, note=note)
 

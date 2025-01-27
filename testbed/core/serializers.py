@@ -27,10 +27,11 @@ class ActivitySerializer(JSONLDSerializerMixin, serializers.ModelSerializer):
 
 
 class PortabilityOutboxSerializer(JSONLDSerializerMixin, serializers.ModelSerializer):
-    actor = serializers.StringRelatedField()  # Actor reference
-    activities = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     json_ld = serializers.SerializerMethodField()
 
     class Meta:
         model = PortabilityOutbox
-        fields = ['id', 'actor', 'activities', 'json_ld']
+        fields = ['id', 'actor', 'json_ld']
+
+    def get_json_ld(self, obj):
+        return obj.get_json_ld()

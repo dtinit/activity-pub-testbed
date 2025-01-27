@@ -81,6 +81,11 @@ class CreateActivity(Activity):
         blank=True
     )
 
+    def __str__(self):
+        if self.note:
+            return f'Create by {self.actor.username}: {self.note}'
+        return f'Create by {self.actor.username}: Actor creation'
+
     def get_json_ld(self):
         json_ld = {
             "@context": "https://www.w3.org/ns/activitystreams",
@@ -106,6 +111,9 @@ class LikeActivity(Activity):
         related_name="like_activities"
     )
 
+    def __str__(self):
+        return f'Like by {self.actor.username}: {self.note}'
+
     def get_json_ld(self):
         return {
             "@context": "https://www.w3.org/ns/activitystreams",
@@ -124,6 +132,9 @@ class FollowActivity(Activity):
         on_delete=models.CASCADE,
         related_name="follow_activities_received"
     )
+
+    def __str__(self):
+        return f'Follow by {self.actor.username}: {self.target_actor.username}'
 
     def get_json_ld(self):
         return {
