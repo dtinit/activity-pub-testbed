@@ -67,7 +67,7 @@ class LikeActivityFactory(DjangoModelFactory):
     class Meta:
         model = LikeActivity
 
-    actor = factory.SubFactory(NoteFactory)
+    actor = factory.SubFactory(ActorFactory)
     note = factory.SubFactory(NoteFactory) # Required for Like activity
     visibility = factory.Iterator(['public', 'private', 'followers-only'])
 
