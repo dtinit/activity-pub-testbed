@@ -32,6 +32,3 @@ class PortabilityOutboxSerializer(JSONLDSerializerMixin, serializers.ModelSerial
     class Meta:
         model = PortabilityOutbox
         fields = ['id', 'actor', 'json_ld']
-
-    def get_json_ld(self, obj):
-        return obj.get_json_ld()
