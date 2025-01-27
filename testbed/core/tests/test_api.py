@@ -19,8 +19,9 @@ def test_outbox_detail_api(outbox):
     client = APIClient()
     url = reverse('actor-outbox', kwargs={'pk': outbox.actor.id})
     response = client.get(url)
+
     assert response.status_code == status.HTTP_200_OK
-    assert response.data['id'] == outbox.id
-    assert response.data['actor'] == str(outbox.actor)
-    assert response.data['activities'] == []
-    assert response.data['json_ld'] == outbox.get_json_ld()
+    assert response.data['type'] == 'OrderedCollection'
+    assert 'items' in response.data
+    assert isinstance(response.data['items'], list)
+    assert response.data['totalItems'] >= 0

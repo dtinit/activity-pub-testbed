@@ -1,6 +1,10 @@
 import pytest
 from django.core.exceptions import ValidationError
-from testbed.core.factories import ActorFactory
+from testbed.core.factories import (
+    ActorFactory,
+    CreateActivityFactory,
+    LikeActivityFactory,
+    FollowActivityFactory)
 
 
 def test_actor_creation(actor):
@@ -24,17 +28,19 @@ def test_username_validation(invalid_username):
 def test_portability_outbox_creation(actor):
     assert actor.portability_outbox.count() == 1
     outbox = actor.portability_outbox.first()
-    assert outbox.activities.count() == 1 # Initial Create activity
-    assert outbox.activities.first().type == 'Create'
+    assert outbox.activities_create.count() == 1 # Initial Create activity
+    # assert outbox.activities_create.first().type == 'Create'
+    assert outbox.activities_create.first().note is None # Should be an Actor creation activity 
 
 def test_actor_creation_activity(actor):
     outbox = actor.portability_outbox.first()
     assert outbox is not None
 
     # Get initial Create activity
-    activity = outbox.activities.first()
+    activity = outbox.activities_create.first()
     assert activity is not None
-    assert activity.type == 'Create'
+    assert activity.note is None # Should be an Actor creation activity
+    # assert activity.type == 'Create'
 
     # Check Activity's JSON-LD
     json_ld = activity.get_json_ld()
@@ -47,7 +53,7 @@ def test_actor_creation_activity(actor):
 
 def test_actor_creation_activity_structure(actor):
     # Test the structure of the Create activity's JSON-LD
-    activity = actor.portability_outbox.first().activities.first()
+    activity = actor.portability_outbox.first().activities_create.first()
     json_ld = activity.get_json_ld()
 
     # Check required fields
@@ -69,7 +75,27 @@ def test_multiple_actor_creations():
 
     for actor in actors:
         outbox = actor.portability_outbox.first()
-        activity = outbox.activities.first()
+        activity = outbox.activities_create.first()
 
         json_ld = activity.get_json_ld()
         assert json_ld['object']['preferredUsername'] == actor.username
+
+def test_outbox_activity_types(actor):
+    outbox = actor.portability_outbox.first()
+
+    # Test Create activity
+    create_activity = CreateActivityFactory(actor=actor)
+    outbox.add_activity(create_activity)
+
+    # Test Like activity
+    like_activity = LikeActivityFactory(actor=actor)
+    outbox.add_activity(like_activity)
+
+    # Test Follow activity
+    follow_activity = FollowActivityFactory(actor=actor)
+    outbox.add_activity(follow_activity)
+
+    # Verify all activities are present
+    assert outbox.activities_create.filter(id=create_activity.id).exists()
+    assert outbox.activities_like.filter(id=like_activity.id).exists()
+    assert outbox.activities_follow.filter(id=follow_activity.id).exists()
