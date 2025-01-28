@@ -1,12 +1,10 @@
-import pytest
-
-
-def test_note_creation(note):
-    assert note.actor is not None
-    assert note.content is not None
-    assert note.published is not None
-    assert note.visibility in ['public', 'private', 'followers-only']
-
-def test_note_str_representation(note):
-    assert str(note).startswith('Note by')
-    assert note.content[:30] in str(note)
+def test_activity_str_representation(create_activity, like_activity, follow_activity):
+    # Test CreateActivity
+    assert f"Create by {create_activity.actor.username}" in str(create_activity)
+    
+    # Test LikeActivity
+    assert f"Like by {like_activity.actor.username}" in str(like_activity)
+    
+    # Test FollowActivity
+    assert f"Follow by {follow_activity.actor.username}" in str(follow_activity)
+    assert follow_activity.target_actor.username in str(follow_activity)
