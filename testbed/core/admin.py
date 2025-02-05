@@ -89,10 +89,3 @@ class PortabilityOutboxAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
-
-    def get_readonly_fields(self, request, obj=None):
-        return [f.name for f in self.model._meta.fields] + [
-            'get_create_activities',
-            'get_like_activities',
-            'get_follow_activities'
-        ]
