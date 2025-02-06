@@ -9,6 +9,28 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      PROJECT_NAME: ${{ secrets.TESTBED_ACTIONS_SECRETS.PROJECT_NAME }}
+      DJANGO_SECRET_KEY: ${{ secrets.TESTBED_ACTIONS_SECRETS.DJANGO_SECRET_KEY }}
+      DJANGO_DEBUG: ${{ secrets.TESTBED_ACTIONS_SECRETS.DJANGO_DEBUG }}
+      DJANGO_ALLOWED_HOSTS: ${{ secrets.TESTBED_ACTIONS_SECRETS.DJANGO_ALLOWED_HOSTS }}
+      DJ_DATABASE_CONN_STRING: ${{ secrets.TESTBED_ACTIONS_SECRETS.DJ_DATABASE_CONN_STRING }}
     
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +44,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Run migrations and seed database
+        run: |
+          python manage.py migrate
+          python manage.py seed --no-prompt
         
       - name: Run tests
         run: pytest
