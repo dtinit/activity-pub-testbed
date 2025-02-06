@@ -25,7 +25,7 @@ class Command(BaseCommand):
             # Check for admin user
             if not User.objects.filter(is_staff=True, is_active=True).exists():
                 if kwargs['no_prompt']:
-                    self.stdout.wriute(self.style.WARNING('Creating admin user automatically...'))
+                    self.stdout.write(self.style.WARNING('Creating admin user automatically...'))
                     User.objects.create_superuser(
                         username='admin',
                         email='admin@testing.com',

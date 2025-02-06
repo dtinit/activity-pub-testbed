@@ -29,6 +29,9 @@ env/
 *.venv
 venv.bak/
 
+# External tools
+# .actrc
+
 # IDE and editor files
 .idea/
 .vscode/

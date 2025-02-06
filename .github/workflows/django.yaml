@@ -1,4 +1,4 @@
-name: Django CI/CD
+name: CI-CD
 
 on:
   pull_request:
@@ -7,16 +7,16 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
+  test-and-seed:
     runs-on: ubuntu-latest
 
     services:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
+          POSTGRES_USER: testbed_ap_user
+          POSTGRES_PASSWORD: testbed_dti
+          POSTGRES_DB: testbed_ap
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -26,11 +26,11 @@ jobs:
           - 5432:5432
 
     env:
-      PROJECT_NAME: ${{ secrets.TESTBED_ACTIONS_SECRETS.PROJECT_NAME }}
-      DJANGO_SECRET_KEY: ${{ secrets.TESTBED_ACTIONS_SECRETS.DJANGO_SECRET_KEY }}
-      DJANGO_DEBUG: ${{ secrets.TESTBED_ACTIONS_SECRETS.DJANGO_DEBUG }}
-      DJANGO_ALLOWED_HOSTS: ${{ secrets.TESTBED_ACTIONS_SECRETS.DJANGO_ALLOWED_HOSTS }}
-      DJ_DATABASE_CONN_STRING: ${{ secrets.TESTBED_ACTIONS_SECRETS.DJ_DATABASE_CONN_STRING }}
+      PROJECT_NAME: ${{ fromJson(secrets.TESTBED_ACTIONS_SECRETS).PROJECT_NAME }}
+      DJANGO_SECRET_KEY: ${{ fromJson(secrets.TESTBED_ACTIONS_SECRETS).DJANGO_SECRET_KEY }}
+      DJANGO_DEBUG: ${{ fromJson(secrets.TESTBED_ACTIONS_SECRETS).DJANGO_DEBUG }}
+      DJANGO_ALLOWED_HOSTS: ${{ fromJson(secrets.TESTBED_ACTIONS_SECRETS).DJANGO_ALLOWED_HOSTS }}
+      DJ_DATABASE_CONN_STRING: ${{ fromJson(secrets.TESTBED_ACTIONS_SECRETS).DJ_DATABASE_CONN_STRING }}
     
     steps:
       - uses: actions/checkout@v4
