@@ -26,14 +26,14 @@ jobs:
           - 5432:5432
 
     env:
-      PROJECT_NAME: ${{ fromJson(secrets.TESTBED_ACTIONS_SECRETS).PROJECT_NAME }}
       DJANGO_SECRET_KEY: ${{ fromJson(secrets.TESTBED_ACTIONS_SECRETS).DJANGO_SECRET_KEY }}
-      DJANGO_DEBUG: ${{ fromJson(secrets.TESTBED_ACTIONS_SECRETS).DJANGO_DEBUG }}
-      DJANGO_ALLOWED_HOSTS: ${{ fromJson(secrets.TESTBED_ACTIONS_SECRETS).DJANGO_ALLOWED_HOSTS }}
       DJ_DATABASE_CONN_STRING: ${{ fromJson(secrets.TESTBED_ACTIONS_SECRETS).DJ_DATABASE_CONN_STRING }}
     
     steps:
       - uses: actions/checkout@v4
+
+      - name: Copy CI environment file
+        run: cp .env-ci .env
 
       - name: Set up Python
         uses: actions/setup-python@v5

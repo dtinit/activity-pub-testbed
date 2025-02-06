@@ -30,7 +30,7 @@ env/
 venv.bak/
 
 # External tools
-# .actrc
+.actrc
 
 # IDE and editor files
 .idea/
