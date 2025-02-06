@@ -1,7 +1,5 @@
 # Actor model
 
-----
-
 The Actor model represents a user or entity in the ActivityPub ecosystem. Each Actor is linked to a Django User for authentication and includes properties such as:
 
 * **username**: A unique identifier for the Actor.
@@ -35,8 +33,6 @@ This model provides a JSON-LD representation, making it interoperable with LOLA 
 
 # Activity model
 
----
-
 The Activity model represents an action performed by an Actor. These actions include creating content, liking, following, and other ActivityPub-defined types. Key properties include:
 
 * **type**: The type of activity (e.g., Create, Like).
@@ -69,8 +65,6 @@ This model ensures compatibility with ActivityStreams and generates JSON-LD for 
 
 # Note model
 
----
-
 The Note model represents textual content authored by an Actor. It includes:
 
 * **content**: The main text of the note.
@@ -79,9 +73,21 @@ The Note model represents textual content authored by an Actor. It includes:
 
 Notes are a core content type in ActivityPub and can be linked to activities like Create or Announce.
 
-# PortabilityOutbox Model
+## **JSON-LD Representation Example**
 
----
+```json
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "Note",
+  "id": "https://example.com/notes/1",
+  "attributedTo": "https://example.com/users/alice",
+  "content": "Hello, world!",
+  "published": "2024-11-08T12:00:00Z",
+  "visibility": "public"
+}
+```
+
+# PortabilityOutbox Model
 
 The PortabilityOutbox model aggregates all activities performed by an Actor, providing a collection for account portability. Key features include:
 

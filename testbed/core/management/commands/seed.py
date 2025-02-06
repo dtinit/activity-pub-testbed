@@ -13,14 +13,19 @@ from testbed.core.factories import (
 class Command(BaseCommand):
     help = 'Seed the database with sample data'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--no-prompt',
+            action='store_true',
+            help='Automatically create admin user without prompting'
+        )
+
     def handle(self, *args, **kwargs):
         try:
             # Check for admin user
             if not User.objects.filter(is_staff=True, is_active=True).exists():
-                self.stdout.write(self.style.WARNING('No admin user found.'))
-                answer = input('Would you like to create one? (Y/N): ').strip().lower()
-                if answer == 'y':
-                    self.stdout.write(self.style.WARNING('Creating admin user...'))
+                if kwargs['no_prompt']:
+                    self.stdout.write(self.style.WARNING('Creating admin user automatically...'))
                     User.objects.create_superuser(
                         username='admin',
                         email='admin@testing.com',
@@ -28,7 +33,18 @@ class Command(BaseCommand):
                     )
                     self.stdout.write(self.style.SUCCESS('Admin user created successfully.'))
                 else:
-                    self.stdout.write(self.style.WARNING('Skipping admin user creation.'))
+                    self.stdout.write(self.style.WARNING('No admin user found.'))
+                    answer = input('Would you like to create one? (Y/N): ').strip().lower()
+                    if answer == 'y':
+                        self.stdout.write(self.style.WARNING('Creating admin user...'))
+                        User.objects.create_superuser(
+                            username='admin',
+                            email='admin@testing.com',
+                            password='admin123'
+                        )
+                        self.stdout.write(self.style.SUCCESS('Admin user created successfully.'))
+                    else:
+                        self.stdout.write(self.style.WARNING('Skipping admin user creation.'))
             else:
                 self.stdout.write(self.style.SUCCESS('Admin user already exists.'))
             
