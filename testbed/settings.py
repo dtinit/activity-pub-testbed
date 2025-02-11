@@ -14,7 +14,6 @@ from pathlib import Path
 
 import os
 import environ
-import base64
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,7 +23,7 @@ env.read_env(os.path.join(BASE_DIR, ".env"))
 
 PROJECT_NAME = env.str("PROJECT_NAME", default="Activity Pub Testbed")
 
-SECRET_KEY = base64.b64decode(env.str("DJANGO_SECRET_KEY")).decode()
+SECRET_KEY = env.str("DJANGO_SECRET_KEY")
 
 DEBUG = env.bool("DJANGO_DEBUG")
 
