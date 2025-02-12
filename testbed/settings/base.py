@@ -16,18 +16,18 @@ import os
 import environ
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 env = environ.Env()
 env.read_env(os.path.join(BASE_DIR, ".env"))
 
 PROJECT_NAME = env.str("PROJECT_NAME", default="Activity Pub Testbed")
 
-SECRET_KEY = env.str("DJANGO_SECRET_KEY")
+# SECURITY WARNING: Keep this secret key in a safe place and do not commit it to version control.
+# SECRET_KEY = env.str("DJANGO_SECRET_KEY")
 
-DEBUG = env.bool("DJANGO_DEBUG")
-
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS")
+# SECURITY WARNING: don't run with debug turned on in production
+# DEBUG = env.bool("DJANGO_DEBUG")
 
 # Application definition
 
@@ -76,11 +76,11 @@ WSGI_APPLICATION = 'testbed.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
+"""DATABASES = {
     "default": env.db_url(
         "DJ_DATABASE_CONN_STRING", default=f'sqlite:///{BASE_DIR / "db.sqlite3"}'
     )
-}
+}"""
 
 
 # Password validation

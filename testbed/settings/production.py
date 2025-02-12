@@ -1,0 +1,17 @@
+from .base import *
+
+DEBUG = False
+ALLOWED_SEED_COMMAND = False
+SECRET_KEY = env.str("DJANGO_SECRET_KEY")
+ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS")
+
+DATABASES = {
+    "default": env.db_url("DJ_DATABASE_CONN_STRING")
+}
+
+# Additional security settings
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
