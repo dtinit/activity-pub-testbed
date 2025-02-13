@@ -1,5 +1,6 @@
 import random
 from django.core.management.base import BaseCommand
+# from django.contrib.auth.models import User
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from testbed.core.factories import (
@@ -25,19 +26,22 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         try:
+
             # Check if seeding is allowed in current environment
             if not getattr(settings, 'ALLOWED_SEED_COMMAND', False):
                 self.stdout.write(
                     self.style.ERROR('Seed command is not allowed in this environment.')
                 )
                 return
-            
+            else:
+                self.stdout.write(self.style.SUCCESS('Seed command allowed in this environment.'))
+
+
             # Check for admin user
             if not User.objects.filter(is_staff=True, is_active=True).exists():
-                username = getattr(settings, 'SEED_ADMIN_USERNAME', 'admin')
-                email = getattr(settings, 'SEED_ADMIN_EMAIL', 'admin@testing.com')
-                password = getattr(settings, 'SEED_ADMIN_PASSWORD', 'admin123')
-
+                username = str(getattr(settings, 'SEED_ADMIN_USERNAME'))
+                email = str(getattr(settings, 'SEED_ADMIN_EMAIL'))
+                password = str(getattr(settings, 'SEED_ADMIN_PASSWORD'))
 
                 if kwargs['no_prompt']:
                     self.stdout.write(self.style.WARNING('Creating admin user automatically...'))
@@ -125,3 +129,4 @@ class Command(BaseCommand):
 
         except Exception as e:
             self.stdout.write(self.style.ERROR(f'Error seeding database: {str(e)}'))
+            

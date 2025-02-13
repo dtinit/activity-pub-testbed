@@ -32,6 +32,9 @@ venv.bak/
 # External tools
 .actrc
 
+# Development files that should not be checked in
+testbed/core/management/commands/cleandb.py
+
 # IDE and editor files
 .idea/
 .vscode/
