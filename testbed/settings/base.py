@@ -23,12 +23,6 @@ env.read_env(os.path.join(BASE_DIR, ".env"))
 
 PROJECT_NAME = env.str("PROJECT_NAME", default="Activity Pub Testbed")
 
-# SECURITY WARNING: Keep this secret key in a safe place and do not commit it to version control.
-# SECRET_KEY = env.str("DJANGO_SECRET_KEY")
-
-# SECURITY WARNING: don't run with debug turned on in production
-# DEBUG = env.bool("DJANGO_DEBUG")
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -71,17 +65,6 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'testbed.wsgi.application'
-
-
-# Database
-# https://docs.djangoproject.com/en/5.1/ref/settings/#databases
-
-"""DATABASES = {
-    "default": env.db_url(
-        "DJ_DATABASE_CONN_STRING", default=f'sqlite:///{BASE_DIR / "db.sqlite3"}'
-    )
-}"""
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators

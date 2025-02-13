@@ -1,6 +1,7 @@
 import random
 from django.core.management.base import BaseCommand
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+from django.conf import settings
 from testbed.core.factories import (
     ActorFactory,
     CreateActivityFactory,
@@ -9,6 +10,8 @@ from testbed.core.factories import (
     NoteFactory
 )
 
+
+User = get_user_model()
 
 class Command(BaseCommand):
     help = 'Seed the database with sample data'
@@ -22,14 +25,26 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         try:
+            # Check if seeding is allowed in current environment
+            if not getattr(settings, 'ALLOWED_SEED_COMMAND', False):
+                self.stdout.write(
+                    self.style.ERROR('Seed command is not allowed in this environment.')
+                )
+                return
+            
             # Check for admin user
             if not User.objects.filter(is_staff=True, is_active=True).exists():
+                username = getattr(settings, 'SEED_ADMIN_USERNAME', 'admin')
+                email = getattr(settings, 'SEED_ADMIN_EMAIL', 'admin@testing.com')
+                password = getattr(settings, 'SEED_ADMIN_PASSWORD', 'admin123')
+
+
                 if kwargs['no_prompt']:
                     self.stdout.write(self.style.WARNING('Creating admin user automatically...'))
                     User.objects.create_superuser(
-                        username='admin',
-                        email='admin@testing.com',
-                        password='admin123'
+                        username=username,
+                        email=email,
+                        password=password
                     )
                     self.stdout.write(self.style.SUCCESS('Admin user created successfully.'))
                 else:
@@ -38,9 +53,9 @@ class Command(BaseCommand):
                     if answer == 'y':
                         self.stdout.write(self.style.WARNING('Creating admin user...'))
                         User.objects.create_superuser(
-                            username='admin',
-                            email='admin@testing.com',
-                            password='admin123'
+                            username=username,
+                            email=email,
+                            password=password
                         )
                         self.stdout.write(self.style.SUCCESS('Admin user created successfully.'))
                     else:
