@@ -1,8 +1,10 @@
 import random
+from datetime import timedelta
 from django.core.management.base import BaseCommand
-# from django.contrib.auth.models import User
 from django.contrib.auth import get_user_model
 from django.conf import settings
+from django.utils import timezone
+from testbed.core.models import LikeActivity
 from testbed.core.factories import (
     ActorFactory,
     CreateActivityFactory,
@@ -14,6 +16,13 @@ from testbed.core.factories import (
 
 User = get_user_model()
 
+# sample remote servers for federation testing
+REMOTE_SERVERS = [
+    ("mastodon.social", ["mastodon_user1", "mastodon_user2", "mastodon_user3"]),
+    ("pixelfed.social", ["pixel_user1", "pixel_user2", "pixel_user3"]),
+    ("pleroma.instance", ["pleroma_user1", "pleroma_user2", "pleroma_user3"]),
+]
+
 class Command(BaseCommand):
     help = 'Seed the database with sample data'
 
@@ -22,6 +31,27 @@ class Command(BaseCommand):
             '--no-prompt',
             action='store_true',
             help='Automatically create admin user without prompting'
+        )
+
+    # Create a series of remote likes
+    def create_remote_like(self, actor):
+        server, usernames = random.choice(REMOTE_SERVERS)
+        username = random.choice(usernames)
+        note_id = random.randint(1000, 9999)
+
+        return LikeActivity.objects.create(
+            actor=actor,
+            note=None,
+            object_url=f"https://{server}/notes/{note_id}",
+            object_data={
+                "@context": "https://www.w3.org/ns/activitystreams",
+                "type": "Note",
+                "actor": f"https://{server}/users/{username}",
+                "content": f"A federated note from {username} on {server}",
+                "published": (timezone.now() - timedelta(days=random.randint(1, 30))).isoformat(),
+                "visibility": "public",
+            },
+            visibility="public"
         )
 
     def handle(self, *args, **kwargs):
@@ -71,13 +101,14 @@ class Command(BaseCommand):
             self.stdout.write('Creating actors...')
             actors = ActorFactory.create_batch(10)
 
-            # Track created likes
-            like_count = 0
+            # Track different types of likes
+            local_like_count = 0
+            remote_like_count = 0
 
             # Create notes and various activities
             self.stdout.write('Creating notes and activities...')
             for actor in actors:
-                # Create some notes
+                # Create local notes
                 notes = NoteFactory.create_batch(3, actor=actor)
 
                 # Create activities for each note
@@ -89,7 +120,7 @@ class Command(BaseCommand):
                     )
                     actor.portability_outbox.first().add_activity(create_activity)
 
-                    # Some notes get liked by other actors
+                    # Some notes get liked by other actors (local likes)
                     if random.choice([True, False]):
                         liker = random.choice([a for a in actors if a != actor])
                         like_activity = LikeActivityFactory(
@@ -98,7 +129,13 @@ class Command(BaseCommand):
                             visibility='public'
                         )
                         liker.portability_outbox.first().add_activity(like_activity)
-                        like_count += 1
+                        local_like_count += 1
+
+                # Create remote likes for each actor
+                for _ in range(random.randint(1, 3)):
+                    remote_like = self.create_remote_like(actor)
+                    actor.portability_outbox.first().add_activity(remote_like)
+                    remote_like_count += 1
 
                 # Create some follow relationships
                 for _ in range(2): # Each actor follows 2 other actors
@@ -122,8 +159,10 @@ class Command(BaseCommand):
                     f'- {total_actors} actors\n'
                     f'- {total_notes} notes\n'
                     f'- {total_creates} Create activities ({total_actors} for actors, {total_notes} for notes)\n'
-                    f'- {like_count} Like activities\n'
-                    f'- {total_follows} Follow activities'
+                    f'- {local_like_count} Local Like activities\n'
+                    f'- {remote_like_count} Remote Like activities\n'
+                    f'- {total_follows} Follow activities\n\n'
+                    f'Federation seeding created with servers: f{",".join(server for server, _ in REMOTE_SERVERS)}' 
                 )
             )
 
