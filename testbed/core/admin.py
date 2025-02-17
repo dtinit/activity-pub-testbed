@@ -28,8 +28,15 @@ class CreateActivityAdmin(admin.ModelAdmin):
 
 @admin.register(LikeActivity)
 class LikeActivityAdmin(admin.ModelAdmin):
-    list_display = ('actor', 'note', 'timestamp', 'visibility')
+    list_display = ('actor', 'get_liked_object', 'timestamp', 'visibility') 
     list_filter = ('visibility', 'timestamp')
+    search_fields = ('actor__username', 'object_url', 'object_data__content') 
+
+    def get_liked_object(self, obj):
+        if obj.note:
+            return f"Local: {obj.note}"
+        return f"Remote: {obj.object_data.get('content', '')[:50]}... ({obj.object_url})"
+    get_liked_object.short_description = "Liked Object"
 
 @admin.register(FollowActivity)
 class FollowActivityAdmin(admin.ModelAdmin):
@@ -65,7 +72,11 @@ class PortabilityOutboxAdmin(admin.ModelAdmin):
         like_activities = obj.activities_like.filter(actor=obj.actor)
         output = []
         for activity in like_activities:
-            output.append(f"Liked: {activity.note.content[:50]}...")
+            if activity.note:
+                output.append(f"Liked local: {activity.note.content[:50]}...")
+            else:
+                content = activity.object_data.get('content', '')[:50]
+                output.append(f"Liked remote: {content}... ({activity.object_url})")
         
         return "\n".join(output) if output else "No like activities"
     

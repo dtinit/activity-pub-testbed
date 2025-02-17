@@ -47,8 +47,8 @@ jobs:
 
       - name: Run migrations and seed database
         run: |
-          python manage.py migrate
-          python manage.py seed --no-prompt
+          python manage.py migrate --settings=testbed.settings.ci
+          python manage.py seed --no-prompt --settings=testbed.settings.ci
         
       - name: Run tests
-        run: pytest
+        run: pytest --ds=testbed.settings.ci

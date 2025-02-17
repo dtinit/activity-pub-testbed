@@ -105,26 +105,59 @@ class CreateActivity(Activity):
     
 
 class LikeActivity(Activity):
-    note = models.OneToOneField(
+    note = models.ForeignKey(
         "Note",
         on_delete=models.CASCADE,
-        related_name="like_activities"
+        related_name="like_activities",
+        null=True,
+        blank=True
+    )
+    object_url = models.URLField(
+        max_length=200,
+        help_text="URL of the liked object in the fediverse",
+        null=True,
+        blank=True
+    )
+    object_data = models.JSONField(
+        help_text="Metadata of the liked object",
+        null=True,
+        blank=True
     )
 
+    def clean(self):
+        super().clean()
+        # For remote objects, we need both url and data
+        if not self.object_url and not (self.object_url and self.object_data):
+            raise ValidationError("Remote objects must have both URL and metadata")
+        
     def __str__(self):
-        return f'Like by {self.actor.username}: {self.note}'
-
+        if self.note:
+            return f'Like by {self.actor.username}: {self.note}'
+        content = self.object_data.get('content', '')[:50]
+        return f'Like by {self.actor.username}: {content}...'
+        
     def get_json_ld(self):
-        return {
+        base = {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Like",
             "id": f"https://example.com/activities/{self.id}",
             "actor": f"https://example.com/users/{self.actor.username}",
-            "object": self.note.get_json_ld(),
             "published": self.timestamp.isoformat(),
             "visibility": self.visibility,
         }
-    
+
+        if self.note:
+            # For local notes, use the Note model's get_json_ld method
+            base["object"] = self.note.get_json_ld()
+        else:
+            # For remote objects, use the stored data
+            base["object"] = {
+                "@context": "https://www.w3.org/ns/activitystreams",
+                **self.object_data,
+                "id": self.object_url
+            }
+
+        return base
 
 class FollowActivity(Activity):
     target_actor = models.ForeignKey(
