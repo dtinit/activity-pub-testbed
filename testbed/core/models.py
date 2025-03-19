@@ -27,6 +27,9 @@ class Actor(models.Model):
     
     # Record a previous location of this account
     def record_move(self, previous_server, previous_username, move_date=None):
+        print(f"Previously type: {type(self.previously)}")  # Debug line
+        print(f"Previously value: {self.previously}")       # Debug line
+
         if self.previously is None:
             self.previously = []
 
