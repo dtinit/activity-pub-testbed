@@ -163,23 +163,53 @@ class FollowActivity(Activity):
     target_actor = models.ForeignKey(
         Actor,
         on_delete=models.CASCADE,
-        related_name="follow_activities_received"
+        related_name="follow_activities_received",
+        null=True,
+        blank=True
+    )
+    target_actor_url = models.URLField(
+        max_length=200,
+        help_text="URL of the followed actor in the fediverse",
+        null=True,
+        blank=True
+    )
+    target_actor_data = models.JSONField(
+        help_text="Metadata of the followed actor",
+        null=True,
+        blank=True,
     )
 
-    def __str__(self):
-        return f'Follow by {self.actor.username}: {self.target_actor.username}'
+    def clean(self):
+        super().clean()
+        if not self.target_actor and not (self.target_actor_url and self.target_actor_data):
+            raise ValidationError("Either local target_actor or remote actor data (URL and metadata) must be provided")
 
+    def __str__(self):
+        if self.target_actor:
+            return f'Follow by {self.actor.username}: {self.target_actor.username}'
+        username = self.target_actor_data.get('preferredUsername', '')
+        return f'Follow by {self.actor.username}: {username} (remote)'
+    
     def get_json_ld(self):
-        return {
+        base = {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Follow",
             "id": f"https://example.com/activities/{self.id}",
             "actor": f"https://example.com/users/{self.actor.username}",
-            "object": self.target_actor.get_json_ld(),
             "published": self.timestamp.isoformat(),
             "visibility": self.visibility,
         }
 
+        if self.target_actor:
+            base["object"] = self.target_actor.get_json_ld()
+        else:
+            base["object"] = {
+                "@context": "https://www.w3.org/ns/activitystreams",
+                **self.target_actor_data,
+                "id": self.target_actor_url
+            }
+
+        return base
 
 
 class Note(models.Model):

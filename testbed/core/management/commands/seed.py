@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.utils import timezone
-from testbed.core.models import LikeActivity
+from testbed.core.models import LikeActivity, FollowActivity
 from testbed.core.factories import (
     ActorFactory,
     CreateActivityFactory,
@@ -50,6 +50,23 @@ class Command(BaseCommand):
                 "content": f"A federated note from {username} on {server}",
                 "published": (timezone.now() - timedelta(days=random.randint(1, 30))).isoformat(),
                 "visibility": "public",
+            },
+            visibility="public"
+        )
+
+    def create_remote_follow(self, actor):
+        server, usernames = random.choice(REMOTE_SERVERS)
+        username = random.choice(usernames)
+
+        return FollowActivity.objects.create(
+            actor=actor,
+            target_actor=None,
+            target_actor_url=f"https://{server}/users/{username}",
+            target_actor_data={
+                "type": "Person",
+                "preferredUsername": username,
+                "name": username,
+                "url": f"https://{server}/users/{username}",
             },
             visibility="public"
         )
@@ -101,9 +118,11 @@ class Command(BaseCommand):
             self.stdout.write('Creating actors...')
             actors = ActorFactory.create_batch(10)
 
-            # Track different types of likes
+            # Track different types of activities
             local_like_count = 0
             remote_like_count = 0
+            local_follow_count = 0
+            remote_follow_count = 0
 
             # Create notes and various activities
             self.stdout.write('Creating notes and activities...')
@@ -137,8 +156,8 @@ class Command(BaseCommand):
                     actor.portability_outbox.first().add_activity(remote_like)
                     remote_like_count += 1
 
-                # Create some follow relationships
-                for _ in range(2): # Each actor follows 2 other actors
+                # Create local follows
+                for _ in range(1): # Each actor follows 1 local actor
                     target = random.choice([a for a in actors if a != actor])
                     follow_activity = FollowActivityFactory(
                         actor=actor,
@@ -146,12 +165,18 @@ class Command(BaseCommand):
                         visibility='public'
                     )
                     actor.portability_outbox.first().add_activity(follow_activity)
+                    local_follow_count += 1
+
+                # Create remote follows
+                for _ in range(1): # Each actor follows 1 remote actor
+                    remote_follow = self.create_remote_follow(actor)
+                    actor.portability_outbox.first().add_activity(remote_follow)
+                    remote_follow_count += 1
 
             # Count all activities
             total_actors = len(actors)
             total_notes = len(actors) * 3
             total_creates = total_notes + total_actors # Notes + Actor creates
-            total_follows = len(actors) * 2
 
             self.stdout.write(
                 self.style.SUCCESS(
@@ -161,8 +186,9 @@ class Command(BaseCommand):
                     f'- {total_creates} Create activities ({total_actors} for actors, {total_notes} for notes)\n'
                     f'- {local_like_count} Local Like activities\n'
                     f'- {remote_like_count} Remote Like activities\n'
-                    f'- {total_follows} Follow activities\n\n'
-                    f'Federation seeding created with servers: f{",".join(server for server, _ in REMOTE_SERVERS)}' 
+                    f'- {local_follow_count} Local Follow activities\n'
+                    f'- {remote_follow_count} Remote Follow activities\n\n'
+                    f'Federation seeding created with servers: {", ".join(server for server, _ in REMOTE_SERVERS)}' 
                 )
             )
 
