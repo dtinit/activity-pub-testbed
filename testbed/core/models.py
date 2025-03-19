@@ -2,6 +2,7 @@ import logging
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from datetime import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +20,24 @@ class Actor(models.Model):
     full_name = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    previously = models.JSONField(default=dict, null=True, blank=True)
+    previously = models.JSONField(default=list, null=True, blank=True)
 
     def __str__(self):
         return self.username
+    
+    # Record a previous location of this account
+    def record_move(self, previous_server, previous_username, move_date=None):
+        if self.previously is None:
+            self.previously = []
+
+        move_record = {
+            'type': 'Move', 
+            'object': f"https://{previous_server}/users/{previous_username}",
+            'published': (move_date or timezone.now()).isoformat()
+        }
+
+        self.previously.append(move_record)
+        self.save()
     
     def save(self, *args, **kwargs):
         is_new = self._state.adding
@@ -56,7 +71,7 @@ class Actor(models.Model):
             "id": f"https://example.com/users/{self.username}",
             "preferredUsername": self.username,
             "name": self.username,
-            "previously": self.previously,
+            "previously": self.previously or [], # Ensure it's always a list
         }
 
 

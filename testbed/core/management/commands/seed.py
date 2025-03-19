@@ -71,6 +71,22 @@ class Command(BaseCommand):
             visibility="public"
         )
 
+    # Create actor with previous server history
+    def create_actor_with_history(self):
+        actor = ActorFactory.create()
+
+        # Add 1-2 previous servers
+        num_previous = random.randint(1, 2)
+
+        for _ in range(num_previous):
+            server, usernames = random.choice(REMOTE_SERVERS)
+            username = random.choice(usernames)
+            move_date = timezone.now() - timedelta(days=random.randint(30, 365)) 
+
+            actor.record_move(server, username, move_date)
+
+        return actor
+
     def handle(self, *args, **kwargs):
         try:
 
@@ -114,15 +130,20 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(self.style.SUCCESS('Admin user already exists.'))
             
-            # Create multiple actors (Outbox will be created automatically)
+            # Create multiple actors - mix of regular and those with history
+            # (Outbox will be created automatically)
             self.stdout.write('Creating actors...')
-            actors = ActorFactory.create_batch(10)
+            regular_actors = ActorFactory.create_batch(7) # 7 regular actors
+            history_actors = [self.create_actor_with_history() for _ in range(3)] # 3 actors with history
+            actors = regular_actors + history_actors
 
             # Track different types of activities
             local_like_count = 0
             remote_like_count = 0
             local_follow_count = 0
             remote_follow_count = 0
+            moved_actors_count = len(history_actors) # Counts the number of actors with history
+            regular_actors_count = len(regular_actors) # Counts the number of regular actors
 
             # Create notes and various activities
             self.stdout.write('Creating notes and activities...')
@@ -182,6 +203,8 @@ class Command(BaseCommand):
                 self.style.SUCCESS(
                     f'Successfully created:\n'
                     f'- {total_actors} actors\n'
+                    f'- {moved_actors_count} actors with history\n'
+                    f'- {regular_actors_count} regular actors\n'
                     f'- {total_notes} notes\n'
                     f'- {total_creates} Create activities ({total_actors} for actors, {total_notes} for notes)\n'
                     f'- {local_like_count} Local Like activities\n'
