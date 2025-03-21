@@ -5,25 +5,36 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0002_remove_portabilityoutbox_activities_createactivity_and_more'),
+        ("core", "0002_remove_portabilityoutbox_activities_createactivity_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='likeactivity',
-            name='object_data',
-            field=models.JSONField(blank=True, help_text='Metadata of the liked object', null=True),
+            model_name="likeactivity",
+            name="object_data",
+            field=models.JSONField(
+                blank=True, help_text="Metadata of the liked object", null=True
+            ),
         ),
         migrations.AddField(
-            model_name='likeactivity',
-            name='object_url',
-            field=models.URLField(blank=True, help_text='URL of the liked object in the fediverse', null=True),
+            model_name="likeactivity",
+            name="object_url",
+            field=models.URLField(
+                blank=True,
+                help_text="URL of the liked object in the fediverse",
+                null=True,
+            ),
         ),
         migrations.AlterField(
-            model_name='likeactivity',
-            name='note',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='like_activities', to='core.note'),
+            model_name="likeactivity",
+            name="note",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="like_activities",
+                to="core.note",
+            ),
         ),
     ]
