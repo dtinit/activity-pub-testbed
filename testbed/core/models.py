@@ -13,9 +13,12 @@ def validate_username(value):
     if len(value) < 3:
         raise ValidationError("Username must be at least 3 characters.")
 
+
 class Actor(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='actor')
-    username = models.CharField(max_length=100, unique=True, validators=[validate_username])
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="actor")
+    username = models.CharField(
+        max_length=100, unique=True, validators=[validate_username]
+    )
     full_name = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -23,7 +26,7 @@ class Actor(models.Model):
 
     def __str__(self):
         return self.username
-    
+
     def save(self, *args, **kwargs):
         is_new = self._state.adding
         super().save(*args, **kwargs)
@@ -35,15 +38,16 @@ class Actor(models.Model):
 
                 # Create an initial Activity announcing the Actor's creation
                 activity = CreateActivity.objects.create(
-                    actor=self,
-                    visibility='public'
+                    actor=self, visibility="public"
                 )
 
                 # Add to Outbox
                 outbox.add_activity(activity)
 
             except Exception as e:
-                logger.error(f'Error creating outbox/activity for actor {self.username}: {e}') 
+                logger.error(
+                    f"Error creating outbox/activity for actor {self.username}: {e}"
+                )
 
     def get_json_ld(self):
         # Return a LOLA-compliant JSON-LD representation of the account
@@ -61,16 +65,23 @@ class Actor(models.Model):
 
 
 class Activity(models.Model):
-    actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="%(class)s_activities") # This makes each subclass have its own related_name 
+    actor = models.ForeignKey(
+        Actor, on_delete=models.CASCADE, related_name="%(class)s_activities"
+    )  # This makes each subclass have its own related_name
     timestamp = models.DateTimeField(auto_now_add=True)
-    visibility = models.CharField(max_length=20, default="public", choices=[
-        ("public", "Public"),
-        ("private", "Private"),
-        ("followers-only", "Followers only")
-    ])
+    visibility = models.CharField(
+        max_length=20,
+        default="public",
+        choices=[
+            ("public", "Public"),
+            ("private", "Private"),
+            ("followers-only", "Followers only"),
+        ],
+    )
 
     class Meta:
-        abstract = True # This makes it a base clas that won't create its own table
+        abstract = True  # This makes it a base clas that won't create its own table
+
 
 class CreateActivity(Activity):
     note = models.OneToOneField(
@@ -78,13 +89,13 @@ class CreateActivity(Activity):
         on_delete=models.CASCADE,
         related_name="create_activities",
         null=True,
-        blank=True
+        blank=True,
     )
 
     def __str__(self):
         if self.note:
-            return f'Create by {self.actor.username}: {self.note}'
-        return f'Create by {self.actor.username}: Actor creation'
+            return f"Create by {self.actor.username}: {self.note}"
+        return f"Create by {self.actor.username}: Actor creation"
 
     def get_json_ld(self):
         json_ld = {
@@ -97,12 +108,12 @@ class CreateActivity(Activity):
         }
 
         if self.note:
-            json_ld['object'] = self.note.get_json_ld()
+            json_ld["object"] = self.note.get_json_ld()
         else:
-            json_ld['object'] = self.actor.get_json_ld()
+            json_ld["object"] = self.actor.get_json_ld()
 
         return json_ld
-    
+
 
 class LikeActivity(Activity):
     note = models.ForeignKey(
@@ -110,18 +121,16 @@ class LikeActivity(Activity):
         on_delete=models.CASCADE,
         related_name="like_activities",
         null=True,
-        blank=True
+        blank=True,
     )
     object_url = models.URLField(
         max_length=200,
         help_text="URL of the liked object in the fediverse",
         null=True,
-        blank=True
+        blank=True,
     )
     object_data = models.JSONField(
-        help_text="Metadata of the liked object",
-        null=True,
-        blank=True
+        help_text="Metadata of the liked object", null=True, blank=True
     )
 
     def clean(self):
@@ -129,13 +138,13 @@ class LikeActivity(Activity):
         # For remote objects, we need both url and data
         if not self.object_url and not (self.object_url and self.object_data):
             raise ValidationError("Remote objects must have both URL and metadata")
-        
+
     def __str__(self):
         if self.note:
-            return f'Like by {self.actor.username}: {self.note}'
-        content = self.object_data.get('content', '')[:50]
-        return f'Like by {self.actor.username}: {content}...'
-        
+            return f"Like by {self.actor.username}: {self.note}"
+        content = self.object_data.get("content", "")[:50]
+        return f"Like by {self.actor.username}: {content}..."
+
     def get_json_ld(self):
         base = {
             "@context": "https://www.w3.org/ns/activitystreams",
@@ -154,20 +163,19 @@ class LikeActivity(Activity):
             base["object"] = {
                 "@context": "https://www.w3.org/ns/activitystreams",
                 **self.object_data,
-                "id": self.object_url
+                "id": self.object_url,
             }
 
         return base
 
+
 class FollowActivity(Activity):
     target_actor = models.ForeignKey(
-        Actor,
-        on_delete=models.CASCADE,
-        related_name="follow_activities_received"
+        Actor, on_delete=models.CASCADE, related_name="follow_activities_received"
     )
 
     def __str__(self):
-        return f'Follow by {self.actor.username}: {self.target_actor.username}'
+        return f"Follow by {self.actor.username}: {self.target_actor.username}"
 
     def get_json_ld(self):
         return {
@@ -181,16 +189,19 @@ class FollowActivity(Activity):
         }
 
 
-
 class Note(models.Model):
     actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="notes")
     content = models.TextField()
     published = models.DateTimeField(auto_now_add=True)
-    visibility = models.CharField(max_length=20, default="public", choices=[
-        ("public", "Public"),
-        ("private", "Private"),
-        ("followers-only", "Followers Only")
-    ])
+    visibility = models.CharField(
+        max_length=20,
+        default="public",
+        choices=[
+            ("public", "Public"),
+            ("private", "Private"),
+            ("followers-only", "Followers Only"),
+        ],
+    )
 
     def __str__(self):
         return f"Note by {self.actor.username}: {self.content[:30]}"
@@ -208,7 +219,9 @@ class Note(models.Model):
 
 
 class PortabilityOutbox(models.Model):
-    actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="portability_outbox")
+    actor = models.ForeignKey(
+        Actor, on_delete=models.CASCADE, related_name="portability_outbox"
+    )
     activities_create = models.ManyToManyField(CreateActivity, related_name="outboxes")
     activities_like = models.ManyToManyField(LikeActivity, related_name="outboxes")
     activities_follow = models.ManyToManyField(FollowActivity, related_name="outboxes")
@@ -216,7 +229,7 @@ class PortabilityOutbox(models.Model):
 
     def __str__(self):
         return f"Outbox for {self.actor.username}"
-    
+
     # Helper method to add any type of activity
     def add_activity(self, activity):
         if isinstance(activity, CreateActivity):
@@ -233,7 +246,7 @@ class PortabilityOutbox(models.Model):
         follow_activities = list(self.activities_follow.all())
 
         all_activities = create_activities + like_activities + follow_activities
-        
+
         # Sort by timestamp
         all_activities.sort(key=lambda x: x.timestamp, reverse=True)
 

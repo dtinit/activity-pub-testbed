@@ -5,71 +5,177 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0001_initial'),
+        ("core", "0001_initial"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='portabilityoutbox',
-            name='activities',
+            model_name="portabilityoutbox",
+            name="activities",
         ),
         migrations.CreateModel(
-            name='CreateActivity',
+            name="CreateActivity",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('timestamp', models.DateTimeField(auto_now_add=True)),
-                ('visibility', models.CharField(choices=[('public', 'Public'), ('private', 'Private'), ('followers-only', 'Followers only')], default='public', max_length=20)),
-                ('actor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)s_activities', to='core.actor')),
-                ('note', models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='create_activities', to='core.note')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("timestamp", models.DateTimeField(auto_now_add=True)),
+                (
+                    "visibility",
+                    models.CharField(
+                        choices=[
+                            ("public", "Public"),
+                            ("private", "Private"),
+                            ("followers-only", "Followers only"),
+                        ],
+                        default="public",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "actor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="%(class)s_activities",
+                        to="core.actor",
+                    ),
+                ),
+                (
+                    "note",
+                    models.OneToOneField(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="create_activities",
+                        to="core.note",
+                    ),
+                ),
             ],
             options={
-                'abstract': False,
+                "abstract": False,
             },
         ),
         migrations.AddField(
-            model_name='portabilityoutbox',
-            name='activities_create',
-            field=models.ManyToManyField(related_name='outboxes', to='core.createactivity'),
+            model_name="portabilityoutbox",
+            name="activities_create",
+            field=models.ManyToManyField(
+                related_name="outboxes", to="core.createactivity"
+            ),
         ),
         migrations.CreateModel(
-            name='FollowActivity',
+            name="FollowActivity",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('timestamp', models.DateTimeField(auto_now_add=True)),
-                ('visibility', models.CharField(choices=[('public', 'Public'), ('private', 'Private'), ('followers-only', 'Followers only')], default='public', max_length=20)),
-                ('actor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)s_activities', to='core.actor')),
-                ('target_actor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='follow_activities_received', to='core.actor')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("timestamp", models.DateTimeField(auto_now_add=True)),
+                (
+                    "visibility",
+                    models.CharField(
+                        choices=[
+                            ("public", "Public"),
+                            ("private", "Private"),
+                            ("followers-only", "Followers only"),
+                        ],
+                        default="public",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "actor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="%(class)s_activities",
+                        to="core.actor",
+                    ),
+                ),
+                (
+                    "target_actor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="follow_activities_received",
+                        to="core.actor",
+                    ),
+                ),
             ],
             options={
-                'abstract': False,
+                "abstract": False,
             },
         ),
         migrations.AddField(
-            model_name='portabilityoutbox',
-            name='activities_follow',
-            field=models.ManyToManyField(related_name='outboxes', to='core.followactivity'),
+            model_name="portabilityoutbox",
+            name="activities_follow",
+            field=models.ManyToManyField(
+                related_name="outboxes", to="core.followactivity"
+            ),
         ),
         migrations.CreateModel(
-            name='LikeActivity',
+            name="LikeActivity",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('timestamp', models.DateTimeField(auto_now_add=True)),
-                ('visibility', models.CharField(choices=[('public', 'Public'), ('private', 'Private'), ('followers-only', 'Followers only')], default='public', max_length=20)),
-                ('actor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)s_activities', to='core.actor')),
-                ('note', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='like_activities', to='core.note')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("timestamp", models.DateTimeField(auto_now_add=True)),
+                (
+                    "visibility",
+                    models.CharField(
+                        choices=[
+                            ("public", "Public"),
+                            ("private", "Private"),
+                            ("followers-only", "Followers only"),
+                        ],
+                        default="public",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "actor",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="%(class)s_activities",
+                        to="core.actor",
+                    ),
+                ),
+                (
+                    "note",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="like_activities",
+                        to="core.note",
+                    ),
+                ),
             ],
             options={
-                'abstract': False,
+                "abstract": False,
             },
         ),
         migrations.AddField(
-            model_name='portabilityoutbox',
-            name='activities_like',
-            field=models.ManyToManyField(related_name='outboxes', to='core.likeactivity'),
+            model_name="portabilityoutbox",
+            name="activities_like",
+            field=models.ManyToManyField(
+                related_name="outboxes", to="core.likeactivity"
+            ),
         ),
         migrations.DeleteModel(
-            name='Activity',
+            name="Activity",
         ),
     ]

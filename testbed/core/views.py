@@ -6,9 +6,11 @@ from django.http import HttpResponse
 from .models import Actor, PortabilityOutbox
 from .serializers import ActorSerializer, PortabilityOutboxSerializer
 
+
 class ActorDetailView(RetrieveAPIView):
     queryset = Actor.objects.all()
     serializer_class = ActorSerializer
+
 
 class PortabilityOutboxDetailView(RetrieveAPIView):
     # queryset = PortabilityOutbox.objects.all()
@@ -16,8 +18,9 @@ class PortabilityOutboxDetailView(RetrieveAPIView):
 
     def get_object(self):
         # Retrieve the outbox for the given actor
-        actor_id = self.kwargs['pk']
+        actor_id = self.kwargs["pk"]
         return get_object_or_404(PortabilityOutbox, actor_id=actor_id)
+
 
 # Restrict the view to staff users using the @user_passes_test decorator
 @user_passes_test(lambda u: u.is_staff)  # Restrict to staff
@@ -26,7 +29,7 @@ def deactivate_account(request, actor_id):
     actor = Actor.objects.get(pk=actor_id)
     actor.user.is_active = False
     actor.user.save()
-    return redirect('admin:index')  # Redirect to admin interface
+    return redirect("admin:index")  # Redirect to admin interface
 
 
 def trigger_account(request):

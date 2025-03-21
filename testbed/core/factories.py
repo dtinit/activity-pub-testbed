@@ -2,11 +2,12 @@ import factory
 from factory.django import DjangoModelFactory
 from django.contrib.auth.models import User
 from testbed.core.models import (
-    Actor, Note,
+    Actor,
+    Note,
     CreateActivity,
     LikeActivity,
     FollowActivity,
-    PortabilityOutbox
+    PortabilityOutbox,
 )
 
 
@@ -14,9 +15,9 @@ class UserFactory(DjangoModelFactory):
     class Meta:
         model = User
 
-    username = factory.Sequence(lambda n: f'user_{n}')
-    email = factory.LazyAttribute(lambda o: f'{o.username}@example.com')
-    password = factory.PostGenerationMethodCall('set_password', 'testpass123')
+    username = factory.Sequence(lambda n: f"user_{n}")
+    email = factory.LazyAttribute(lambda o: f"{o.username}@example.com")
+    password = factory.PostGenerationMethodCall("set_password", "testpass123")
     is_staff = False
     is_active = True
 
@@ -31,8 +32,8 @@ class ActorFactory(DjangoModelFactory):
         model = Actor
 
     user = factory.SubFactory(UserFactory)
-    username = factory.SelfAttribute('user.username')
-    full_name = factory.Faker('name')
+    username = factory.SelfAttribute("user.username")
+    full_name = factory.Faker("name")
     previously = factory.Dict({})
 
 
@@ -41,8 +42,8 @@ class NoteFactory(DjangoModelFactory):
         model = Note
 
     actor = factory.SubFactory(ActorFactory)
-    content = factory.Faker('text', max_nb_chars=200)
-    visibility = factory.Iterator(['public', 'private', 'followers-only'])
+    content = factory.Faker("text", max_nb_chars=200)
+    visibility = factory.Iterator(["public", "private", "followers-only"])
 
 
 class CreateActivityFactory(DjangoModelFactory):
@@ -51,25 +52,25 @@ class CreateActivityFactory(DjangoModelFactory):
 
     actor = factory.SubFactory(ActorFactory)
     note = factory.SubFactory(NoteFactory)
-    visibility = factory.Iterator(['public', 'private', 'followers-only'])
+    visibility = factory.Iterator(["public", "private", "followers-only"])
 
     # Helper method to create a CreateActivity for Actor creation
     @classmethod
     def create_for_actor(cls, actor):
         return cls.create(
             actor=actor,
-            note=None, # No note means this is an Actor creation activity
-            visibility='public'
+            note=None,  # No note means this is an Actor creation activity
+            visibility="public",
         )
-    
+
 
 class LikeActivityFactory(DjangoModelFactory):
     class Meta:
         model = LikeActivity
 
     actor = factory.SubFactory(ActorFactory)
-    note = factory.SubFactory(NoteFactory) # Required for Like activity
-    visibility = factory.Iterator(['public', 'private', 'followers-only'])
+    note = factory.SubFactory(NoteFactory)  # Required for Like activity
+    visibility = factory.Iterator(["public", "private", "followers-only"])
 
 
 class FollowActivityFactory(DjangoModelFactory):
@@ -77,8 +78,8 @@ class FollowActivityFactory(DjangoModelFactory):
         model = FollowActivity
 
     actor = factory.SubFactory(ActorFactory)
-    target_actor = factory.SubFactory(ActorFactory) # Required for Follow activity
-    visibility = factory.Iterator(['public', 'private', 'followers-only'])
+    target_actor = factory.SubFactory(ActorFactory)  # Required for Follow activity
+    visibility = factory.Iterator(["public", "private", "followers-only"])
 
 
 class PortabilityOutboxFactory(DjangoModelFactory):
