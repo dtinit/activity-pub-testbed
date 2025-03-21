@@ -1,4 +1,3 @@
-import pytest
 from testbed.core.models import LikeActivity
 
 

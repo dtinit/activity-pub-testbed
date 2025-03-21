@@ -1,5 +1,5 @@
 import pytest
-from testbed.core.serializers import ActorSerializer, ActivitySerializer, PortabilityOutboxSerializer
+from testbed.core.serializers import ActorSerializer
 
 
 # Test that the ActorSerializer returns the correct data
