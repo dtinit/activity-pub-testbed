@@ -5,8 +5,7 @@ from testbed.core.factories import (
     NoteFactory,
     CreateActivityFactory,
     LikeActivityFactory,
-    FollowActivityFactory,
-    PortabilityOutboxFactory)
+    FollowActivityFactory)
 
 
 @pytest.fixture

@@ -1,5 +1,3 @@
-import pytest
-from testbed.core.models import CreateActivity, LikeActivity, FollowActivity
 
 
 def test_create_activity(create_activity):
