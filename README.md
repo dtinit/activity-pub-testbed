@@ -64,5 +64,31 @@ To run the tests, use the following command:
 pytest
 ```
 
+## 🧹 pre-commit Hooks
+
+We use [pre-commit](https://pre-commit.com/) to automatically lint and format code before each commit, ensuring code quality and consistency.
+
+### 🚀 Setting it up
+
+1. **Install the pre-commit hook**  
+   This sets up Git hooks in your local repo:
+
+   ```sh
+   pre-commit install
+   ```
+
+2. **You're all set!**  
+   Now, every time you commit, `pre-commit` will automatically run checks (like `ruff`) on staged files.
+
+### 💡 Run checks manually (optional)
+
+To run all hooks on all files manually:
+
+```bash
+pre-commit run --all-files
+```
+
+This is useful for checking your work before pushing large changes.
+
 ## License
 This project is licensed under the Apache License 2.0.
