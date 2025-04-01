@@ -44,3 +44,7 @@ def report_activity(request):
         # Perform report activity logic
         return HttpResponse("Activity has been reported.")
     return render(request, "report_activity_form.html")
+
+
+def index(request):
+    return render(request, "index.html")
