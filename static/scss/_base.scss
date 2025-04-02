@@ -1,0 +1,39 @@
+html {
+  height: 100%;
+  background: #eee;
+}
+
+.layout {
+  display: grid;
+  min-height: 100%;
+  grid-template-rows: auto 1fr auto;
+  gap: 25px;
+}
+
+.layout header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 25px;
+  background: #fff;
+  border-bottom: 1px solid #ccc;
+}
+
+.layout .main-content {
+  padding: 25px;
+  max-width: 1300px;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px solid #ccc;
+}
+
+.layout footer {
+  padding: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 25px;
+  background: #fff;
+  border-top: 1px solid #ccc;
+}
+

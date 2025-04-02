@@ -1,0 +1,30 @@
+{% load static %}
+{% load sass_tags %}
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ActivityPub Account Portability Testbed</title>
+    <link rel="stylesheet" href="{% sass_src 'scss/site.scss' %}">
+  </head>
+  <body class="layout">
+    <header>
+      <b>
+        ActivityPub Account Portability Testbed
+      </b>
+      <a href="">Sign in</a>
+    </header>
+    <div class="main-content">
+    {% block content %}
+    {% endblock %}
+    </div>
+    <footer>
+      <span>
+        &copy;{% now "Y" %} <a href="https://dtinit.org">Data Transfer Initiative</a>
+      </span>
+      <a href="https://dtinit.org/privacy-policy">Privacy policy</a>
+    </footer>
+  </body>
+</html>

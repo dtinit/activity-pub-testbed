@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "testbed.core",
     "rest_framework",
+    "sass_processor"
 ]
 
 MIDDLEWARE = [
@@ -101,6 +102,18 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = "static/"
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "static")
+]
+STATIC_ROOT = env.str("DJANGO_STATIC_ROOT", str(BASE_DIR.joinpath("staticfiles")))
+
+# SASS
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+    'sass_processor.finders.CssFinder'
+]
+SASS_PROCESSOR_AUTO_INCLUDE = False # Don't bother looking through apps
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field

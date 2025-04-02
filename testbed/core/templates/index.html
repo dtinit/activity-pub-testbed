@@ -1,0 +1,19 @@
+{% extends "_base.html" %}
+
+{% block content %}
+<main>
+  <h1>ActivityPub Account Portability Testbed</h1>
+  <br />
+  <p>
+    The <a href="https://www.w3.org/TR/activitypub/">ActivityPub</a> account portability testbed is an implementation of <a href="https://swicg.github.io/activitypub-data-portability/lola.html">LOLA</a>, a proposal for an interoperable approach to moving accounts between ActivityPub servers.  The testbed implements LOLA as a source server currently, and we have plans to implement LOLA as a destination as well.
+  </p>
+  <br />
+  <p>
+    If you are building a LOLA implementation, register for a test account here (coming soon).  The account will be populated with test data including posts, follows and item history.  Use this account to test moving an ActivityPub Actor’s full account to your site.
+  </p>
+  <br />
+  <p>
+    Accounts on this site are not full ActivityPub accounts in that they are not shared to the Fediverse or truly federated with other ActivityPubservers.
+  </p>
+</main>
+{% endblock %}

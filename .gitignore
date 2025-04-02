@@ -80,3 +80,6 @@ dist/
 
 # Sphinx documentation
 docs/_build/
+
+# collectstatic output
+staticfiles/
