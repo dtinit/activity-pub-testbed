@@ -32,9 +32,9 @@ class ActorFactory(DjangoModelFactory):
         model = Actor
 
     user = factory.SubFactory(UserFactory)
-    username = factory.SelfAttribute("user.username")
-    full_name = factory.Faker("name")
-    previously = factory.Dict({})
+    username = factory.SelfAttribute('user.username')
+    full_name = factory.Faker('name')
+    previously = factory.List([])
 
 
 class NoteFactory(DjangoModelFactory):

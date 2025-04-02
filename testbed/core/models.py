@@ -2,6 +2,7 @@ import logging
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from datetime import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +23,28 @@ class Actor(models.Model):
     full_name = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    previously = models.JSONField(default=dict, null=True, blank=True)
+    previously = models.JSONField(default=list, null=True, blank=True)
 
     def __str__(self):
         return self.username
+    
+    # Record a previous location of this account
+    def record_move(self, previous_server, previous_username, move_date=None):
+        print(f"Previously type: {type(self.previously)}")  # Debug line
+        print(f"Previously value: {self.previously}")       # Debug line
 
+        if self.previously is None:
+            self.previously = []
+
+        move_record = {
+            'type': 'Move', 
+            'object': f"https://{previous_server}/users/{previous_username}",
+            'published': (move_date or timezone.now()).isoformat()
+        }
+
+        self.previously.append(move_record)
+        self.save()
+    
     def save(self, *args, **kwargs):
         is_new = self._state.adding
         super().save(*args, **kwargs)
@@ -60,7 +78,7 @@ class Actor(models.Model):
             "id": f"https://example.com/users/{self.username}",
             "preferredUsername": self.username,
             "name": self.username,
-            "previously": self.previously,
+            "previously": self.previously or [], # Ensure it's always a list
         }
 
 
@@ -171,23 +189,55 @@ class LikeActivity(Activity):
 
 class FollowActivity(Activity):
     target_actor = models.ForeignKey(
-        Actor, on_delete=models.CASCADE, related_name="follow_activities_received"
+        Actor,
+        on_delete=models.CASCADE,
+        related_name="follow_activities_received",
+        null=True,
+        blank=True
+    )
+    target_actor_url = models.URLField(
+        max_length=200,
+        help_text="URL of the followed actor in the fediverse",
+        null=True,
+        blank=True
+    )
+    target_actor_data = models.JSONField(
+        help_text="Metadata of the followed actor",
+        null=True,
+        blank=True,
     )
 
-    def __str__(self):
-        return f"Follow by {self.actor.username}: {self.target_actor.username}"
+    def clean(self):
+        super().clean()
+        if not self.target_actor and not (self.target_actor_url and self.target_actor_data):
+            raise ValidationError("Either local target_actor or remote actor data (URL and metadata) must be provided")
 
+    def __str__(self):
+        if self.target_actor:
+            return f'Follow by {self.actor.username}: {self.target_actor.username}'
+        username = self.target_actor_data.get('preferredUsername', '')
+        return f'Follow by {self.actor.username}: {username} (remote)'
+    
     def get_json_ld(self):
-        return {
+        base = {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Follow",
             "id": f"https://example.com/activities/{self.id}",
             "actor": f"https://example.com/users/{self.actor.username}",
-            "object": self.target_actor.get_json_ld(),
             "published": self.timestamp.isoformat(),
             "visibility": self.visibility,
         }
 
+        if self.target_actor:
+            base["object"] = self.target_actor.get_json_ld()
+        else:
+            base["object"] = {
+                "@context": "https://www.w3.org/ns/activitystreams",
+                **self.target_actor_data,
+                "id": self.target_actor_url
+            }
+
+        return base
 
 class Note(models.Model):
     actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="notes")
