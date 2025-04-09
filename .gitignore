@@ -29,6 +29,9 @@ env/
 *.venv
 venv.bak/
 
+# Local logs
+logs/
+
 # External tools
 .actrc
 
