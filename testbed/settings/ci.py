@@ -14,3 +14,11 @@ SEED_ADMIN_EMAIL = ("admin@testing.com",)
 SEED_ADMIN_PASSWORD = ("admin123",)
 
 DATABASES = {"default": env.db_url("DJ_DATABASE_CONN_STRING")}
+
+LOGGING["loggers"] = {
+    "django": {
+        "handlers": ["rich_console"],
+        "level": "WARNING",
+        "propagate": False,
+    }
+}
