@@ -33,10 +33,40 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "testbed.core",
+    "testbed.core", 
+    "sass_processor",
     "rest_framework",
-    "sass_processor"
+    "oauth2_provider"
 ]
+
+# OAuth2 Configuration
+# https://django-oauth-toolkit.readthedocs.io/en/latest/
+
+OAUTH2_PROVIDER = {
+    'SCOPES': {
+        'read': 'Read public data',
+        'write': 'Write data',
+        'private': 'Access private data',
+    },
+    'ACCESS_TOKEN_EXPIRE_SECONDS': 3600, # 1 hour
+    'REFRESH_TOKEN_EXPIRE_SECONDS': 86400, # 1 day
+}
+
+# REST Framework Configuration
+# https://www.django-rest-framework.org/api-guide/settings/
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'oauth2_provider.contrib.rest_framework.OAuth2Authentication',
+        'rest_framework.authentication.SessionAuthentication', # Keep session auth too
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
+
+# LOGIN_URL = '/admin/login/'
+# LOGOUT_URL = '/admin/logout/'
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
