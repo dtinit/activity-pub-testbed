@@ -1,10 +1,29 @@
+from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
 from rest_framework.generics import RetrieveAPIView
 from django.shortcuts import redirect
 from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse
 from .models import Actor, PortabilityOutbox
-from .serializers import ActorSerializer, PortabilityOutboxSerializer
+from .serializers import ActorSerializer, PortabilityOutboxSerializer, TesterRegistrationSerializer
+
+
+class TesterRegistrationView(APIView):
+    permissions_classes = [AllowAny] # Allow anyone to register
+
+    def post(self, request):
+        serializer = TesterRegistrationSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response({
+                'message': 'Tester account created successfully.',
+                'user_id': user.id,
+                'username': user.username,
+            }, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ActorDetailView(RetrieveAPIView):

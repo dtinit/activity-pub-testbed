@@ -32,3 +32,20 @@ def test_outbox_detail_api(outbox):
     assert json_ld["id"] == f"https://example.com/users/{outbox.actor.username}/outbox"
     assert json_ld["totalItems"] >= 0
     assert "items" in json_ld
+
+
+# Tester registration API test
+@pytest.mark.django_db
+def test_tester_registration_api():
+    client = APIClient()
+    url = reverse('register')
+    data = {
+        'username': 'testuser',
+        'email': 'test@example.com',
+        'password': 'testpass123'
+    }
+    response = client.post(url, data)
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data['username'] == 'testuser'
+    assert 'user_id' in response.data
