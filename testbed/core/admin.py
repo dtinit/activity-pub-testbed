@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.models import User
 from .models import (
     Actor,
     Note,
@@ -7,6 +9,40 @@ from .models import (
     FollowActivity,
     PortabilityOutbox,
 )
+
+
+# Tester User Admin
+class TesterUserAdmin(UserAdmin):
+    list_display = ('username', 'email', 'date_joined', 'last_login', 'is_active')
+    list_filter = ('is_active', 'date_joined')
+    search_fields = ('username', 'email')
+    ordering = ('-date_joined',)
+
+    fieldsets = (
+        (None, {'fields': ('username', 'password')}),
+        ('Personal info', {'fields': ('email',)}),
+        ('Important dates', {'fields': ('last_login', 'date_joined')}),
+        ('Status', {'fields': ('is_active',)}),
+    )
+
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('username', 'email', 'password1', 'password2'),
+        }),
+    )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(
+            is_staff=False, 
+            is_superuser=False
+        ).exclude(
+            actor__isnull=False  # Exclude users that have associated Actor instances
+        )
+    
+# Unregister default User admin and register TesterUserAdmin instead
+admin.site.unregister(User)
+admin.site.register(User, TesterUserAdmin)
 
 
 @admin.register(Actor)

@@ -8,14 +8,14 @@ from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse
 from .models import Actor, PortabilityOutbox
-from .serializers import ActorSerializer, PortabilityOutboxSerializer, TesterRegistrationSerializer
+from .serializers import ActorSerializer, PortabilityOutboxSerializer, UserRegistrationSerializer
 
 
 class TesterRegistrationView(APIView):
     permissions_classes = [AllowAny] # Allow anyone to register
 
     def post(self, request):
-        serializer = TesterRegistrationSerializer(data=request.data)
+        serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
             return Response({
