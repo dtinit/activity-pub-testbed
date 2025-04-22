@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "testbed.core", 
     "sass_processor",
     "rest_framework",
+    "rest_framework.authtoken",
     "oauth2_provider"
 ]
 
