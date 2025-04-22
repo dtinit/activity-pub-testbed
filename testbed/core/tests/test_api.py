@@ -9,18 +9,52 @@ from oauth2_provider.models import Application, AccessToken
 # Test that the Actor detail API returns the correct data
 @pytest.mark.django_db
 def test_actor_detail_api(actor):
+    # Create test user and get token
+    user = User.objects.create_user(
+        username='testuser',
+        password='testpass123'
+    )
+    
+    # Login to get token
     client = APIClient()
+    login_url = reverse('login')
+    login_data = {
+        'username': 'testuser',
+        'password': 'testpass123'
+    }
+    login_response = client.post(login_url, login_data)
+    token = login_response.data['token']['access_token']
+    
+    # Test protected endpoint with token
+    client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
     url = reverse("actor-detail", kwargs={"pk": actor.id})
     response = client.get(url)
+    
     assert response.status_code == status.HTTP_200_OK
     assert response.data["id"] == actor.id
     assert response.data["json_ld"] == actor.get_json_ld()
 
-
 # Test that the PortabilityOutbox detail API returns the correct data
 @pytest.mark.django_db
 def test_outbox_detail_api(outbox):
+   # Create test user and get token
+    user = User.objects.create_user(
+        username='testuser',
+        password='testpass123'
+    )
+    
+    # Login to get token
     client = APIClient()
+    login_url = reverse('login')
+    login_data = {
+        'username': 'testuser',
+        'password': 'testpass123'
+    }
+    login_response = client.post(login_url, login_data)
+    token = login_response.data['token']['access_token']
+    
+    # Test protected endpoint with token
+    client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
     url = reverse("actor-outbox", kwargs={"pk": outbox.actor.id})
     response = client.get(url)
 
@@ -190,3 +224,18 @@ def test_login_token_is_unique():
 
     # Verify tokens are different
     assert token1 != token2
+
+# Add these new tests
+@pytest.mark.django_db
+def test_actor_detail_api_without_token(actor):
+    client = APIClient()
+    url = reverse("actor-detail", kwargs={"pk": actor.id})
+    response = client.get(url)
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+@pytest.mark.django_db
+def test_outbox_detail_api_without_token(outbox):
+    client = APIClient()
+    url = reverse("actor-outbox", kwargs={"pk": outbox.actor.id})
+    response = client.get(url)
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED

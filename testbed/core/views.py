@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.generics import RetrieveAPIView
 from rest_framework.authtoken.models import Token
+from oauth2_provider.contrib.rest_framework import TokenHasScope
 from oauth2_provider.models import Application, AccessToken
 from django.utils import timezone
 from django.shortcuts import redirect
@@ -17,6 +18,7 @@ from .serializers import ActorSerializer, PortabilityOutboxSerializer, UserRegis
 import uuid
 
 
+# Public endpoint (no token required)
 class TesterRegistrationView(APIView):
     permissions_classes = [AllowAny] # Allow anyone to register
 
@@ -32,6 +34,7 @@ class TesterRegistrationView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
+# Public endpoint (no token required)
 class LoginView(APIView):
     permission_classes = [AllowAny]  # Allow anyone to log in
     serializer_class = LoginSerializer
@@ -74,13 +77,18 @@ class LoginView(APIView):
             }
         }, status=status.HTTP_200_OK)
 
+# Protected endpoint (requires token)
 class ActorDetailView(RetrieveAPIView):
+    permission_classes = [TokenHasScope]
+    required_scopes = ['read']  # Public Actor data -> Require 'read' scope for this view 
     queryset = Actor.objects.all()
     serializer_class = ActorSerializer
 
 
 class PortabilityOutboxDetailView(RetrieveAPIView):
     # queryset = PortabilityOutbox.objects.all()
+    permission_classes = [TokenHasScope]
+    required_scopes = ['private']  # Private data access -> Require 'private' scope for this view
     serializer_class = PortabilityOutboxSerializer
 
     def get_object(self):
