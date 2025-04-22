@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse
 from .models import Actor, PortabilityOutbox
-from .serializers import ActorSerializer, PortabilityOutboxSerializer, UserRegistrationSerializer
+from .serializers import ActorSerializer, PortabilityOutboxSerializer, UserRegistrationSerializer, LoginSerializer
 
 
 class TesterRegistrationView(APIView):
@@ -24,6 +24,24 @@ class TesterRegistrationView(APIView):
                 'username': user.username,
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+class LoginView(APIView):
+    permission_classes = [AllowAny]  # Allow anyone to log in
+    serializer_class = LoginSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.validated_data['user']
+
+        return Response({
+            'message': 'Login successful',
+            'user_id': user.id,
+            'username': user.username,
+            'email': user.email
+        }, status=status.HTTP_200_OK)
 
 
 class ActorDetailView(RetrieveAPIView):
