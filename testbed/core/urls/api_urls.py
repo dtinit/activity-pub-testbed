@@ -3,6 +3,8 @@ from testbed.core.views import (
     ActorDetailView,
     PortabilityOutboxDetailView,
     deactivate_account,
+    TesterRegistrationView,
+    LoginView
 )
 
 urlpatterns = [
@@ -19,5 +21,17 @@ urlpatterns = [
         "actors/<int:actor_id>/deactivate/",
         deactivate_account,
         name="deactivate-account",
+    ),
+    # Registration: API endpoint for tester registration
+    path(
+        "register/",
+        TesterRegistrationView.as_view(),
+        name="register",
+    ),
+    # Login: API endpoint for user login
+    path(
+        "login/",
+        LoginView.as_view(),
+        name="login",
     ),
 ]
