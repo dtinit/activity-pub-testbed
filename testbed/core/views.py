@@ -1,26 +1,35 @@
-from rest_framework.generics import RetrieveAPIView
+# from rest_framework.generics import RetrieveAPIView 
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
 from django.shortcuts import redirect
 from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse
 from .models import Actor, PortabilityOutbox
+from .forms import SecureAuthenticationForm
 from .serializers import ActorSerializer, PortabilityOutboxSerializer
 
 
-class ActorDetailView(RetrieveAPIView):
-    queryset = Actor.objects.all()
-    serializer_class = ActorSerializer
+def login_view(request):
+    form = SecureAuthenticationForm()
+    return render(request, 'auth/login.html', {'form': form})
+
+def logout_view(request):
+    return redirect('home')  # Redirect to the home page after logout
 
 
-class PortabilityOutboxDetailView(RetrieveAPIView):
-    # queryset = PortabilityOutbox.objects.all()
-    serializer_class = PortabilityOutboxSerializer
+@api_view(['GET'])
+def actor_detail(request, pk):
+    actor = get_object_or_404(Actor.objects.all(), pk=pk)
+    serializer = ActorSerializer(actor)
+    return Response(serializer.data)
 
-    def get_object(self):
-        # Retrieve the outbox for the given actor
-        actor_id = self.kwargs["pk"]
-        return get_object_or_404(PortabilityOutbox, actor_id=actor_id)
 
+@api_view(['GET'])
+def portability_outbox_detail(request, pk):
+    outbox = get_object_or_404(PortabilityOutbox, actor_id=pk)
+    serializer = PortabilityOutboxSerializer(outbox)
+    return Response(serializer.data)
 
 # Restrict the view to staff users using the @user_passes_test decorator
 @user_passes_test(lambda u: u.is_staff)  # Restrict to staff
