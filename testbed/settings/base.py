@@ -99,6 +99,11 @@ USE_I18N = True
 
 USE_TZ = True
 
+# HTTPS/SSL settings
+# https://docs.djangoproject.com/en/5.1/topics/security/#ssl-https
+
+SECURE_SSL_REDIRECT = False
+SECURE_PROXY_SSL_HEADER = None
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
