@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
+from .models.auth import TesterUser
 from .models import (
     Actor,
     Note,
@@ -7,6 +9,31 @@ from .models import (
     FollowActivity,
     PortabilityOutbox,
 )
+
+@admin.register(TesterUser)
+class TesterUserAdmin(UserAdmin):
+    list_display = ("email", "is_tester", "email_verified", "is_staff", "is_active")
+    list_filter = ("is_tester", "email_verified", "is_staff", "is_active")
+    readonly_fields = ("email_verified", "date_joined", "last_login")
+
+    fieldsets = (
+        (None, {'fields': ('email', 'password')}),
+        ('Personal info', {'fields': ('first_name', 'last_name')}),
+        ('Permissions', {'fields': ('is_tester', 'email_verified', 'is_active', 'is_staff', 'is_superuser')}),
+        ('Important dates', {'fields': ('last_login', 'date_joined')}),
+    )
+
+    # Override add_fieldsets to use email instead of username
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'password1', 'password2'),
+        }),
+    )
+
+    search_fields = ('email', 'first_name', 'last_name')
+    ordering = ('email',)
+
 
 
 @admin.register(Actor)

@@ -6,6 +6,7 @@ from django.conf import settings
 from django.utils import timezone
 from testbed.core.models import LikeActivity, FollowActivity
 from testbed.core.factories import (
+    TesterUserFactory,
     ActorFactory,
     CreateActivityFactory,
     LikeActivityFactory,
@@ -14,7 +15,7 @@ from testbed.core.factories import (
 )
 
 
-User = get_user_model()
+TesterUser = get_user_model()
 
 # sample remote servers for federation testing
 REMOTE_SERVERS = [
@@ -104,8 +105,7 @@ class Command(BaseCommand):
                 )
 
             # Check for admin user
-            if not User.objects.filter(is_staff=True, is_active=True).exists():
-                username = str(getattr(settings, "SEED_ADMIN_USERNAME"))
+            if not TesterUser.objects.filter(is_staff=True, is_active=True).exists():
                 email = str(getattr(settings, "SEED_ADMIN_EMAIL"))
                 password = str(getattr(settings, "SEED_ADMIN_PASSWORD"))
 
@@ -113,8 +113,9 @@ class Command(BaseCommand):
                     self.stdout.write(
                         self.style.WARNING("Creating admin user automatically...")
                     )
-                    User.objects.create_superuser(
-                        username=username, email=email, password=password
+                    TesterUser.objects.create_superuser(
+                        email=email,
+                        password=password
                     )
                     self.stdout.write(
                         self.style.SUCCESS("Admin user created successfully.")
@@ -126,8 +127,9 @@ class Command(BaseCommand):
                     )
                     if answer == "y":
                         self.stdout.write(self.style.WARNING("Creating admin user..."))
-                        User.objects.create_superuser(
-                            username=username, email=email, password=password
+                        TesterUser.objects.create_superuser(
+                            email=email,
+                            password=password
                         )
                         self.stdout.write(
                             self.style.SUCCESS("Admin user created successfully.")

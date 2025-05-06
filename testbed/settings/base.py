@@ -87,6 +87,20 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# Authentication settings
+# https://docs.djangoproject.com/en/5.1/topics/auth/default/#authentication-backends
+"""AUTEHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+]"""
+
+# Auth URLs
+LOGIN_URL = "/login"
+LOGIN_REDIRECT_URL = "home"
+LOGOUT_REDIRECT_URL = "login"
+
+
+AUTH_USER_MODEL = "core.TesterUser"
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
@@ -99,6 +113,11 @@ USE_I18N = True
 
 USE_TZ = True
 
+# HTTPS/SSL settings
+# https://docs.djangoproject.com/en/5.1/topics/security/#ssl-https
+
+SECURE_SSL_REDIRECT = False
+SECURE_PROXY_SSL_HEADER = None
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
