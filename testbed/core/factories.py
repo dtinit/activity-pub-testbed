@@ -2,6 +2,7 @@ import factory
 from factory.django import DjangoModelFactory
 from django.contrib.auth.models import User
 from testbed.core.models import (
+    TesterUser,
     Actor,
     Note,
     CreateActivity,
@@ -10,13 +11,11 @@ from testbed.core.models import (
     PortabilityOutbox,
 )
 
-
-class UserFactory(DjangoModelFactory):
+class TesterUserFactory(DjangoModelFactory):
     class Meta:
-        model = User
+        model = TesterUser
 
-    username = factory.Sequence(lambda n: f"user_{n}")
-    email = factory.LazyAttribute(lambda o: f"{o.username}@example.com")
+    email = factory.Sequence(lambda n: f"tester_{n}@example.com")
     password = factory.PostGenerationMethodCall("set_password", "testpass123")
     is_staff = False
     is_active = True
@@ -31,8 +30,7 @@ class ActorFactory(DjangoModelFactory):
     class Meta:
         model = Actor
 
-    user = factory.SubFactory(UserFactory)
-    username = factory.SelfAttribute('user.username')
+    username = factory.Sequence(lambda n: f"actor_{n}")
     full_name = factory.Faker('name')
     previously = factory.List([])
 

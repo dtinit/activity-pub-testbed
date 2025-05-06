@@ -1,6 +1,6 @@
 import pytest
 from testbed.core.factories import (
-    UserFactory,
+    TesterUserFactory,
     ActorFactory,
     NoteFactory,
     CreateActivityFactory,
@@ -8,11 +8,9 @@ from testbed.core.factories import (
     FollowActivityFactory,
 )
 
-
 @pytest.fixture
-def user():
-    return UserFactory()
-
+def tester():
+    return TesterUserFactory()
 
 @pytest.fixture
 def actor():
