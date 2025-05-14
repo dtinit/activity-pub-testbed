@@ -90,5 +90,9 @@ pre-commit run --all-files
 
 This is useful for checking your work before pushing large changes.
 
+## Email
+During local development, emails printed in the server output and not actually sent, including verification link emails. In production, you will need to pass `EMAIL_HOST_USER` and `EMAIL_HOST_PASSWORD` with valid Gmail credentials, where `EMAIL_HOST_USER` is the email address to send mail from, and `EMAIL_HOST_PASSWORD` is an [app password](https://support.google.com/mail/answer/185833?hl=en) for that account.
+
 ## License
 This project is licensed under the Apache License 2.0.
+
