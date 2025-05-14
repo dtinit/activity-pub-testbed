@@ -35,7 +35,9 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "testbed.core",
     "rest_framework",
-    "sass_processor"
+    "sass_processor",
+    "allauth",
+    "allauth.account"
 ]
 
 MIDDLEWARE = [
@@ -47,6 +49,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_structlog.middlewares.RequestMiddleware",
+    "allauth.account.middleware.AccountMiddleware"
 ]
 
 ROOT_URLCONF = "testbed.urls"
@@ -188,3 +191,23 @@ LOGGING = {
         },
     },
 }
+
+AUTHENTICATION_BACKENDS = [
+    # Needed to login by username in Django admin, regardless of `allauth`
+    'django.contrib.auth.backends.ModelBackend',
+    # `allauth` specific authentication methods, such as login by email
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
+
+# allauth configuration
+ACCOUNT_LOGIN_METHODS = {'email'}
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*']
+ACCOUNT_UNIQUE_EMAIL = True
+ACCOUNT_SESSION_REMEMBER = True
+ACCOUNT_EMAIL_VERIFICATION='mandatory'
+ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION=True
+LOGIN_REDIRECT_URL = '/'
+
+# Email configuration
+DEFAULT_FROM_EMAIL='noreply@dt-reg.org'
+
