@@ -14,7 +14,11 @@
       <b>
         ActivityPub Account Portability Testbed
       </b>
-      <a href="{% url 'login' %}">Sign in</a>
+      {% if user.is_authenticated %}
+      <a href="{% url 'account_logout' %}">Sign out</a>
+      {% else %}
+      <a href="{% url 'account_login' %}">Sign in</a>
+      {% endif %}
     </header>
     <div class="main-content">
     {% block content %}

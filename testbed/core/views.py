@@ -6,16 +6,7 @@ from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse
 from .models import Actor, PortabilityOutbox
-from .forms import SecureAuthenticationForm
 from .serializers import ActorSerializer, PortabilityOutboxSerializer
-
-
-def login_view(request):
-    form = SecureAuthenticationForm()
-    return render(request, 'auth/login.html', {'form': form})
-
-def logout_view(request):
-    return redirect('home')  # Redirect to the home page after logout
 
 
 @api_view(['GET'])
