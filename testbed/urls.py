@@ -23,6 +23,8 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     # API-specific endpoints (prefixed with '/api/')
     path("api/", include("testbed.core.urls.api_urls")),
+    # allauth
+    path("account/", include("allauth.urls")),
     # Regular views (no prefix)
     path("", include("testbed.core.urls.views_urls")),
 ]
