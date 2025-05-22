@@ -1,38 +1,64 @@
 import logging
 from django.db import models
 from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from datetime import timezone
 
 logger = logging.getLogger(__name__)
 
+class ActorManager(models.Manager):
+    # Create both source and destination actors for a user
+    def create_actors_for_user(self, user):
+        source = self.create(
+            user=user,
+            role=Actor.ROLE_SOURCE,
+        )
+        destination = self.create(
+            user=user,
+            role=Actor.ROLE_DESTINATION,
+        )
 
-def validate_username(value):
-    if " " in value or not value.isalnum():
-        raise ValidationError("Username must be alphanumeric and contain no spaces.")
-
-    if len(value) < 3:
-        raise ValidationError("Username must be at least 3 characters.")
+        return source, destination
 
 
 class Actor(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="actor")
-    username = models.CharField(
-        max_length=100, unique=True, validators=[validate_username]
-    )
-    full_name = models.CharField(max_length=100)
+    ROLE_SOURCE = "source"
+    ROLE_DESTINATION = "destination"
+    ROLE_CHOICES = [
+        (ROLE_SOURCE, "Source Service"),
+        (ROLE_DESTINATION, "Destination Service"),
+    ]
+
+    user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE, related_name="actors")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     previously = models.JSONField(default=list, null=True, blank=True)
 
+    objects = ActorManager()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "role"],
+                name="unique_user_role",
+            )
+        ]
+
     def __str__(self):
-        return self.username
+        return f"{self.user.username}'s {self.role} actor"
+    
+    @property
+    def is_source(self):
+        return self.role == self.ROLE_SOURCE
+    
+    @property
+    def is_destination(self):
+        return self.role == self.ROLE_DESTINATION
     
     # Record a previous location of this account
     def record_move(self, previous_server, previous_username, move_date=None):
-        print(f"Previously type: {type(self.previously)}")  # Debug line
-        print(f"Previously value: {self.previously}")       # Debug line
-
         if self.previously is None:
             self.previously = []
 
@@ -44,28 +70,40 @@ class Actor(models.Model):
 
         self.previously.append(move_record)
         self.save()
+
+    # Initialize outbox and create activity if this is a source actor
+    def initialize_if_source(self):
+        if not self.is_source:
+            return
+        
+        try:
+            # Create a PortabilityOutbox for new actor
+            outbox, created = PortabilityOutbox.objects.get_or_create(actor=self)
+
+            # Only create the initial activity if this is a new outbox
+            if created:
+                # Create an initial Activity announcing the Actor's creation
+                activity = CreateActivity.objects.create(
+                    actor=self,
+                    visibility="public",
+                )
+                # Add the activity to the outbox
+                outbox.add_activity(activity)
+
+        except Exception as e:
+            logger.error(f"Error initializing source actor {self.user.username}: {e}")
     
     def save(self, *args, **kwargs):
         is_new = self._state.adding
         super().save(*args, **kwargs)
 
         if is_new:
-            try:
-                # Create a PortabilityOutbox for new actor
-                outbox = PortabilityOutbox.objects.create(actor=self)
+            self.initialize_if_source()
 
-                # Create an initial Activity announcing the Actor's creation
-                activity = CreateActivity.objects.create(
-                    actor=self, visibility="public"
-                )
-
-                # Add to Outbox
-                outbox.add_activity(activity)
-
-            except Exception as e:
-                logger.error(
-                    f"Error creating outbox/activity for actor {self.username}: {e}"
-                )
+    def clean(self):
+        super().clean()
+        if self.user.actors.filter(role=self.role).exists():
+            raise ValidationError(f"User {self.user.username} already has an actor with role {self.role}")
 
     def get_json_ld(self):
         # Return a LOLA-compliant JSON-LD representation of the account
@@ -75,9 +113,9 @@ class Actor(models.Model):
                 "https://swicg.github.io/activitypub-data-portability/lola.jsonld",
             ],
             "type": "Person",
-            "id": f"https://example.com/users/{self.username}",
-            "preferredUsername": self.username,
-            "name": self.username,
+            "id": f"https://example.com/users/{self.user.username}",
+            "preferredUsername": self.user.username,
+            "name": self.user.get_full_name() or self.user.username,
             "previously": self.previously or [], # Ensure it's always a list
         }
 
@@ -112,15 +150,15 @@ class CreateActivity(Activity):
 
     def __str__(self):
         if self.note:
-            return f"Create by {self.actor.username}: {self.note}"
-        return f"Create by {self.actor.username}: Actor creation"
+            return f"Create by {self.actor.user.username}: {self.note}"
+        return f"Create by {self.actor.user.username}: Actor creation"
 
     def get_json_ld(self):
         json_ld = {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Create",
             "id": f"https://example.com/activities/{self.id}",
-            "actor": f"https://example.com/users/{self.actor.username}",
+            "actor": f"https://example.com/users/{self.actor.user.username}",
             "published": self.timestamp.isoformat(),
             "visibility": self.visibility,
         }
@@ -159,16 +197,16 @@ class LikeActivity(Activity):
 
     def __str__(self):
         if self.note:
-            return f"Like by {self.actor.username}: {self.note}"
+            return f"Like by {self.actor.user.username}: {self.note}"
         content = self.object_data.get("content", "")[:50]
-        return f"Like by {self.actor.username}: {content}..."
+        return f"Like by {self.actor.user.username}: {content}..."
 
     def get_json_ld(self):
         base = {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Like",
             "id": f"https://example.com/activities/{self.id}",
-            "actor": f"https://example.com/users/{self.actor.username}",
+            "actor": f"https://example.com/users/{self.actor.user.username}",
             "published": self.timestamp.isoformat(),
             "visibility": self.visibility,
         }
@@ -214,16 +252,16 @@ class FollowActivity(Activity):
 
     def __str__(self):
         if self.target_actor:
-            return f'Follow by {self.actor.username}: {self.target_actor.username}'
+            return f'Follow by {self.actor.user.username}: {self.target_actor.user.username}'
         username = self.target_actor_data.get('preferredUsername', '')
-        return f'Follow by {self.actor.username}: {username} (remote)'
+        return f'Follow by {self.actor.user.username}: {username} (remote)'
     
     def get_json_ld(self):
         base = {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Follow",
             "id": f"https://example.com/activities/{self.id}",
-            "actor": f"https://example.com/users/{self.actor.username}",
+            "actor": f"https://example.com/users/{self.actor.user.username}",
             "published": self.timestamp.isoformat(),
             "visibility": self.visibility,
         }
@@ -254,14 +292,14 @@ class Note(models.Model):
     )
 
     def __str__(self):
-        return f"Note by {self.actor.username}: {self.content[:30]}"
+        return f"Note by {self.actor.user.username}: {self.content[:30]}"
 
     def get_json_ld(self):
         return {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Note",
             "id": f"https://example.com/notes/{self.id}",
-            "actor": f"https://example.com/users/{self.actor.username}",
+            "actor": f"https://example.com/users/{self.actor.user.username}",
             "content": self.content,
             "published": self.published.isoformat(),
             "visibility": self.visibility,
@@ -269,7 +307,7 @@ class Note(models.Model):
 
 
 class PortabilityOutbox(models.Model):
-    actor = models.ForeignKey(
+    actor = models.OneToOneField(
         Actor, on_delete=models.CASCADE, related_name="portability_outbox"
     )
     activities_create = models.ManyToManyField(CreateActivity, related_name="outboxes")
@@ -277,8 +315,16 @@ class PortabilityOutbox(models.Model):
     activities_follow = models.ManyToManyField(FollowActivity, related_name="outboxes")
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['actor'],
+                name='unique_actor_outbox'
+            )
+        ]
+
     def __str__(self):
-        return f"Outbox for {self.actor.username}"
+        return f"Outbox for {self.actor.user.username}"
 
     # Helper method to add any type of activity
     def add_activity(self, activity):
@@ -303,7 +349,7 @@ class PortabilityOutbox(models.Model):
         return {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "OrderedCollection",
-            "id": f"https://example.com/users/{self.actor.username}/outbox",
+            "id": f"https://example.com/users/{self.actor.user.username}/outbox",
             "totalItems": len(all_activities),
             "items": [activity.get_json_ld() for activity in all_activities],
         }
