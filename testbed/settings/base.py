@@ -208,6 +208,8 @@ ACCOUNT_EMAIL_VERIFICATION='mandatory'
 ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION=True
 LOGIN_REDIRECT_URL = '/'
 
+ACCOUNT_ADAPTER = 'testbed.core.adapters.TestbedAccountAdapter'
+
 # Email configuration
 DEFAULT_FROM_EMAIL='noreply@dt-reg.org'
 
