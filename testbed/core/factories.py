@@ -34,6 +34,7 @@ class ActorFactory(DjangoModelFactory):
         model = Actor
 
     user = factory.SubFactory(UserFactory)
+    username = factory.LazyAttribute(lambda o: f"{o.user.username}_{o.role}")
     role = factory.Iterator([Actor.ROLE_SOURCE, Actor.ROLE_DESTINATION])
     previously = factory.List([])
 

@@ -13,7 +13,7 @@ def test_create_activity_json_ld(create_activity):
     json_ld = create_activity.get_json_ld()
     assert json_ld["@context"] == "https://www.w3.org/ns/activitystreams"
     assert json_ld["type"] == "Create"
-    assert json_ld["actor"] == f"https://example.com/users/{create_activity.actor.user.username}"
+    assert json_ld["actor"] == f"https://example.com/actors/{create_activity.actor.id}"
     assert json_ld["visibility"] == create_activity.visibility
 
 def test_like_activity(like_activity):
@@ -63,6 +63,6 @@ def test_activity_json_ld_common_fields(create_activity, like_activity, follow_a
         json_ld = activity.get_json_ld()
         assert json_ld["@context"] == "https://www.w3.org/ns/activitystreams"
         assert "type" in json_ld
-        assert json_ld["actor"] == f"https://example.com/users/{activity.actor.user.username}"
+        assert json_ld["actor"] == f"https://example.com/actors/{activity.actor.id}"
         assert "published" in json_ld
         assert json_ld["visibility"] == activity.visibility

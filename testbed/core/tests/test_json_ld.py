@@ -8,10 +8,10 @@ def test_actor_json_ld(actor):
         "https://swicg.github.io/activitypub-data-portability/lola.jsonld",
     ]
     assert json_ld["type"] == "Person"
-    assert json_ld["preferredUsername"] == actor.user.username
-    assert json_ld["name"] == actor.user.get_full_name() or actor.user.username
+    assert json_ld["preferredUsername"] == actor.username
+    assert json_ld["name"] == actor.username
     assert json_ld["previously"] == actor.previously
-    assert json_ld["id"] == f"https://example.com/users/{actor.user.username}"
+    assert json_ld["id"] == f"https://example.com/actors/{actor.id}"
 
 
 def test_note_json_ld(note):
@@ -19,7 +19,7 @@ def test_note_json_ld(note):
     assert json_ld["@context"] == "https://www.w3.org/ns/activitystreams"
     assert json_ld["type"] == "Note"
     assert json_ld["content"] == note.content
-    assert json_ld["actor"] == f"https://example.com/users/{note.actor.user.username}"
+    assert json_ld["actor"] == f"https://example.com/actors/{note.actor.id}"
     assert json_ld["id"] == f"https://example.com/notes/{note.id}"
     assert json_ld["visibility"] == note.visibility
     assert json_ld["published"] == note.published.isoformat()
@@ -30,7 +30,7 @@ def test_create_activity_json_ld(create_activity):
     assert json_ld["@context"] == "https://www.w3.org/ns/activitystreams"
     assert json_ld["type"] == "Create"
     assert json_ld["id"] == f"https://example.com/activities/{create_activity.id}"
-    assert json_ld["actor"] == f"https://example.com/users/{create_activity.actor.user.username}"
+    assert json_ld["actor"] == f"https://example.com/actors/{create_activity.actor.id}"
     assert json_ld["published"] == create_activity.timestamp.isoformat()
     assert json_ld["visibility"] == create_activity.visibility
     
@@ -46,14 +46,14 @@ def test_like_activity_json_ld_local(like_activity):
     assert json_ld["@context"] == "https://www.w3.org/ns/activitystreams"
     assert json_ld["type"] == "Like"
     assert json_ld["id"] == f"https://example.com/activities/{like_activity.id}"
-    assert json_ld["actor"] == f"https://example.com/users/{like_activity.actor.user.username}"
+    assert json_ld["actor"] == f"https://example.com/actors/{like_activity.actor.id}"
     assert json_ld["published"] == like_activity.timestamp.isoformat()
     assert json_ld["visibility"] == like_activity.visibility
 
     # Check local object structure
     assert json_ld["object"]["type"] == "Note"
     assert json_ld["object"]["content"] == like_activity.note.content
-    assert json_ld["object"]["actor"] == f"https://example.com/users/{like_activity.note.actor.user.username}"
+    assert json_ld["object"]["actor"] == f"https://example.com/actors/{like_activity.note.actor.id}"
     assert json_ld["object"]["id"] == f"https://example.com/notes/{like_activity.note.id}"
 
 
@@ -76,7 +76,7 @@ def test_like_activity_json_ld_remote(actor):
     json_ld = remote_like.get_json_ld()
     assert json_ld["@context"] == "https://www.w3.org/ns/activitystreams"
     assert json_ld["type"] == "Like"
-    assert json_ld["actor"] == f"https://example.com/users/{actor.user.username}"
+    assert json_ld["actor"] == f"https://example.com/actors/{actor.id}"
     assert json_ld["published"] == remote_like.timestamp.isoformat()
     assert json_ld["visibility"] == "public"
 
@@ -93,20 +93,20 @@ def test_follow_activity_json_ld(follow_activity):
     assert json_ld["@context"] == "https://www.w3.org/ns/activitystreams"
     assert json_ld["type"] == "Follow"
     assert json_ld["id"] == f"https://example.com/activities/{follow_activity.id}"
-    assert json_ld["actor"] == f"https://example.com/users/{follow_activity.actor.user.username}"
+    assert json_ld["actor"] == f"https://example.com/actors/{follow_activity.actor.id}"
     assert json_ld["published"] == follow_activity.timestamp.isoformat()
     assert json_ld["visibility"] == follow_activity.visibility
     
     # Check target actor structure
     assert json_ld["object"]["type"] == "Person"
-    assert json_ld["object"]["preferredUsername"] == follow_activity.target_actor.user.username
+    assert json_ld["object"]["preferredUsername"] == follow_activity.target_actor.username
 
 
 def test_outbox_json_ld(outbox):
     json_ld = outbox.get_json_ld()
     assert json_ld["@context"] == "https://www.w3.org/ns/activitystreams"
     assert json_ld["type"] == "OrderedCollection"
-    assert json_ld["id"] == f"https://example.com/users/{outbox.actor.user.username}/outbox"
+    assert json_ld["id"] == f"https://example.com/actors/{outbox.actor.id}/outbox"
     assert "totalItems" in json_ld
     assert isinstance(json_ld["items"], list)
     

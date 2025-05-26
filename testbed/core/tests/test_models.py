@@ -57,7 +57,9 @@ def test_actor_json_ld():
     
     assert json_ld["@context"]
     assert json_ld["type"] == "Person"
-    assert json_ld["preferredUsername"] == actor.user.username
+    assert json_ld["id"] == f"https://example.com/actors/{actor.id}"
+    assert json_ld["preferredUsername"] == actor.username
+    assert json_ld["name"] == actor.username
     assert isinstance(json_ld["previously"], list)
 
 # Note Tests

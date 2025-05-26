@@ -12,5 +12,7 @@ def test_actor_serializer(actor):
     
     json_ld = data["json_ld"]
     assert json_ld["type"] == "Person"
-    assert json_ld["preferredUsername"] == actor.user.username
+    assert json_ld["preferredUsername"] == actor.username
+    assert json_ld["name"] == actor.username
     assert json_ld["previously"] == actor.previously
+    assert json_ld["id"] == f"https://example.com/actors/{actor.id}"

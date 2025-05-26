@@ -9,13 +9,15 @@ logger = logging.getLogger(__name__)
 
 class ActorManager(models.Manager):
     # Create both source and destination actors for a user
-    def create_actors_for_user(self, user):
+    def create_actors_for_user(self, user, source_username=None, destination_username=None):
         source = self.create(
             user=user,
+            username=source_username or f"{user.username}_source",
             role=Actor.ROLE_SOURCE,
         )
         destination = self.create(
             user=user,
+            username=destination_username or f"{user.username}_dest",
             role=Actor.ROLE_DESTINATION,
         )
 
@@ -31,20 +33,13 @@ class Actor(models.Model):
     ]
 
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE, related_name="actors")
+    username = models.CharField(max_length=100, unique=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     previously = models.JSONField(default=list, null=True, blank=True)
 
     objects = ActorManager()
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user", "role"],
-                name="unique_user_role",
-            )
-        ]
 
     def __str__(self):
         return f"{self.user.username}'s {self.role} actor"
@@ -113,9 +108,9 @@ class Actor(models.Model):
                 "https://swicg.github.io/activitypub-data-portability/lola.jsonld",
             ],
             "type": "Person",
-            "id": f"https://example.com/users/{self.user.username}",
-            "preferredUsername": self.user.username,
-            "name": self.user.get_full_name() or self.user.username,
+            "id": f"https://example.com/actors/{self.id}",
+            "preferredUsername": self.username,
+            "name": self.username,
             "previously": self.previously or [], # Ensure it's always a list
         }
 
@@ -158,7 +153,7 @@ class CreateActivity(Activity):
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Create",
             "id": f"https://example.com/activities/{self.id}",
-            "actor": f"https://example.com/users/{self.actor.user.username}",
+            "actor": f"https://example.com/actors/{self.actor.id}",
             "published": self.timestamp.isoformat(),
             "visibility": self.visibility,
         }
@@ -206,7 +201,7 @@ class LikeActivity(Activity):
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Like",
             "id": f"https://example.com/activities/{self.id}",
-            "actor": f"https://example.com/users/{self.actor.user.username}",
+            "actor": f"https://example.com/actors/{self.actor.id}",
             "published": self.timestamp.isoformat(),
             "visibility": self.visibility,
         }
@@ -261,7 +256,7 @@ class FollowActivity(Activity):
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Follow",
             "id": f"https://example.com/activities/{self.id}",
-            "actor": f"https://example.com/users/{self.actor.user.username}",
+            "actor": f"https://example.com/actors/{self.actor.id}",
             "published": self.timestamp.isoformat(),
             "visibility": self.visibility,
         }
@@ -299,7 +294,7 @@ class Note(models.Model):
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Note",
             "id": f"https://example.com/notes/{self.id}",
-            "actor": f"https://example.com/users/{self.actor.user.username}",
+            "actor": f"https://example.com/actors/{self.actor.id}",
             "content": self.content,
             "published": self.published.isoformat(),
             "visibility": self.visibility,
@@ -349,7 +344,7 @@ class PortabilityOutbox(models.Model):
         return {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "OrderedCollection",
-            "id": f"https://example.com/users/{self.actor.user.username}/outbox",
+            "id": f"https://example.com/actors/{self.actor.id}/outbox",
             "totalItems": len(all_activities),
             "items": [activity.get_json_ld() for activity in all_activities],
         }

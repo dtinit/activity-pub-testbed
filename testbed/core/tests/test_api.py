@@ -21,8 +21,9 @@ def test_actor_detail_api(actor):
         "https://swicg.github.io/activitypub-data-portability/lola.jsonld",
     ]
     assert json_ld["type"] == "Person"
-    assert json_ld["preferredUsername"] == actor.user.username
-    assert json_ld["name"] == actor.user.get_full_name() or actor.user.username
+    assert json_ld["id"] == f"https://example.com/actors/{actor.id}"
+    assert json_ld["preferredUsername"] == actor.username
+    assert json_ld["name"] == actor.username
     assert json_ld["previously"] == actor.previously
 
 
@@ -43,7 +44,8 @@ def test_outbox_detail_api(actor):
     json_ld = response.data["json_ld"]
     assert json_ld["@context"] == "https://www.w3.org/ns/activitystreams"
     assert json_ld["type"] == "OrderedCollection"
-    assert json_ld["id"] == f"https://example.com/users/{actor.user.username}/outbox"
+    # assert json_ld["id"] == f"https://example.com/users/{actor.user.username}/outbox"
+    assert json_ld["id"] == f"https://example.com/actors/{actor.id}/outbox"
     assert isinstance(json_ld["totalItems"], int)
     assert isinstance(json_ld["items"], list)
 
