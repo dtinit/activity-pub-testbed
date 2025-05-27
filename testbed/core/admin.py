@@ -11,9 +11,13 @@ from .models import (
 
 @admin.register(Actor)
 class ActorAdmin(admin.ModelAdmin):
-    list_display = ("username", "full_name", "created_at", "updated_at")
-    search_fields = ("username", "full_name")
-    readonly_fields = ("created_at", "updated_at")
+    list_display = ('get_username', 'role', 'created_at')
+    list_filter = ('role',)
+    search_fields = ('user__username', 'role')
+
+    def get_username(self, obj):
+        return obj.user.username
+    get_username.short_description = 'Username'
 
 
 @admin.register(Note)

@@ -18,6 +18,8 @@ class UserFactory(DjangoModelFactory):
     username = factory.Sequence(lambda n: f"user_{n}")
     email = factory.LazyAttribute(lambda o: f"{o.username}@example.com")
     password = factory.PostGenerationMethodCall("set_password", "testpass123")
+    first_name = factory.Faker('first_name')
+    last_name = factory.Faker('last_name')
     is_staff = False
     is_active = True
 
@@ -32,8 +34,8 @@ class ActorFactory(DjangoModelFactory):
         model = Actor
 
     user = factory.SubFactory(UserFactory)
-    username = factory.SelfAttribute('user.username')
-    full_name = factory.Faker('name')
+    username = factory.LazyAttribute(lambda o: f"{o.user.username}_{o.role}")
+    role = factory.Iterator([Actor.ROLE_SOURCE, Actor.ROLE_DESTINATION])
     previously = factory.List([])
 
 
@@ -86,7 +88,8 @@ class PortabilityOutboxFactory(DjangoModelFactory):
     class Meta:
         model = PortabilityOutbox
 
-    actor = factory.SubFactory(ActorFactory)
+    # Ensure we create a source actor for the outbox
+    actor = factory.SubFactory(ActorFactory, role=Actor.ROLE_SOURCE)
 
     @factory.post_generation
     def activities(self, create, extracted, **kwargs):
@@ -95,9 +98,8 @@ class PortabilityOutboxFactory(DjangoModelFactory):
 
         if extracted:
             for activity in extracted:
-                self.activities.add(activity)
-
+                self.add_activity(activity)  # Use the model's add_activity method
         else:
             # By default, add a Create activity for the Actor
             activity = CreateActivityFactory.create_for_actor(self.actor)
-            self.activities.add(activity)
+            self.add_activity(activity)

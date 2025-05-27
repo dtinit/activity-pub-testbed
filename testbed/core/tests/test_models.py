@@ -1,114 +1,151 @@
 import pytest
 from django.core.exceptions import ValidationError
+from django.utils import timezone
+from datetime import timedelta
+from testbed.core.models import Actor, Note
 from testbed.core.factories import (
+    UserFactory,
     ActorFactory,
+    NoteFactory,
     CreateActivityFactory,
     LikeActivityFactory,
     FollowActivityFactory,
 )
 
-
+# Actor Tests
 def test_actor_creation(actor):
     assert actor.user is not None
-    assert actor.username == actor.user.username
-    assert actor.full_name is not None
-
+    assert actor.role in [Actor.ROLE_SOURCE, Actor.ROLE_DESTINATION]
 
 def test_actor_str_representation(actor):
-    assert str(actor) == actor.username
+    assert str(actor) == f"{actor.user.username}'s {actor.role} actor"
 
+def test_actor_roles():
+    source_actor = ActorFactory(role=Actor.ROLE_SOURCE)
+    dest_actor = ActorFactory(role=Actor.ROLE_DESTINATION)
+    
+    assert source_actor.is_source
+    assert dest_actor.is_destination
+    assert not source_actor.is_destination
+    assert not dest_actor.is_source
 
-@pytest.mark.parametrize(
-    "invalid_username",
-    [
-        "user space",  # Contains space
-        "ab",  # Too short
-        "user@name",  # Non-alphanumeric
-    ],
-)
-def test_username_validation(invalid_username):
+# Fix for the unique role constraint test
+def test_actor_unique_role_constraint():
+    user = UserFactory()
+    ActorFactory(user=user, role=Actor.ROLE_SOURCE)
+    
+    # Create the second actor but don't save it yet
+    actor = ActorFactory.build(user=user, role=Actor.ROLE_SOURCE)
+    
+    # Now the validation should raise the error
     with pytest.raises(ValidationError):
-        actor = ActorFactory(username=invalid_username)
-        actor.full_clean()  # This triggers the validation
+        actor.clean()
 
+def test_actor_move_history():
+    actor = ActorFactory()
+    test_date = timezone.now()
+    
+    actor.record_move("old-server.com", "old_username", test_date)
+    assert len(actor.previously) == 1
+    assert actor.previously[0]["type"] == "Move"
+    assert actor.previously[0]["object"] == "https://old-server.com/users/old_username"
+    assert actor.previously[0]["published"] == test_date.isoformat()
 
+def test_actor_json_ld():
+    actor = ActorFactory()
+    json_ld = actor.get_json_ld()
+    
+    assert json_ld["@context"]
+    assert json_ld["type"] == "Person"
+    assert json_ld["id"] == f"https://example.com/actors/{actor.id}"
+    assert json_ld["preferredUsername"] == actor.username
+    assert json_ld["name"] == actor.username
+    assert isinstance(json_ld["previously"], list)
+
+# Note Tests
+def test_note_creation(note):
+    assert note.content is not None
+    assert note.actor is not None
+    assert note.visibility in ["public", "private", "followers-only"]
+
+def test_note_str_representation(note):
+    expected = f"Note by {note.actor.user.username}: {note.content[:30]}"
+    assert str(note) == expected
+
+def test_note_json_ld(note):
+    json_ld = note.get_json_ld()
+    
+    assert json_ld["@context"] == "https://www.w3.org/ns/activitystreams"
+    assert json_ld["type"] == "Note"
+    assert json_ld["content"] == note.content
+    assert json_ld["visibility"] == note.visibility
+
+# Activity Tests
+def test_create_activity_str(create_activity):
+    if create_activity.note:
+        expected = f"Create by {create_activity.actor.user.username}: {create_activity.note}"
+    else:
+        expected = f"Create by {create_activity.actor.user.username}: Actor creation"
+    assert str(create_activity) == expected
+
+def test_like_activity_validation():
+    with pytest.raises(ValidationError):
+        activity = LikeActivityFactory(note=None, object_url=None)
+        activity.clean()  # Need to call clean explicitly
+
+def test_like_activity_remote_object():
+    activity = LikeActivityFactory(
+        note=None,
+        object_url="https://remote.example/notes/123",
+        object_data={"content": "Remote note content"}
+    )
+    json_ld = activity.get_json_ld()
+    
+    assert json_ld["object"]["id"] == "https://remote.example/notes/123"
+    assert json_ld["object"]["content"] == "Remote note content"
+
+def test_follow_activity_validation():
+    with pytest.raises(ValidationError):
+        activity = FollowActivityFactory(target_actor=None, target_actor_url=None)
+        activity.clean()  # Need to call clean explicitly
+
+def test_follow_activity_remote_actor():
+    activity = FollowActivityFactory(
+        target_actor=None,
+        target_actor_url="https://remote.example/users/remote_user",
+        target_actor_data={"preferredUsername": "remote_user"}
+    )
+    json_ld = activity.get_json_ld()
+    
+    assert json_ld["object"]["id"] == "https://remote.example/users/remote_user"
+    assert json_ld["object"]["preferredUsername"] == "remote_user"
+
+# Outbox Tests
 def test_portability_outbox_creation(actor):
-    assert actor.portability_outbox.count() == 1
-    outbox = actor.portability_outbox.first()
-    assert outbox.activities_create.count() == 1  # Initial Create activity
-    # assert outbox.activities_create.first().type == 'Create'
-    assert (
-        outbox.activities_create.first().note is None
-    )  # Should be an Actor creation activity
-
-
-def test_actor_creation_activity(actor):
-    outbox = actor.portability_outbox.first()
+    outbox = actor.portability_outbox
     assert outbox is not None
+    assert outbox.activities_create.count() == 1  # Initial Create activity
+    assert outbox.activities_create.first().note is None  # Should be an Actor creation activity
 
-    # Get initial Create activity
-    activity = outbox.activities_create.first()
-    assert activity is not None
-    assert activity.note is None  # Should be an Actor creation activity
-    # assert activity.type == 'Create'
+def test_outbox_activity_types():
+    # Create a source actor explicitly
+    actor = ActorFactory(role=Actor.ROLE_SOURCE)
+    
+    # Initialize the outbox (this should happen automatically in save())
+    actor.initialize_if_source()
+    
+    outbox = actor.portability_outbox
+    initial_count = outbox.activities_create.count()
 
-    # Check Activity's JSON-LD
-    json_ld = activity.get_json_ld()
-    assert json_ld["type"] == "Create"
-    assert "object" in json_ld
-
-    # The object should be the Actor's JSON-LD
-    actor_json_ld = actor.get_json_ld()
-    assert json_ld["object"] == actor_json_ld
-
-
-def test_actor_creation_activity_structure(actor):
-    # Test the structure of the Create activity's JSON-LD
-    activity = actor.portability_outbox.first().activities_create.first()
-    json_ld = activity.get_json_ld()
-
-    # Check required fields
-    assert "@context" in json_ld
-    assert "type" in json_ld
-    assert "actor" in json_ld
-    assert "object" in json_ld
-    assert "published" in json_ld
-
-    # Check specific values
-    assert json_ld["type"] == "Create"
-    assert json_ld["actor"] == f"https://example.com/users/{actor.username}"
-    assert json_ld["object"]["type"] == "Person"
-    assert json_ld["object"]["preferredUsername"] == actor.username
-
-
-# Test that multiple actors each get their own Create activity
-def test_multiple_actor_creations():
-    actors = ActorFactory.create_batch(3)
-
-    for actor in actors:
-        outbox = actor.portability_outbox.first()
-        activity = outbox.activities_create.first()
-
-        json_ld = activity.get_json_ld()
-        assert json_ld["object"]["preferredUsername"] == actor.username
-
-
-def test_outbox_activity_types(actor):
-    outbox = actor.portability_outbox.first()
-
-    # Test Create activity
+    # Add different types of activities
     create_activity = CreateActivityFactory(actor=actor)
-    outbox.add_activity(create_activity)
-
-    # Test Like activity
     like_activity = LikeActivityFactory(actor=actor)
-    outbox.add_activity(like_activity)
-
-    # Test Follow activity
     follow_activity = FollowActivityFactory(actor=actor)
+
+    outbox.add_activity(create_activity)
+    outbox.add_activity(like_activity)
     outbox.add_activity(follow_activity)
 
-    # Verify all activities are present
-    assert outbox.activities_create.filter(id=create_activity.id).exists()
-    assert outbox.activities_like.filter(id=like_activity.id).exists()
-    assert outbox.activities_follow.filter(id=follow_activity.id).exists()
+    assert outbox.activities_create.count() == initial_count + 1
+    assert outbox.activities_like.count() == 1
+    assert outbox.activities_follow.count() == 1
