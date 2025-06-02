@@ -4,23 +4,19 @@ from rest_framework.response import Response
 from django.shortcuts import redirect
 from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, get_object_or_404
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from .models import Actor, PortabilityOutbox
-from .serializers import ActorSerializer, PortabilityOutboxSerializer
-
+from .json_ld_builders import build_actor_json_ld, build_outbox_json_ld
 
 @api_view(['GET'])
 def actor_detail(request, pk):
-    actor = get_object_or_404(Actor.objects.all(), pk=pk)
-    serializer = ActorSerializer(actor)
-    return Response(serializer.data)
-
+    actor = get_object_or_404(Actor, pk=pk)
+    return Response(build_actor_json_ld(actor))
 
 @api_view(['GET'])
 def portability_outbox_detail(request, pk):
     outbox = get_object_or_404(PortabilityOutbox, actor_id=pk)
-    serializer = PortabilityOutboxSerializer(outbox)
-    return Response(serializer.data)
+    return Response(build_outbox_json_ld(outbox))
 
 # Restrict the view to staff users using the @user_passes_test decorator
 @user_passes_test(lambda u: u.is_staff)  # Restrict to staff
