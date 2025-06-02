@@ -100,21 +100,6 @@ class Actor(models.Model):
         if self.user.actors.filter(role=self.role).exists():
             raise ValidationError(f"User {self.user.username} already has an actor with role {self.role}")
 
-    def get_json_ld(self):
-        # Return a LOLA-compliant JSON-LD representation of the account
-        return {
-            "@context": [
-                "https://www.w3.org/ns/activitystreams",
-                "https://swicg.github.io/activitypub-data-portability/lola.jsonld",
-            ],
-            "type": "Person",
-            "id": f"https://example.com/actors/{self.id}",
-            "preferredUsername": self.username,
-            "name": self.username,
-            "previously": self.previously or [], # Ensure it's always a list
-        }
-
-
 class Activity(models.Model):
     actor = models.ForeignKey(
         Actor, on_delete=models.CASCADE, related_name="%(class)s_activities"
@@ -148,24 +133,6 @@ class CreateActivity(Activity):
             return f"Create by {self.actor.user.username}: {self.note}"
         return f"Create by {self.actor.user.username}: Actor creation"
 
-    def get_json_ld(self):
-        json_ld = {
-            "@context": "https://www.w3.org/ns/activitystreams",
-            "type": "Create",
-            "id": f"https://example.com/activities/{self.id}",
-            "actor": f"https://example.com/actors/{self.actor.id}",
-            "published": self.timestamp.isoformat(),
-            "visibility": self.visibility,
-        }
-
-        if self.note:
-            json_ld["object"] = self.note.get_json_ld()
-        else:
-            json_ld["object"] = self.actor.get_json_ld()
-
-        return json_ld
-
-
 class LikeActivity(Activity):
     note = models.ForeignKey(
         "Note",
@@ -195,30 +162,6 @@ class LikeActivity(Activity):
             return f"Like by {self.actor.user.username}: {self.note}"
         content = self.object_data.get("content", "")[:50]
         return f"Like by {self.actor.user.username}: {content}..."
-
-    def get_json_ld(self):
-        base = {
-            "@context": "https://www.w3.org/ns/activitystreams",
-            "type": "Like",
-            "id": f"https://example.com/activities/{self.id}",
-            "actor": f"https://example.com/actors/{self.actor.id}",
-            "published": self.timestamp.isoformat(),
-            "visibility": self.visibility,
-        }
-
-        if self.note:
-            # For local notes, use the Note model's get_json_ld method
-            base["object"] = self.note.get_json_ld()
-        else:
-            # For remote objects, use the stored data
-            base["object"] = {
-                "@context": "https://www.w3.org/ns/activitystreams",
-                **self.object_data,
-                "id": self.object_url,
-            }
-
-        return base
-
 
 class FollowActivity(Activity):
     target_actor = models.ForeignKey(
@@ -250,27 +193,6 @@ class FollowActivity(Activity):
             return f'Follow by {self.actor.user.username}: {self.target_actor.user.username}'
         username = self.target_actor_data.get('preferredUsername', '')
         return f'Follow by {self.actor.user.username}: {username} (remote)'
-    
-    def get_json_ld(self):
-        base = {
-            "@context": "https://www.w3.org/ns/activitystreams",
-            "type": "Follow",
-            "id": f"https://example.com/activities/{self.id}",
-            "actor": f"https://example.com/actors/{self.actor.id}",
-            "published": self.timestamp.isoformat(),
-            "visibility": self.visibility,
-        }
-
-        if self.target_actor:
-            base["object"] = self.target_actor.get_json_ld()
-        else:
-            base["object"] = {
-                "@context": "https://www.w3.org/ns/activitystreams",
-                **self.target_actor_data,
-                "id": self.target_actor_url
-            }
-
-        return base
 
 class Note(models.Model):
     actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="notes")
@@ -288,18 +210,6 @@ class Note(models.Model):
 
     def __str__(self):
         return f"Note by {self.actor.user.username}: {self.content[:30]}"
-
-    def get_json_ld(self):
-        return {
-            "@context": "https://www.w3.org/ns/activitystreams",
-            "type": "Note",
-            "id": f"https://example.com/notes/{self.id}",
-            "actor": f"https://example.com/actors/{self.actor.id}",
-            "content": self.content,
-            "published": self.published.isoformat(),
-            "visibility": self.visibility,
-        }
-
 
 class PortabilityOutbox(models.Model):
     actor = models.OneToOneField(
@@ -329,22 +239,3 @@ class PortabilityOutbox(models.Model):
             self.activities_like.add(activity)
         elif isinstance(activity, FollowActivity):
             self.activities_follow.add(activity)
-
-    def get_json_ld(self):
-        # Combine all activity types
-        create_activities = list(self.activities_create.all())
-        like_activities = list(self.activities_like.all())
-        follow_activities = list(self.activities_follow.all())
-
-        all_activities = create_activities + like_activities + follow_activities
-
-        # Sort by timestamp
-        all_activities.sort(key=lambda x: x.timestamp, reverse=True)
-
-        return {
-            "@context": "https://www.w3.org/ns/activitystreams",
-            "type": "OrderedCollection",
-            "id": f"https://example.com/actors/{self.actor.id}/outbox",
-            "totalItems": len(all_activities),
-            "items": [activity.get_json_ld() for activity in all_activities],
-        }
