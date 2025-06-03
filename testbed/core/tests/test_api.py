@@ -10,42 +10,55 @@ from testbed.core.json_ld_utils import (
     build_outbox_id,
 )
 
-
+# Test actor detail API endpoint for source actors
 @pytest.mark.django_db
-def test_actor_detail_api(actor):
+def test_source_actor_detail_api(source_actor):
     client = APIClient()
-    url = reverse("actor-detail", kwargs={"pk": actor.id})
+    url = reverse("actor-detail", kwargs={"pk": source_actor.id})
     response = client.get(url)
     
     assert response.status_code == status.HTTP_200_OK
     
-    # Check JSON-LD structure directly
+    # Check JSON-LD structure
     json_ld = response.data
     assert json_ld["@context"] == build_actor_context()
     assert json_ld["type"] == "Person"
-    assert json_ld["id"] == build_actor_id(actor.id)
-    assert json_ld["preferredUsername"] == actor.username
-    assert json_ld["name"] == actor.username
+    assert json_ld["id"] == build_actor_id(source_actor.id)
+    assert json_ld["preferredUsername"] == source_actor.username
+    assert json_ld["name"] == source_actor.username
     assert isinstance(json_ld["previously"], list)
 
-
+# Test actor detail API endpoint for destination actors
 @pytest.mark.django_db
-def test_outbox_detail_api(actor):
-    # Ensure we're using a source actor
-    actor.role = Actor.ROLE_SOURCE
-    actor.save()
-    
+def test_destination_actor_detail_api(destination_actor):
     client = APIClient()
-    url = reverse("actor-outbox", kwargs={"pk": actor.id})
+    url = reverse("actor-detail", kwargs={"pk": destination_actor.id})
+    response = client.get(url)
+    
+    assert response.status_code == status.HTTP_200_OK
+    
+    json_ld = response.data
+    assert json_ld["@context"] == build_actor_context()
+    assert json_ld["type"] == "Person"
+    assert json_ld["id"] == build_actor_id(destination_actor.id)
+    assert json_ld["preferredUsername"] == destination_actor.username
+    assert json_ld["name"] == destination_actor.username
+    assert isinstance(json_ld["previously"], list)
+
+# Test outbox detail API endpoint (only available for source actors)
+@pytest.mark.django_db
+def test_outbox_detail_api(source_actor):
+    client = APIClient()
+    url = reverse("actor-outbox", kwargs={"pk": source_actor.id})
     response = client.get(url)
 
     assert response.status_code == status.HTTP_200_OK
 
-    # Check JSON-LD structure directly
+    # Check JSON-LD structure
     json_ld = response.data
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "OrderedCollection"
-    assert json_ld["id"] == build_outbox_id(actor.id)
+    assert json_ld["id"] == build_outbox_id(source_actor.id)
     assert isinstance(json_ld["totalItems"], int)
     assert isinstance(json_ld["items"], list)
 
@@ -59,7 +72,17 @@ def test_outbox_detail_api(actor):
             assert "published" in item
             assert "visibility" in item
 
+# Test that outbox is not available for destination actors
+@pytest.mark.django_db
+def test_destination_actor_outbox_api(destination_actor):
+    client = APIClient()
+    url = reverse("actor-outbox", kwargs={"pk": destination_actor.id})
+    response = client.get(url)
+    
+    # Should return 404 as destination actors don't have outboxes
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
+# Test 404 response for non-existent actor
 @pytest.mark.django_db
 def test_actor_detail_api_not_found():
     client = APIClient()
@@ -67,7 +90,7 @@ def test_actor_detail_api_not_found():
     response = client.get(url)
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
-
+# Test 404 response for non-existent outbox
 @pytest.mark.django_db
 def test_outbox_detail_api_not_found():
     client = APIClient()
