@@ -43,4 +43,11 @@ def report_activity(request):
 
 
 def index(request):
-    return render(request, "index.html")
+    if not request.user.is_authenticated:
+        return render(request, "index.html")
+
+    user_actors = Actor.objects.filter(user=request.user)
+    return render(request, "index.html", {
+        'source_actor': user_actors.filter(role=Actor.ROLE_SOURCE).first(),
+        'destination_actor': user_actors.filter(role=Actor.ROLE_DESTINATION).first()
+    })
