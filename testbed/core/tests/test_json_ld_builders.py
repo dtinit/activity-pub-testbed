@@ -16,25 +16,27 @@ from testbed.core.json_ld_utils import (
     build_outbox_id
 )
 from testbed.core.factories import (
+    ActorFactory,
     LikeActivityFactory,
     FollowActivityFactory,
     CreateActivityFactory,
     NoteFactory
 )
+from testbed.core.models import Actor
 
-# Test building JSON-LD for a source actor
+# Test building JSON-LD for an actor
 @pytest.mark.django_db
-def test_build_actor_json_ld(source_actor):
-    json_ld = build_actor_json_ld(source_actor)
+def test_build_actor_json_ld(actor):
+    json_ld = build_actor_json_ld(actor)
     
     assert json_ld["@context"] == build_actor_context()
     assert json_ld["type"] == "Person"
-    assert json_ld["id"] == build_actor_id(source_actor.id)
-    assert json_ld["preferredUsername"] == source_actor.username
-    assert json_ld["name"] == source_actor.username
+    assert json_ld["id"] == build_actor_id(actor.id)
+    assert json_ld["preferredUsername"] == actor.username
+    assert json_ld["name"] == actor.username
     assert isinstance(json_ld["previously"], list)
 
-# Test building JSON-LD for a note"
+# Test building JSON-LD for a note
 @pytest.mark.django_db
 def test_build_note_json_ld(note):
     json_ld = build_note_json_ld(note)
@@ -48,50 +50,54 @@ def test_build_note_json_ld(note):
 
 # Test building JSON-LD for note creation activity
 @pytest.mark.django_db
-def test_build_create_activity_json_ld_note(source_actor):
-    note = NoteFactory(actor=source_actor)
-    activity = CreateActivityFactory(actor=source_actor, note=note)
+def test_build_create_activity_json_ld_note(actor):
+    note = NoteFactory(actor=actor)
+    activity = CreateActivityFactory(actor=actor, note=note)
     json_ld = build_create_activity_json_ld(activity)
     
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "Create"
     assert json_ld["id"] == build_activity_id(activity.id)
-    assert json_ld["actor"] == build_actor_id(source_actor.id)
+    assert json_ld["actor"] == build_actor_id(actor.id)
     assert json_ld["object"]["type"] == "Note"
     assert json_ld["object"]["id"] == build_note_id(note.id)
 
 # Test building JSON-LD for actor creation activity
 @pytest.mark.django_db
-def test_build_create_activity_json_ld_actor_creation(source_actor):
-    activity = CreateActivityFactory.create_for_actor(source_actor)
+def test_build_create_activity_json_ld_actor_creation(actor):
+    activity = CreateActivityFactory(
+        actor=actor,
+        note=None,
+        visibility="public"
+    )
     json_ld = build_create_activity_json_ld(activity)
     
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "Create"
     assert json_ld["id"] == build_activity_id(activity.id)
-    assert json_ld["actor"] == build_actor_id(source_actor.id)
+    assert json_ld["actor"] == build_actor_id(actor.id)
     assert json_ld["object"]["type"] == "Person"
-    assert json_ld["object"]["id"] == build_actor_id(source_actor.id)
+    assert json_ld["object"]["id"] == build_actor_id(actor.id)
 
 # Test building JSON-LD for local like activity
 @pytest.mark.django_db
-def test_build_like_activity_json_ld_local(source_actor):
-    note = NoteFactory(actor=source_actor)
-    activity = LikeActivityFactory(actor=source_actor, note=note)
+def test_build_like_activity_json_ld_local(actor):
+    note = NoteFactory(actor=actor)
+    activity = LikeActivityFactory(actor=actor, note=note)
     json_ld = build_like_activity_json_ld(activity)
     
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "Like"
     assert json_ld["id"] == build_activity_id(activity.id)
-    assert json_ld["actor"] == build_actor_id(source_actor.id)
+    assert json_ld["actor"] == build_actor_id(actor.id)
     assert json_ld["object"]["type"] == "Note"
     assert json_ld["object"]["id"] == build_note_id(note.id)
 
 # Test building JSON-LD for remote like activity
 @pytest.mark.django_db
-def test_build_like_activity_json_ld_remote(source_actor):
+def test_build_like_activity_json_ld_remote(actor):
     activity = LikeActivityFactory(
-        actor=source_actor,
+        actor=actor,
         note=None,
         object_url="https://remote.example/notes/123",
         object_data={"content": "Remote content"}
@@ -101,31 +107,31 @@ def test_build_like_activity_json_ld_remote(source_actor):
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "Like"
     assert json_ld["id"] == build_activity_id(activity.id)
-    assert json_ld["actor"] == build_actor_id(source_actor.id)
+    assert json_ld["actor"] == build_actor_id(actor.id)
     assert json_ld["object"]["id"] == "https://remote.example/notes/123"
     assert json_ld["object"]["content"] == "Remote content"
 
 # Test building JSON-LD for local follow activity
 @pytest.mark.django_db
-def test_build_follow_activity_json_ld_local(source_actor, destination_actor):
+def test_build_follow_activity_json_ld_local(actor, other_actor):
     activity = FollowActivityFactory(
-        actor=source_actor,
-        target_actor=destination_actor
+        actor=actor,
+        target_actor=other_actor
     )
     
     json_ld = build_follow_activity_json_ld(activity)
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "Follow"
     assert json_ld["id"] == build_activity_id(activity.id)
-    assert json_ld["actor"] == build_actor_id(source_actor.id)
+    assert json_ld["actor"] == build_actor_id(actor.id)
     assert json_ld["object"]["type"] == "Person"
-    assert json_ld["object"]["id"] == build_actor_id(destination_actor.id)
+    assert json_ld["object"]["id"] == build_actor_id(other_actor.id)
 
 # Test building JSON-LD for remote follow activity
 @pytest.mark.django_db
-def test_build_follow_activity_json_ld_remote(source_actor):
+def test_build_follow_activity_json_ld_remote(actor):
     activity = FollowActivityFactory(
-        actor=source_actor,
+        actor=actor,
         target_actor=None,
         target_actor_url="https://remote.example/users/remote_user",
         target_actor_data={"preferredUsername": "remote_user"}
@@ -135,13 +141,22 @@ def test_build_follow_activity_json_ld_remote(source_actor):
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "Follow"
     assert json_ld["id"] == build_activity_id(activity.id)
-    assert json_ld["actor"] == build_actor_id(source_actor.id)
+    assert json_ld["actor"] == build_actor_id(actor.id)
     assert json_ld["object"]["id"] == "https://remote.example/users/remote_user"
     assert json_ld["object"]["preferredUsername"] == "remote_user"
 
 # Test Outbox JSON-LD builder with multiple activities
 @pytest.mark.django_db
-def test_build_outbox_json_ld(outbox, create_activity, like_activity, follow_activity):
+def test_build_outbox_json_ld():
+    # Create source actor since we need an outbox
+    source_actor = ActorFactory(role=Actor.ROLE_SOURCE)
+    outbox = source_actor.portability_outbox
+    
+    # Create activities with this source actor
+    create_activity = CreateActivityFactory(actor=source_actor)
+    like_activity = LikeActivityFactory(actor=source_actor)
+    follow_activity = FollowActivityFactory(actor=source_actor)
+    
     # Add activities to outbox
     outbox.add_activity(create_activity)
     outbox.add_activity(like_activity)

@@ -1,6 +1,7 @@
 import pytest
 from testbed.core.factories import (
-    UserFactory,
+    UserOnlyFactory,
+    UserWithActorsFactory,
     ActorFactory,
     NoteFactory,
     CreateActivityFactory,
@@ -12,67 +13,57 @@ from testbed.core.models import Actor
 # Creates a user without actors
 @pytest.fixture
 def user():
-    return UserFactory(with_actors=False)
+    return UserOnlyFactory()
 
-# Creates a user with both source and destination actors
+# Creates a user with associated actors
 @pytest.fixture
 def user_with_actors():
-    return UserFactory(with_actors=True)
+    return UserWithActorsFactory()
 
-# Creates a pair of actors (source and destination) for a new user
+# Returns an actor for testing
 @pytest.fixture
-def actor_pair():
-    return ActorFactory.create_pair()
+def actor():
+    return ActorFactory()
 
-# Returns the source actor from the pair
+# Returns another actor for interaction testing
 @pytest.fixture
-def source_actor(actor_pair):
-    return actor_pair[0]
+def other_actor():
+    return ActorFactory()
 
-# Returns the destination actor from the pair
+# Creates a note from an actor
 @pytest.fixture
-def destination_actor(actor_pair):
-    return actor_pair[1]
+def note(actor):
+    return NoteFactory(actor=actor)
 
-# Creates another source actor for interaction testing
+# Creates a Create activity for a note
 @pytest.fixture
-def another_source_actor():
-    return ActorFactory.create_source_actor()
-
-# Creates another destination actor for interaction testing
-@pytest.fixture
-def another_destination_actor():
-    return ActorFactory.create_destination_actor()
-
-# Creates a note from a source actor
-@pytest.fixture
-def note(source_actor):
-    return NoteFactory(actor=source_actor)
-
-# Creates a Create activity for a note.
-@pytest.fixture
-def create_activity(source_actor, note):
-    return CreateActivityFactory(actor=source_actor, note=note)
+def create_activity(actor, note):
+    return CreateActivityFactory(actor=actor, note=note)
 
 # Creates a Create activity for actor creation
 @pytest.fixture
-def actor_create_activity(source_actor):
-    return CreateActivityFactory.create_for_actor(source_actor)
+def actor_create_activity(actor):
+    return CreateActivityFactory(
+        actor=actor,
+        note=None,  # No note means this is an Actor creation activity
+        visibility="public"
+    )
 
 # Creates a Like activity for a note
 @pytest.fixture
-def like_activity(source_actor, note):
-    return LikeActivityFactory(actor=source_actor, note=note)
+def like_activity(actor, note):
+    return LikeActivityFactory(actor=actor, note=note)
 
-# Creates a Follow activity from source to destination actor
+# Creates a Follow activity between actors
 @pytest.fixture
-def follow_activity(source_actor, another_destination_actor):
+def follow_activity(actor, other_actor):
     return FollowActivityFactory(
-        actor=source_actor,
-        target_actor=another_destination_actor
+        actor=actor,
+        target_actor=other_actor
     )
 
-# Returns the outbox of a source actor
+# Returns the actor's outbox
 @pytest.fixture
-def outbox(source_actor):
+def outbox():
+    source_actor = ActorFactory(role=Actor.ROLE_SOURCE)
     return source_actor.portability_outbox

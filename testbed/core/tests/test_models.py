@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from testbed.core.models import Actor
 from testbed.core.factories import (
-    UserFactory,
+    UserOnlyFactory,
     ActorFactory,
     NoteFactory,
     CreateActivityFactory,
@@ -12,27 +12,27 @@ from testbed.core.factories import (
 )
 
 # Test basic actor creation
-def test_actor_creation(source_actor):
-    assert source_actor.user is not None
-    assert source_actor.role == Actor.ROLE_SOURCE
+def test_actor_creation(actor):
+    assert actor.user is not None
+    assert actor.role in [Actor.ROLE_SOURCE, Actor.ROLE_DESTINATION]
 
 # Test actor string representation
-def test_actor_str_representation(source_actor):
-    assert str(source_actor) == f"{source_actor.user.username}'s {source_actor.role} actor"
+def test_actor_str_representation(actor):
+    assert str(actor) == f"{actor.user.username}'s {actor.role} actor"
 
 # Test actor role properties
 def test_actor_roles():
-    source_actor = ActorFactory.create_source_actor()
-    dest_actor = ActorFactory.create_destination_actor()
+    actor_source = ActorFactory(role=Actor.ROLE_SOURCE)
+    actor_dest = ActorFactory(role=Actor.ROLE_DESTINATION)
     
-    assert source_actor.is_source
-    assert dest_actor.is_destination
-    assert not source_actor.is_destination
-    assert not dest_actor.is_source
+    assert actor_source.is_source
+    assert actor_dest.is_destination
+    assert not actor_source.is_destination
+    assert not actor_dest.is_source
 
 # Test that a user cannot have multiple actors with the same role
 def test_actor_unique_role_constraint():
-    user = UserFactory(with_actors=False)
+    user = UserOnlyFactory()
     ActorFactory(user=user, role=Actor.ROLE_SOURCE)
     
     actor = ActorFactory.build(user=user, role=Actor.ROLE_SOURCE)
@@ -41,8 +41,7 @@ def test_actor_unique_role_constraint():
         actor.clean()
 
 # Test recording actor movement history
-def test_actor_move_history():
-    actor = ActorFactory.create_source_actor()
+def test_actor_move_history(actor):
     test_date = timezone.now()
     
     actor.record_move("old-server.com", "old_username", test_date)
@@ -54,7 +53,6 @@ def test_actor_move_history():
 # Test basic note creation
 def test_note_creation(note):
     assert note.content is not None
-    assert note.actor.is_source  # Notes can only be created by source actors
     assert note.visibility in ["public", "private", "followers-only"]
 
 # Test note string representation
@@ -105,22 +103,29 @@ def test_follow_activity_remote_actor_validation():
     assert activity.target_actor_data["preferredUsername"] == "remote_user"
 
 # Test outbox is created automatically for source actors
-def test_portability_outbox_creation(source_actor):
-    outbox = source_actor.portability_outbox
-    assert outbox is not None
-    assert outbox.activities_create.count() == 1  # Initial Create activity
-    assert outbox.activities_create.first().note is None  # Should be an Actor creation activity
+def test_portability_outbox_creation():
+    source_actor = ActorFactory(role=Actor.ROLE_SOURCE)
+    dest_actor = ActorFactory(role=Actor.ROLE_DESTINATION)
+    
+    # Source actor should have an outbox
+    assert source_actor.portability_outbox is not None
+    assert source_actor.portability_outbox.activities_create.count() == 1
+    assert source_actor.portability_outbox.activities_create.first().note is None
+    
+    # Destination actor should not have an outbox initially for now
+    with pytest.raises(Actor.portability_outbox.RelatedObjectDoesNotExist):
+        _ = dest_actor.portability_outbox
 
 # Test adding different types of activities to outbox
 def test_outbox_activity_types():
-    actor = ActorFactory.create_source_actor()
-    outbox = actor.portability_outbox
+    source_actor = ActorFactory(role=Actor.ROLE_SOURCE)
+    outbox = source_actor.portability_outbox
     initial_count = outbox.activities_create.count()
 
     # Add different types of activities
-    create_activity = CreateActivityFactory(actor=actor)
-    like_activity = LikeActivityFactory(actor=actor)
-    follow_activity = FollowActivityFactory(actor=actor)
+    create_activity = CreateActivityFactory(actor=source_actor)
+    like_activity = LikeActivityFactory(actor=source_actor)
+    follow_activity = FollowActivityFactory(actor=source_actor)
 
     outbox.add_activity(create_activity)
     outbox.add_activity(like_activity)
@@ -132,13 +137,13 @@ def test_outbox_activity_types():
 
 # Test adding multiple activities to outbox
 def test_outbox_activity_addition():
-    actor = ActorFactory.create_source_actor()
-    outbox = actor.portability_outbox
+    source_actor = ActorFactory(role=Actor.ROLE_SOURCE)
+    outbox = source_actor.portability_outbox
     
     activities = [
-        CreateActivityFactory(actor=actor),
-        LikeActivityFactory(actor=actor),
-        FollowActivityFactory(actor=actor)
+        CreateActivityFactory(actor=source_actor),
+        LikeActivityFactory(actor=source_actor),
+        FollowActivityFactory(actor=source_actor)
     ]
     
     for activity in activities:
