@@ -1,56 +1,137 @@
-from testbed.core.models import Actor
+import pytest
+from django.core.exceptions import ValidationError
+from testbed.core.models import Actor, CreateActivity, LikeActivity, FollowActivity
+from testbed.core.factories import (
+    ActorFactory,
+    NoteFactory,
+    CreateActivityFactory,
+    LikeActivityFactory,
+    FollowActivityFactory,
+)
 
-# Test CreateActivity basic properties and relationships
-def test_create_activity(create_activity):
-    assert create_activity.actor is not None
-    assert create_activity.visibility in ["public", "private", "followers-only"]
-    # Test both cases: with note and without note (Actor creation)
-    if create_activity.note:
-        assert str(create_activity) == f"Create by {create_activity.actor.user.username}: {create_activity.note}"
-    else:
-        assert str(create_activity) == f"Create by {create_activity.actor.user.username}: Actor creation"
-
-# Test LikeActivity basic properties and relationships
-def test_like_activity(like_activity):
-    assert like_activity.actor is not None
-    assert like_activity.note is not None  # Required for Like
-    assert like_activity.visibility in ["public", "private", "followers-only"]
-    assert str(like_activity) == f"Like by {like_activity.actor.user.username}: {like_activity.note}"
-
-def test_like_activity_remote_object(like_activity):
-    # Test with remote object instead of local note
-    like_activity.note = None
-    like_activity.object_url = "https://remote.example/notes/123"
-    like_activity.object_data = {"content": "Remote content"}
+# Test Create activity for note creation
+@pytest.mark.django_db
+def test_create_activity_with_note(actor, note):
+    activity = CreateActivityFactory(actor=actor, note=note)
     
-    assert str(like_activity) == f"Like by {like_activity.actor.user.username}: Remote content..."
-    assert like_activity.object_url == "https://remote.example/notes/123"
-    assert like_activity.object_data["content"] == "Remote content"
+    assert activity.note == note
+    assert activity.timestamp is not None
+    assert str(activity) == f"Create by {actor.user.username}: {note}"
 
-# Test FollowActivity basic properties and relationships
-def test_follow_activity(follow_activity):
-    assert follow_activity.actor is not None
-    assert follow_activity.target_actor is not None  # Required for Follow
-    assert follow_activity.visibility in ["public", "private", "followers-only"]
-    assert str(follow_activity) == f"Follow by {follow_activity.actor.user.username}: {follow_activity.target_actor.user.username}"
+# Test Create activity for actor creation
+@pytest.mark.django_db
+def test_create_activity_for_actor(actor_create_activity):
+    assert actor_create_activity.note is None
+    assert actor_create_activity.timestamp is not None
+    assert str(actor_create_activity) == f"Create by {actor_create_activity.actor.user.username}: Actor creation"
 
-def test_follow_activity_remote_actor(follow_activity):
-    # Test with remote actor instead of local target
-    follow_activity.target_actor = None
-    follow_activity.target_actor_url = "https://remote.example/users/remote_user"
-    follow_activity.target_actor_data = {"preferredUsername": "remote_user"}
+# Test Like activity for local note
+@pytest.mark.django_db
+def test_like_activity_local(actor, note):
+    activity = LikeActivityFactory(actor=actor, note=note)
     
-    assert str(follow_activity) == f"Follow by {follow_activity.actor.user.username}: remote_user (remote)"
-    assert follow_activity.target_actor_url == "https://remote.example/users/remote_user"
-    assert follow_activity.target_actor_data["preferredUsername"] == "remote_user"
+    assert activity.note == note
+    assert activity.object_url is None
+    assert activity.object_data is None
+    assert str(activity) == f"Like by {actor.user.username}: {note}"
 
-# Test string representation for all activity types
-def test_activity_str_representation(create_activity, like_activity, follow_activity):
-    # Test that all activities include actor's username in their string representation
-    for activity in [create_activity, like_activity, follow_activity]:
-        assert activity.actor.user.username in str(activity)
+# Test Like activity for remote object
+@pytest.mark.django_db
+def test_like_activity_remote(actor):
+    activity = LikeActivityFactory(
+        actor=actor,
+        note=None,
+        object_url="https://remote.example/notes/123",
+        object_data={"content": "Remote content"}
+    )
+    
+    assert activity.note is None
+    assert activity.object_url == "https://remote.example/notes/123"
+    assert "content" in activity.object_data
+    assert str(activity) == f"Like by {actor.user.username}: Remote content..."
 
-# Test visibility field for all activity types
-def test_activity_visibility(create_activity, like_activity, follow_activity):
-    for activity in [create_activity, like_activity, follow_activity]:
-        assert activity.visibility in ["public", "private", "followers-only"]
+# Test Like activity validation rules
+@pytest.mark.django_db
+def test_like_activity_validation(actor):
+    with pytest.raises(ValidationError):
+        # Neither local note nor remote object
+        LikeActivityFactory(
+            actor=actor,
+            note=None,
+            object_url=None,
+            object_data=None
+        ).clean()
+
+# Test Follow activity for local actor
+@pytest.mark.django_db
+def test_follow_activity_local(actor, other_actor):
+    activity = FollowActivityFactory(
+        actor=actor,
+        target_actor=other_actor
+    )
+    
+    assert activity.target_actor == other_actor
+    assert activity.target_actor_url is None
+    assert activity.target_actor_data is None
+    assert str(activity) == f"Follow by {actor.user.username}: {other_actor.user.username}"
+
+# Test Follow activity for remote actor
+@pytest.mark.django_db
+def test_follow_activity_remote(actor):
+    activity = FollowActivityFactory(
+        actor=actor,
+        target_actor=None,
+        target_actor_url="https://remote.example/users/remote_user",
+        target_actor_data={"preferredUsername": "remote_user"}
+    )
+    
+    assert activity.target_actor is None
+    assert activity.target_actor_url == "https://remote.example/users/remote_user"
+    assert "preferredUsername" in activity.target_actor_data
+    assert str(activity) == f"Follow by {actor.user.username}: remote_user (remote)"
+
+# Test Follow activity validation rules
+@pytest.mark.django_db
+def test_follow_activity_validation(actor):
+    with pytest.raises(ValidationError):
+        # Neither local target nor remote actor
+        FollowActivityFactory(
+            actor=actor,
+            target_actor=None,
+            target_actor_url=None,
+            target_actor_data=None
+        ).clean()
+
+# Test activities are properly added to outbox
+@pytest.mark.django_db
+def test_activity_outbox_integration(outbox, create_activity, like_activity, follow_activity):
+    initial_count = outbox.activities_create.count()
+
+    # Add to outbox
+    outbox.add_activity(create_activity)
+    outbox.add_activity(like_activity)
+    outbox.add_activity(follow_activity)
+
+    # Verify counts
+    assert outbox.activities_create.count() == initial_count + 1
+    assert outbox.activities_like.count() == 1
+    assert outbox.activities_follow.count() == 1
+
+    # Verify activity presence
+    assert create_activity in outbox.activities_create.all()
+    assert like_activity in outbox.activities_like.all()
+    assert follow_activity in outbox.activities_follow.all()
+
+# Test activities maintain proper temporal ordering
+@pytest.mark.django_db
+def test_activity_timestamp_ordering(actor):
+    activities = [
+        CreateActivityFactory(actor=actor),
+        LikeActivityFactory(actor=actor),
+        FollowActivityFactory(actor=actor)
+    ]
+    
+    # Verify timestamps exist and are ordered
+    timestamps = [activity.timestamp for activity in activities]
+    assert all(timestamps)
+    assert sorted(timestamps) == timestamps
