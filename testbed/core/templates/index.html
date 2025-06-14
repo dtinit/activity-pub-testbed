@@ -2,6 +2,13 @@
  
 {% block content %}
 <main class="index">
+  {% if messages %}
+  <ul class="messages">
+    {% for message in messages %}
+    <p class="{{ message.tags }}">{{ message }}</p>
+    {% endfor %}
+  </ul>
+  {% endif %}
   <h1>ActivityPub Account Portability Testbed</h1>
   <br />
   {% if user.is_authenticated %}
@@ -45,5 +52,19 @@
     Accounts on this site are not full ActivityPub accounts in that they are not shared to the Fediverse or truly federated with other ActivityPubservers.
   </p>
   {% endif %}
+    </div>
+
+  <h3>Update Your OAuth Connection</h3>
+
+      {% if oauth_form %}
+      <div class="actor">
+      <form method="post" class="oauth-form">
+        {% csrf_token %}
+        {{ oauth_form.as_p }}
+        <br/>
+        <button type="submit">Update</button>
+      </form>
+      </div>
+      {% endif %}
 </main>
 {% endblock %}
