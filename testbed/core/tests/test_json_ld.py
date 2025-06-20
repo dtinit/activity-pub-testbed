@@ -9,10 +9,15 @@ from testbed.core.json_ld_builders import (
     build_follow_activity_json_ld,
     build_outbox_json_ld,
 )
+from testbed.core.factories import (
+    LikeActivityFactory,
+    FollowActivityFactory
+)
+
 # Test complete flow from API to JSON-LD for Actor
 @pytest.mark.django_db
-def test_complete_actor_json_ld_flow(actor):
-    # Test direct builder
+def test_actor_json_ld_flow(actor):
+    # Test JSON-LD generation
     builder_json_ld = build_actor_json_ld(actor)
     
     # Test API response
@@ -22,11 +27,13 @@ def test_complete_actor_json_ld_flow(actor):
     
     # Both should match
     assert response.data == builder_json_ld
+    assert response.data["type"] == "Person"
+    assert response.data["preferredUsername"] == actor.username
 
 # Test complete flow from API to JSON-LD for Outbox
 @pytest.mark.django_db
 def test_complete_outbox_json_ld_flow(outbox):
-    # Test direct builder
+    # Test JSON-LD generation for outboxes
     builder_json_ld = build_outbox_json_ld(outbox)
     
     # Test API response
@@ -40,7 +47,7 @@ def test_complete_outbox_json_ld_flow(outbox):
 # Test that all activity types appear correctly in outbox
 @pytest.mark.django_db
 def test_activity_types_in_outbox(outbox, create_activity, like_activity, follow_activity):
-
+    # Add activities to outbox
     outbox.add_activity(create_activity)
     outbox.add_activity(like_activity)
     outbox.add_activity(follow_activity)
@@ -65,6 +72,7 @@ def test_activity_types_in_outbox(outbox, create_activity, like_activity, follow
 # Test that JSON-LD structure is consistent across all builders
 @pytest.mark.django_db
 def test_json_ld_consistency(actor, note, create_activity, like_activity, follow_activity):
+    # Test JSON-LD structure consistency across all builders
     builders_and_objects = [
         (build_actor_json_ld, actor),
         (build_note_json_ld, note),
@@ -78,3 +86,25 @@ def test_json_ld_consistency(actor, note, create_activity, like_activity, follow
         assert "@context" in json_ld
         assert "type" in json_ld
         assert "id" in json_ld
+
+# Test JSON-LD for remote activities
+@pytest.mark.django_db
+def test_remote_activity_json_ld(actor):
+    # Create activities with remote objects using factory traits
+    like_activity = LikeActivityFactory(
+        actor=actor,
+        remote=True
+    )
+    
+    follow_activity = FollowActivityFactory(
+        actor=actor,
+        remote=True
+    )
+
+    # Test JSON-LD generation
+    like_json_ld = build_like_activity_json_ld(like_activity)
+    follow_json_ld = build_follow_activity_json_ld(follow_activity)
+
+    # Verify remote object structure
+    assert like_json_ld["object"]["id"] == like_activity.object_url
+    assert follow_json_ld["object"]["id"] == follow_activity.target_actor_url
