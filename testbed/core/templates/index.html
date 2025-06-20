@@ -1,5 +1,5 @@
 {% extends "_base.html" %}
- 
+
 {% block content %}
 <main class="index">
   {% if messages %}
@@ -9,62 +9,68 @@
     {% endfor %}
   </ul>
   {% endif %}
+
   <h1>ActivityPub Account Portability Testbed</h1>
   <br />
+
   {% if user.is_authenticated %}
 
-    {% if source_actor or destination_actor %}
+  {% if source_actor or destination_actor %}
+  <p>
+    Here are the ActivityPub Actors available for you to test LOLA account portability with:
+  </p>
 
-    <p>
-      Here are the ActivityPub Actors available for you to test LOLA account portability with:
-    </p>
-    {% if source_actor %}
-    <h3>Source</h3>
-    <div class="actor">
-      <div>Username: {{ source_actor.username }}</div>
-      <div><a href="{% url 'actor-detail' pk=source_actor.pk %}">Details</a></div>
-      <div><a href="{% url 'actor-outbox' pk=source_actor.pk %}">Outbox</a></div>
-      </div>
-    {% endif %}
-    {% if destination_actor %}
-    <h3>Destination</h3>
-    <div class="actor">
-      <div>Username: {{ destination_actor.username }}</div>
-      <div class="actor__links">
+  {% if source_actor %}
+  <h3>Source</h3>
+  <div class="actor">
+    <div>Username: {{ source_actor.username }}</div>
+    <div><a href="{% url 'actor-detail' pk=source_actor.pk %}">Details</a></div>
+    <div><a href="{% url 'actor-outbox' pk=source_actor.pk %}">Outbox</a></div>
+  </div>
+  {% endif %}
+
+  {% if destination_actor %}
+  <h3>Destination</h3>
+  <div class="actor">
+    <div>Username: {{ destination_actor.username }}</div>
+    <div class="actor__links">
       <a href="{% url 'actor-detail' pk=destination_actor.pk %}">Details</a>
     </div>
-    {% endif %}
-  
-    {% else %}
-    <p>There are no ActivityPub Actors available for testing yet.</p>
-    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <p>There are no ActivityPub Actors available for testing yet.</p>
+  {% endif %}
+
+  {% if oauth_form %}
+  <h3>Update Your OAuth Connection</h3>
+  <div class="actor">
+    <form method="post" class="oauth-form">
+      {% csrf_token %}
+      {{ oauth_form.as_p }}
+      <br />
+      <button type="submit">Update</button>
+    </form>
+  </div>
+  {% endif %}
 
   {% else %}
   <p>
-    The <a href="https://www.w3.org/TR/activitypub/">ActivityPub</a> account portability testbed is an implementation of <a href="https://swicg.github.io/activitypub-data-portability/lola.html">LOLA</a>, a proposal for an interoperable approach to moving accounts between ActivityPub servers.  The testbed implements LOLA as a source server currently, and we have plans to implement LOLA as a destination as well.
+    The <a href="https://www.w3.org/TR/activitypub/">ActivityPub</a> account portability testbed is an implementation of
+    <a href="https://swicg.github.io/activitypub-data-portability/lola.html">LOLA</a>, a proposal for an interoperable approach to moving accounts between ActivityPub servers.
+    The testbed implements LOLA as a source server currently, and we have plans to implement LOLA as a destination as well.
   </p>
   <br />
   <p>
-    If you are building a LOLA implementation, register for a test account <a href="{% url 'account_signup' %}">here</a>.  The account will be populated with test data including posts, follows and item history.  Use this account to test moving an ActivityPub Actor’s full account to your site.
+    If you are building a LOLA implementation, register for a test account
+    <a href="{% url 'account_signup' %}">here</a>. The account will be populated with test data including posts, follows and item history.
+    Use this account to test moving an ActivityPub Actor’s full account to your site.
   </p>
   <br />
   <p>
-    Accounts on this site are not full ActivityPub accounts in that they are not shared to the Fediverse or truly federated with other ActivityPubservers.
+    Accounts on this site are not full ActivityPub accounts in that they are not shared to the Fediverse or truly federated with other ActivityPub servers.
   </p>
   {% endif %}
-    </div>
-
-  <h3>Update Your OAuth Connection</h3>
-
-      {% if oauth_form %}
-      <div class="actor">
-      <form method="post" class="oauth-form">
-        {% csrf_token %}
-        {{ oauth_form.as_p }}
-        <br/>
-        <button type="submit">Update</button>
-      </form>
-      </div>
-      {% endif %}
 </main>
 {% endblock %}
