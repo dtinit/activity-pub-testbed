@@ -14,9 +14,23 @@ SECRET_KEY = env.str("DJANGO_SECRET_KEY", default="your-dev-secret-key")
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
 # Seeding settings
-SEED_ADMIN_USERNAME = ("admin",)
-SEED_ADMIN_EMAIL = ("admin@testing.com",)
-SEED_ADMIN_PASSWORD = ("admin123",)
+SEED_ADMIN_USERNAME = "admin"
+SEED_ADMIN_EMAIL = "admin@seeding.com"
+SEED_ADMIN_PASSWORD = "admin123"
+
+# Test users for login testing (each with both source and destination actors)
+SEED_TEST_USERS = [
+    {
+        "username": "login_user_1",
+        "email": "login_user_1@seeding.com",
+        "password": "testpass123"
+    },
+    {
+        "username": "login_user_2", 
+        "email": "login_user_2@seeding.com",
+        "password": "testpass123"
+    }
+]
 
 # Database settings
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
@@ -51,4 +65,3 @@ if DEBUG:
     })
 
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # Print emails to console
-

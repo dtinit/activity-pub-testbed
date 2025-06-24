@@ -22,7 +22,8 @@ from testbed.core.factories import (
     CreateActivityFactory,
     NoteFactory
 )
-from testbed.core.models import Actor
+from testbed.core.tests.conftest import create_isolated_actor
+from testbed.core.models import Actor, CreateActivity, LikeActivity, FollowActivity
 
 # Test building JSON-LD for an actor
 @pytest.mark.django_db
@@ -148,14 +149,29 @@ def test_build_follow_activity_json_ld_remote(actor):
 # Test Outbox JSON-LD builder with multiple activities
 @pytest.mark.django_db
 def test_build_outbox_json_ld():
-    # Create source actor since we need an outbox
-    source_actor = ActorFactory(role=Actor.ROLE_SOURCE)
-    outbox = source_actor.portability_outbox
+    # Create actors with the helper function that ensures unique usernames
+    actor = create_isolated_actor("json_ld_outbox_test")
+    target_actor = create_isolated_actor("json_ld_target_test")
+    outbox = actor.portability_outbox
     
-    # Create activities with this source actor
-    create_activity = CreateActivityFactory(actor=source_actor)
-    like_activity = LikeActivityFactory(actor=source_actor)
-    follow_activity = FollowActivityFactory(actor=source_actor)
+    # Create a note for our tests
+    note = NoteFactory(actor=actor, content="Test note for outbox")
+    
+    # Use factories to create activities but pass in our controlled actors
+    create_activity = CreateActivityFactory(
+        actor=actor,
+        note=note
+    )
+    
+    like_activity = LikeActivityFactory(
+        actor=actor,
+        note=note
+    )
+    
+    follow_activity = FollowActivityFactory(
+        actor=actor,
+        target_actor=target_actor
+    )
     
     # Add activities to outbox
     outbox.add_activity(create_activity)

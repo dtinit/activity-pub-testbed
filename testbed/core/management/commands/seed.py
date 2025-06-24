@@ -1,17 +1,10 @@
 import random
-from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.conf import settings
-from django.utils import timezone
-from testbed.core.models import LikeActivity, FollowActivity
-from testbed.core.factories import (
-    ActorFactory,
-    CreateActivityFactory,
-    LikeActivityFactory,
-    FollowActivityFactory,
-    NoteFactory,
-)
+from testbed.core.models import Actor
+from testbed.core.factories import UserWithActorsFactory
+from testbed.core.utils.actor_utils import populate_source_actor_outbox
 
 
 User = get_user_model()
@@ -34,61 +27,6 @@ class Command(BaseCommand):
             help="Automatically create admin user without prompting",
         )
 
-    # Create a series of remote likes
-    def create_remote_like(self, actor):
-        server, usernames = random.choice(REMOTE_SERVERS)
-        username = random.choice(usernames)
-        note_id = random.randint(1000, 9999)
-
-        return LikeActivity.objects.create(
-            actor=actor,
-            note=None,
-            object_url=f"https://{server}/notes/{note_id}",
-            object_data={
-                "@context": "https://www.w3.org/ns/activitystreams",
-                "type": "Note",
-                "actor": f"https://{server}/users/{username}",
-                "content": f"A federated note from {username} on {server}",
-                "published": (
-                    timezone.now() - timedelta(days=random.randint(1, 30))
-                ).isoformat(),
-                "visibility": "public",
-            },
-            visibility="public",
-        )
-
-    def create_remote_follow(self, actor):
-        server, usernames = random.choice(REMOTE_SERVERS)
-        username = random.choice(usernames)
-
-        return FollowActivity.objects.create(
-            actor=actor,
-            target_actor=None,
-            target_actor_url=f"https://{server}/users/{username}",
-            target_actor_data={
-                "type": "Person",
-                "preferredUsername": username,
-                "name": username,
-                "url": f"https://{server}/users/{username}",
-            },
-            visibility="public"
-        )
-
-    # Create actor with previous server history
-    def create_actor_with_history(self):
-        actor = ActorFactory.create()
-
-        # Add 1-2 previous servers
-        num_previous = random.randint(1, 2)
-
-        for _ in range(num_previous):
-            server, usernames = random.choice(REMOTE_SERVERS)
-            username = random.choice(usernames)
-            move_date = timezone.now() - timedelta(days=random.randint(30, 365)) 
-
-            actor.record_move(server, username, move_date)
-
-        return actor
 
     def handle(self, *args, **kwargs):
         try:
@@ -113,11 +51,12 @@ class Command(BaseCommand):
                     self.stdout.write(
                         self.style.WARNING("Creating admin user automatically...")
                     )
-                    User.objects.create_superuser(
+                    admin_user = User.objects.create_superuser(
                         username=username, email=email, password=password
                     )
+                    # Signal will handle actor creation
                     self.stdout.write(
-                        self.style.SUCCESS("Admin user created successfully.")
+                        self.style.SUCCESS("Admin user created successfully (actors created by signal)")
                     )
                 else:
                     self.stdout.write(self.style.WARNING("No admin user found."))
@@ -126,11 +65,12 @@ class Command(BaseCommand):
                     )
                     if answer == "y":
                         self.stdout.write(self.style.WARNING("Creating admin user..."))
-                        User.objects.create_superuser(
+                        admin_user = User.objects.create_superuser(
                             username=username, email=email, password=password
                         )
+                        # Signal will handle actor creation
                         self.stdout.write(
-                            self.style.SUCCESS("Admin user created successfully.")
+                            self.style.SUCCESS("Admin user created successfully (actors created by signal)")
                         )
                     else:
                         self.stdout.write(
@@ -138,78 +78,116 @@ class Command(BaseCommand):
                         )
             else:
                 self.stdout.write(self.style.SUCCESS('Admin user already exists.'))
+                
+            # Create login test users (automatically created, regardless of no_prompt flag)
+            self.stdout.write(self.style.WARNING("Creating login test users..."))
+            login_users_created = 0
+            login_users = []
             
-            # Create multiple actors - mix of regular and those with history
-            # (Outbox will be created automatically)
-            self.stdout.write('Creating actors...')
-            regular_actors = ActorFactory.create_batch(7) # 7 regular actors
-            history_actors = [self.create_actor_with_history() for _ in range(3)] # 3 actors with history
-            actors = regular_actors + history_actors
+            for user_config in getattr(settings, "SEED_TEST_USERS", []):
+                username = str(user_config["username"])
+                email = str(user_config["email"])
+                password = str(user_config["password"])
+                
+                if not User.objects.filter(username=username).exists():
+                    user = User.objects.create_user(
+                        username=username, email=email, password=password
+                    )
+                    # Signal will handle actor creation
+                    self.stdout.write(
+                        self.style.SUCCESS(f"Login user '{username}' created (actors created by signal)")
+                    )
+                    login_users_created += 1
+                else:
+                    user = User.objects.get(username=username)
+                    self.stdout.write(self.style.SUCCESS(f"Login user '{username}' already exists"))
+                
+                login_users.append(user)
+            
+            if login_users_created > 0:
+                self.stdout.write(self.style.SUCCESS(f"Created {login_users_created} login test users with password: testpass123"))
+            
+            # Create additional users with both source and destination actors for API testing
+            # (Outboxes will be created automatically for BOTH source and destination actors)
+            self.stdout.write('Creating users with paired actors...')
+            regular_users = UserWithActorsFactory.create_batch(7) # 7 regular users with paired actors
+            
+            # Collect all actors (both source and destination)
+            all_actors = []
+            
+            # Add actors from regular users
+            for user in regular_users:
+                # Get both source and destination actors for each user
+                source_actor = user.actors.get(role=Actor.ROLE_SOURCE)
+                dest_actor = user.actors.get(role=Actor.ROLE_DESTINATION)
+                all_actors.extend([source_actor, dest_actor])
+            
+            # Add actors from login users
+            for user in login_users:
+                # Get both source and destination actors for each user
+                source_actor = user.actors.get(role=Actor.ROLE_SOURCE)
+                dest_actor = user.actors.get(role=Actor.ROLE_DESTINATION)
+                all_actors.extend([source_actor, dest_actor])
+                
+            # All actors
+            actors = all_actors
+            
+            # Verify outboxes were created for all actors
+            source_actors_count = sum(1 for a in actors if a.is_source)
+            dest_actors_count = sum(1 for a in actors if a.is_destination)
+            self.stdout.write(f'Created {source_actors_count} source actors and {dest_actors_count} destination actors')
+            self.stdout.write(f'All actors now have outboxes with initial Create activities')
 
             # Track different types of activities
             local_like_count = 0
             remote_like_count = 0
             local_follow_count = 0
             remote_follow_count = 0
-            moved_actors_count = len(history_actors) # Counts the number of actors with history
-            regular_actors_count = len(regular_actors) # Counts the number of regular actors
+            regular_actors_count = len(all_actors) # Counts the number of regular actors (both from regular users and login users)
 
-            # Create notes and various activities
-            self.stdout.write("Creating notes and activities...")
-            for actor in actors:
-                # Create local notes
-                notes = NoteFactory.create_batch(3, actor=actor)
+            # Split actors into source and destination
+            source_actors = [a for a in actors if a.is_source]
+            dest_actors = [a for a in actors if a.is_destination]
+            
+            # Destination actors should only have their creation activity
+            self.stdout.write("Destination actors only have their creation activity in outbox")
+            
+            # Skip additional population since actors are already populated by the signal
+            self.stdout.write("Source actors already populated by signal handler")
 
-                # Create activities for each note
-                for note in notes:
-                    create_activity = CreateActivityFactory(
-                        actor=actor, note=note, visibility="public"
-                    )
-                    actor.portability_outbox.first().add_activity(create_activity)
-
-                    # Some notes get liked by other actors (local likes)
-                    if random.choice([True, False]):
-                        liker = random.choice([a for a in actors if a != actor])
-                        like_activity = LikeActivityFactory(
-                            actor=liker, note=note, visibility="public"
-                        )
-                        liker.portability_outbox.first().add_activity(like_activity)
-                        local_like_count += 1
-
-                # Create remote likes for each actor
-                for _ in range(random.randint(1, 3)):
-                    remote_like = self.create_remote_like(actor)
-                    actor.portability_outbox.first().add_activity(remote_like)
-                    remote_like_count += 1
-
-                # Create local follows
-                for _ in range(1): # Each actor follows 1 local actor
-
-                    target = random.choice([a for a in actors if a != actor])
-                    follow_activity = FollowActivityFactory(
-                        actor=actor, target_actor=target, visibility="public"
-                    )
-                    actor.portability_outbox.first().add_activity(follow_activity)
-                    local_follow_count += 1
-
-                # Create remote follows
-                for _ in range(1): # Each actor follows 1 remote actor
-                    remote_follow = self.create_remote_follow(actor)
-                    actor.portability_outbox.first().add_activity(remote_follow)
-                    remote_follow_count += 1
+            # Count the activities in source actors' outboxes
+            for actor in source_actors:
+                # Count likes in outbox
+                local_like_count += actor.portability_outbox.activities_like.filter(
+                    note__isnull=False  # Local likes have a note reference
+                ).count()
+                
+                remote_like_count += actor.portability_outbox.activities_like.filter(
+                    note__isnull=True  # Remote likes don't have a note reference
+                ).count()
+                
+                # Count follows in outbox
+                local_follow_count += actor.portability_outbox.activities_follow.filter(
+                    target_actor__isnull=False  # Local follows have a target_actor reference
+                ).count()
+                
+                remote_follow_count += actor.portability_outbox.activities_follow.filter(
+                    target_actor__isnull=True  # Remote follows don't have a target_actor reference
+                ).count()
 
             # Count all activities
             total_actors = len(actors)
-            total_notes = len(actors) * 3
-            total_creates = total_notes + total_actors # Notes + Actor creates
+            total_users = len(regular_users) + len(login_users)
+            total_notes = len(source_actors) * 3 # Only source actors have notes
+            total_creates = total_notes + total_actors # Notes + Actor creates (both source and destination actors)
 
             self.stdout.write(
                 self.style.SUCCESS(
                     f'Successfully created:\n'
-                    f'- {total_actors} actors\n'
-                    f'- {moved_actors_count} actors with history\n'
-                    f'- {regular_actors_count} regular actors\n'
-                    f'- {total_notes} notes\n'
+                    f'- {total_users} users\n'
+                    f'- {total_actors} actors (all paired with source and destination)\n'
+                    f'- {source_actors_count} source actors and {dest_actors_count} destination actors\n'
+                    f'- {total_notes} notes (for source actors only)\n'
                     f'- {total_creates} Create activities ({total_actors} for actors, {total_notes} for notes)\n'
                     f'- {local_like_count} Local Like activities\n'
                     f'- {remote_like_count} Remote Like activities\n'

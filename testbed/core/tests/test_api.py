@@ -4,6 +4,7 @@ from rest_framework import status
 from django.urls import reverse
 from testbed.core.models import Actor
 from testbed.core.factories import ActorFactory
+from testbed.core.tests.conftest import create_isolated_actor
 from testbed.core.json_ld_utils import (
     build_basic_context,
     build_actor_context,
@@ -30,8 +31,9 @@ def test_actor_detail_api(actor):
 # Test outbox detail API endpoint
 @pytest.mark.django_db
 def test_outbox_api_for_source_actor():
-    source_actor = ActorFactory(role=Actor.ROLE_SOURCE)
-    response = APIClient().get(reverse("actor-outbox", kwargs={"pk": source_actor.id}))
+    # Create an actor with the helper function that ensures unique usernames
+    actor = create_isolated_actor("api_test")
+    response = APIClient().get(reverse("actor-outbox", kwargs={"pk": actor.id}))
 
     assert response.status_code == status.HTTP_200_OK
 
@@ -39,7 +41,7 @@ def test_outbox_api_for_source_actor():
     json_ld = response.data
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "OrderedCollection"
-    assert json_ld["id"] == build_outbox_id(source_actor.id)
+    assert json_ld["id"] == build_outbox_id(actor.id)
     assert isinstance(json_ld["totalItems"], int)
     assert isinstance(json_ld["items"], list)
 
