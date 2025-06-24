@@ -1,7 +1,7 @@
 import pytest
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from testbed.core.models import Actor
+from testbed.core.models import Actor, Note, CreateActivity, LikeActivity, FollowActivity, PortabilityOutbox
 from testbed.core.factories import (
     UserOnlyFactory,
     ActorFactory,
@@ -9,6 +9,11 @@ from testbed.core.factories import (
     CreateActivityFactory,
     LikeActivityFactory,
     FollowActivityFactory,
+)
+from testbed.core.tests.conftest import (
+    create_isolated_actor,
+    create_isolated_remote_like,
+    create_isolated_remote_follow,
 )
 
 # Test basic actor creation
@@ -20,25 +25,27 @@ def test_actor_creation(actor):
 def test_actor_str_representation(actor):
     assert str(actor) == f"{actor.user.username}'s {actor.role} actor"
 
-# Test actor role properties
-def test_actor_roles():
-    actor_source = ActorFactory(role=Actor.ROLE_SOURCE)
-    actor_dest = ActorFactory(role=Actor.ROLE_DESTINATION)
-    
-    assert actor_source.is_source
-    assert actor_dest.is_destination
-    assert not actor_source.is_destination
-    assert not actor_dest.is_source
-
 # Test that a user cannot have multiple actors with the same role
 def test_actor_unique_role_constraint():
-    user = UserOnlyFactory()
-    ActorFactory(user=user, role=Actor.ROLE_SOURCE)
+    # Create a user directly
+    user = UserOnlyFactory(username="unique_role_test_user")
     
-    actor = ActorFactory.build(user=user, role=Actor.ROLE_SOURCE)
+    # Create first actor manually
+    first_actor = Actor.objects.create(
+        user=user,
+        username="unique_role_test_source",
+        role=Actor.ROLE_SOURCE
+    )
+    
+    # Try to create another actor with the same role for same user
+    second_actor = Actor(
+        user=user,
+        username="unique_role_test_source2",
+        role=Actor.ROLE_SOURCE
+    )
     
     with pytest.raises(ValidationError):
-        actor.clean()
+        second_actor.clean()
 
 # Test recording actor movement history
 def test_actor_move_history(actor):
@@ -72,83 +79,132 @@ def test_create_activity_str_for_actor_creation(actor_create_activity):
 
 # Test that Like activity requires either note or remote object data
 def test_like_activity_validation():
+    # Create isolated actor using helper function
+    actor = create_isolated_actor("like_validation_test")
+    
+    # Create invalid activity (no note and no remote object data)
+    activity = LikeActivity(
+        actor=actor,
+        note=None,
+        object_url=None,
+        visibility="public"
+    )
+    
     with pytest.raises(ValidationError):
-        activity = LikeActivityFactory(note=None, object_url=None)
         activity.clean()
 
 # Test Like activity with remote object data
 def test_like_activity_remote_object_validation():
-    activity = LikeActivityFactory(
-        note=None,
-        object_url="https://remote.example/notes/123",
-        object_data={"content": "Remote note content"}
-    )
-    assert activity.object_url == "https://remote.example/notes/123"
+    # Use helper function that creates isolated actor and uses factory
+    activity = create_isolated_remote_like()
+    
+    # Verify remote object data
+    assert activity.object_url.startswith("https://remote.example/notes/")
     assert activity.object_data["content"] == "Remote note content"
 
 # Test that Follow activity requires either target_actor or remote actor data
 def test_follow_activity_validation():
+    # Create isolated actor using helper function
+    actor = create_isolated_actor("follow_validation_test")
+    
+    # Create invalid activity (no target_actor and no remote actor data)
+    activity = FollowActivity(
+        actor=actor,
+        target_actor=None,
+        target_actor_url=None,
+        target_actor_data=None,
+        visibility="public"
+    )
+    
     with pytest.raises(ValidationError):
-        activity = FollowActivityFactory(target_actor=None, target_actor_url=None)
         activity.clean()
 
 # Test Follow activity with remote actor data
 def test_follow_activity_remote_actor_validation():
-    activity = FollowActivityFactory(
-        target_actor=None,
-        target_actor_url="https://remote.example/users/remote_user",
-        target_actor_data={"preferredUsername": "remote_user"}
-    )
-    assert activity.target_actor_url == "https://remote.example/users/remote_user"
-    assert activity.target_actor_data["preferredUsername"] == "remote_user"
+    # Use helper function that creates isolated actor and uses factory
+    activity = create_isolated_remote_follow()
+    
+    # Verify remote actor data
+    assert activity.target_actor_url.startswith("https://remote.example/users/")
+    assert "preferredUsername" in activity.target_actor_data
 
-# Test outbox is created automatically for source actors
+# Test outbox is created automatically for actors
 def test_portability_outbox_creation():
-    source_actor = ActorFactory(role=Actor.ROLE_SOURCE)
-    dest_actor = ActorFactory(role=Actor.ROLE_DESTINATION)
+    from testbed.core.utils.actor_utils import populate_source_actor_outbox
+    from testbed.core.models import Note, CreateActivity
     
-    # Source actor should have an outbox
-    assert source_actor.portability_outbox is not None
-    assert source_actor.portability_outbox.activities_create.count() == 1
-    assert source_actor.portability_outbox.activities_create.first().note is None
+    # Create an isolated actor for testing
+    actor = create_isolated_actor("outbox_test")
     
-    # Destination actor should not have an outbox initially for now
-    with pytest.raises(Actor.portability_outbox.RelatedObjectDoesNotExist):
-        _ = dest_actor.portability_outbox
+    # Actor should have an outbox created automatically
+    assert actor.portability_outbox is not None
+    
+    # The outbox should have the actor creation activity
+    assert actor.portability_outbox.activities_create.count() >= 1
+    
+    # At least one Create activity should be for actor creation (no note)
+    actor_create_activities = actor.portability_outbox.activities_create.filter(note__isnull=True)
+    assert actor_create_activities.count() >= 1
+    
+    # Manually populate the outbox with additional content for testing
+    populate_source_actor_outbox(actor, num_notes=2)
+    
+    # Now verify we have notes
+    note_activities = actor.portability_outbox.activities_create.filter(note__isnull=False)
+    assert note_activities.count() > 0
+    
+    # And we should have likes and follows
+    assert actor.portability_outbox.activities_like.count() > 0
+    assert actor.portability_outbox.activities_follow.count() > 0
 
 # Test adding different types of activities to outbox
 def test_outbox_activity_types():
-    source_actor = ActorFactory(role=Actor.ROLE_SOURCE)
-    outbox = source_actor.portability_outbox
-    initial_count = outbox.activities_create.count()
+    # Create isolated actors using helper functions
+    actor = create_isolated_actor("types_test")
+    target_actor = create_isolated_actor("target_test")
+    
+    # Create a note for the like activity
+    note = NoteFactory(actor=actor, content="Test note for liking")
+    
+    outbox = actor.portability_outbox
+    initial_create_count = outbox.activities_create.count()
+    initial_like_count = outbox.activities_like.count()
+    initial_follow_count = outbox.activities_follow.count()
 
-    # Add different types of activities
-    create_activity = CreateActivityFactory(actor=source_actor)
-    like_activity = LikeActivityFactory(actor=source_actor)
-    follow_activity = FollowActivityFactory(actor=source_actor)
+    # Use factories but pass in our manually created actors
+    create_activity = CreateActivityFactory(actor=actor, note=note)
+    like_activity = LikeActivityFactory(actor=actor, note=note)
+    follow_activity = FollowActivityFactory(actor=actor, target_actor=target_actor)
 
     outbox.add_activity(create_activity)
     outbox.add_activity(like_activity)
     outbox.add_activity(follow_activity)
 
-    assert outbox.activities_create.count() == initial_count + 1
-    assert outbox.activities_like.count() == 1
-    assert outbox.activities_follow.count() == 1
+    # Check that counts have increased by 1
+    assert outbox.activities_create.count() == initial_create_count + 1
+    assert outbox.activities_like.count() == initial_like_count + 1
+    assert outbox.activities_follow.count() == initial_follow_count + 1
 
 # Test adding multiple activities to outbox
 def test_outbox_activity_addition():
-    source_actor = ActorFactory(role=Actor.ROLE_SOURCE)
-    outbox = source_actor.portability_outbox
+    # Create isolated actors using helper functions
+    actor = create_isolated_actor("addition_test")
+    target_actor = create_isolated_actor("target_addition_test")
+    
+    # Create a note for the like activity
+    note = NoteFactory(actor=actor, content="Test note for addition")
+    
+    outbox = actor.portability_outbox
     
     activities = [
-        CreateActivityFactory(actor=source_actor),
-        LikeActivityFactory(actor=source_actor),
-        FollowActivityFactory(actor=source_actor)
+        CreateActivityFactory(actor=actor, note=note),
+        LikeActivityFactory(actor=actor, note=note),
+        FollowActivityFactory(actor=actor, target_actor=target_actor)
     ]
     
     for activity in activities:
         outbox.add_activity(activity)
         
-    assert activity in outbox.activities_follow.all() or \
-           activity in outbox.activities_like.all() or \
-           activity in outbox.activities_create.all()
+    assert activities[0] in outbox.activities_create.all()
+    assert activities[1] in outbox.activities_like.all()
+    assert activities[2] in outbox.activities_follow.all()

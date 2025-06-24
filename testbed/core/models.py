@@ -66,11 +66,8 @@ class Actor(models.Model):
         self.previously.append(move_record)
         self.save()
 
-    # Initialize outbox and create activity if this is a source actor
-    def initialize_if_source(self):
-        if not self.is_source:
-            return
-        
+    # Initialize outbox and create activity for any actor type
+    def initialize_actor(self):
         try:
             # Create a PortabilityOutbox for new actor
             outbox, created = PortabilityOutbox.objects.get_or_create(actor=self)
@@ -86,14 +83,14 @@ class Actor(models.Model):
                 outbox.add_activity(activity)
 
         except Exception as e:
-            logger.error(f"Error initializing source actor {self.user.username}: {e}")
+            logger.error(f"Error initializing actor {self.user.username}: {e}")
     
     def save(self, *args, **kwargs):
         is_new = self._state.adding
         super().save(*args, **kwargs)
 
         if is_new:
-            self.initialize_if_source()
+            self.initialize_actor()
 
     def clean(self):
         super().clean()
@@ -248,4 +245,3 @@ class OauthConnection(models.Model):
 
     def __str__(self):
         return f"OAuth for {self.user.username}"
-

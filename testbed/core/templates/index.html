@@ -15,6 +15,10 @@
 
   {% if user.is_authenticated %}
 
+  {% if user.is_superuser %}
+  <p><strong>[Admin User]</strong></p>
+  {% endif %}
+
   {% if source_actor or destination_actor %}
   <p>
     Here are the ActivityPub Actors available for you to test LOLA account portability with:
@@ -36,6 +40,7 @@
     <div class="actor__links">
       <a href="{% url 'actor-detail' pk=destination_actor.pk %}">Details</a>
     </div>
+    <div><a href="{% url 'actor-outbox' pk=destination_actor.pk %}">Outbox</a></div>
   </div>
   {% endif %}
 

@@ -105,17 +105,20 @@ def test_follow_activity_validation(actor):
 # Test activities are properly added to outbox
 @pytest.mark.django_db
 def test_activity_outbox_integration(outbox, create_activity, like_activity, follow_activity):
-    initial_count = outbox.activities_create.count()
+    # Get initial counts before adding activities
+    initial_create_count = outbox.activities_create.count()
+    initial_like_count = outbox.activities_like.count()
+    initial_follow_count = outbox.activities_follow.count()
 
     # Add to outbox
     outbox.add_activity(create_activity)
     outbox.add_activity(like_activity)
     outbox.add_activity(follow_activity)
 
-    # Verify counts
-    assert outbox.activities_create.count() == initial_count + 1
-    assert outbox.activities_like.count() == 1
-    assert outbox.activities_follow.count() == 1
+    # Verify counts have increased by 1
+    assert outbox.activities_create.count() == initial_create_count + 1
+    assert outbox.activities_like.count() == initial_like_count + 1
+    assert outbox.activities_follow.count() == initial_follow_count + 1
 
     # Verify activity presence
     assert create_activity in outbox.activities_create.all()
@@ -125,10 +128,15 @@ def test_activity_outbox_integration(outbox, create_activity, like_activity, fol
 # Test activities maintain proper temporal ordering
 @pytest.mark.django_db
 def test_activity_timestamp_ordering(actor):
+    # Create a note for the activities
+    note = NoteFactory(actor=actor)
+    target_actor = actor  # Use the same actor as target to avoid uniqueness issues
+    
+    # Create activities using the existing actor
     activities = [
-        CreateActivityFactory(actor=actor),
-        LikeActivityFactory(actor=actor),
-        FollowActivityFactory(actor=actor)
+        CreateActivityFactory(actor=actor, note=note),
+        LikeActivityFactory(actor=actor, note=note),
+        FollowActivityFactory(actor=actor, target_actor=target_actor)
     ]
     
     # Verify timestamps exist and are ordered

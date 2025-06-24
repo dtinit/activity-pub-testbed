@@ -31,8 +31,8 @@ class UserWithActorsFactory(UserOnlyFactory):
         if not create:
             return
         
+        # Just save the user - signal will handle actor creation
         self.save()
-        Actor.objects.create_actors_for_user(self)
 
 class ActorFactory(DjangoModelFactory):
     class Meta:

@@ -212,4 +212,3 @@ ACCOUNT_ADAPTER = 'testbed.core.adapters.TestbedAccountAdapter'
 
 # Email configuration
 DEFAULT_FROM_EMAIL='noreply@dt-reg.org'
-
