@@ -37,7 +37,8 @@ INSTALLED_APPS = [
     "rest_framework",
     "sass_processor",
     "allauth",
-    "allauth.account"
+    "allauth.account",
+    "oauth2_provider",
 ]
 
 MIDDLEWARE = [
@@ -210,5 +211,28 @@ LOGIN_REDIRECT_URL = '/'
 
 ACCOUNT_ADAPTER = 'testbed.core.adapters.TestbedAccountAdapter'
 
+# Authentication URLs
+LOGIN_URL = '/account/login/'
+LOGIN_REDIRECT_URL = '/'
+ACCOUNT_LOGOUT_REDIRECT_URL = '/'
+
 # Email configuration
 DEFAULT_FROM_EMAIL='noreply@dt-reg.org'
+
+# OAuth2 provider configuration
+OAUTH2_PROVIDER = {
+    'SCOPES': {
+        'activitypub_account_portability': 'ActivityPub Account Portability',
+    },
+    'ACCESS_TOKEN_EXPIRE_SECONDS': 3600,  # 1 hour
+    'REFRESH_TOKEN_EXPIRE_SECONDS': 86400,  # 1 day
+    'AUTHORIZATION_CODE_EXPIRE_SECONDS': 600,  # 10 minutes
+}
+
+# Configure REST framework to use OAuth2 authentication
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'oauth2_provider.contrib.rest_framework.OAuth2Authentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+}

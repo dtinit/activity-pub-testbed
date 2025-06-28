@@ -236,12 +236,3 @@ class PortabilityOutbox(models.Model):
             self.activities_like.add(activity)
         elif isinstance(activity, FollowActivity):
             self.activities_follow.add(activity)
-
-class OauthConnection(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    client_id = models.CharField(max_length=100)
-    client_secret = models.CharField(max_length=255)
-    redirect_url = models.URLField()
-
-    def __str__(self):
-        return f"OAuth for {self.user.username}"

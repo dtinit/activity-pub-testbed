@@ -25,6 +25,8 @@ urlpatterns = [
     path("api/", include("testbed.core.urls.api_urls")),
     # allauth
     path("account/", include("allauth.urls")),
+    # OAuth2 provider endpoints
+    path("oauth/", include("oauth2_provider.urls", namespace="oauth2_provider")),
     # Regular views (no prefix)
     path("", include("testbed.core.urls.views_urls")),
 ]

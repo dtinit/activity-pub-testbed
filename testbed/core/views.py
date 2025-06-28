@@ -8,9 +8,8 @@ from django.http import HttpResponse, JsonResponse
 from .models import Actor, PortabilityOutbox
 from .json_ld_builders import build_actor_json_ld, build_outbox_json_ld
 from django.contrib.auth.decorators import login_required
-from .models import OauthConnection
-from testbed.core.utils.utils import random_client_id, random_client_secret
-from testbed.core.forms.oauth_connection_form import OauthConnectionForm
+from testbed.core.utils.oauth_utils import get_user_application
+from testbed.core.forms.oauth_connection_form import OAuthApplicationForm
 from django.contrib import messages
 
 @api_view(['GET'])
@@ -52,26 +51,21 @@ def index(request):
         return render(request, "index.html")
 
     user_actors = Actor.objects.filter(user=request.user)
-
-    try:
-        oauth_conn = OauthConnection.objects.get(user=request.user)
-    except OauthConnection.DoesNotExist:
-        oauth_conn = OauthConnection(
-            user=request.user,
-            client_id=random_client_id(),
-            client_secret=random_client_secret(),
-        )
+    
+    # Get the user's OAuth application using our utility function
+    application = get_user_application(request.user)
 
     if request.method == "POST":
-        oauth_form = OauthConnectionForm(request.POST, instance=oauth_conn)
+        oauth_form = OAuthApplicationForm(request.POST, instance=application)
         if oauth_form.is_valid():
             oauth_form.save()
             messages.success(request, "OAuth connection updated successfully.")
-            return redirect("home")
+            return redirect("/")  # Redirect to index page instead of using named URL
         else:
             messages.error(request, "There was an error updating your OAuth connection.")
     else:
-        oauth_form = OauthConnectionForm(instance=oauth_conn)
+        # Initialize form with the application instance
+        oauth_form = OAuthApplicationForm(instance=application)
 
     return render(request, "index.html", {
         'source_actor': user_actors.filter(role=Actor.ROLE_SOURCE).first(),
