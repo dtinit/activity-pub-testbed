@@ -43,7 +43,7 @@ class OAuthApplicationForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Set default values for required fields that users don't need to see for now
         if not self.instance.pk:
-            self.instance.name = kwargs.get('initial', {}).get('name', 'ActivityPub Service')
+            
             self.instance.client_type = 'confidential'
             self.instance.authorization_grant_type = 'authorization-code'
         
