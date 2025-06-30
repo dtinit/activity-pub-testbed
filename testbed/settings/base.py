@@ -227,6 +227,7 @@ OAUTH2_PROVIDER = {
     'ACCESS_TOKEN_EXPIRE_SECONDS': 3600,  # 1 hour
     'REFRESH_TOKEN_EXPIRE_SECONDS': 86400,  # 1 day
     'AUTHORIZATION_CODE_EXPIRE_SECONDS': 600,  # 10 minutes
+    'OAUTH2_VALIDATOR_CLASS': 'testbed.core.utils.oauth_validators.ActivityPubOAuth2Validator',
 }
 
 # Configure REST framework to use OAuth2 authentication
