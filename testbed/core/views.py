@@ -11,6 +11,10 @@ from django.contrib.auth.decorators import login_required
 from testbed.core.utils.oauth_utils import get_user_application
 from testbed.core.forms.oauth_connection_form import OAuthApplicationForm
 from django.contrib import messages
+from django.urls import reverse
+import logging
+
+logger = logging.getLogger(__name__)
 
 @api_view(['GET'])
 def actor_detail(request, pk):
@@ -72,3 +76,78 @@ def index(request):
         'destination_actor': user_actors.filter(role=Actor.ROLE_DESTINATION).first(),
         'oauth_form': oauth_form,
     })
+
+
+# OAuth Testing Views
+
+def oauth_callback(request):
+    """
+    Handle the callback from the OAuth server
+    This displays the authorization code or error message
+    """
+    # Get query parameters
+    code = request.GET.get('code')
+    error = request.GET.get('error')
+    error_description = request.GET.get('error_description')
+    state = request.GET.get('state')
+    
+    context = {
+        'code': code,
+        'error': error,
+        'error_description': error_description,
+        'state': state
+    }
+    
+    return render(request, 'oauth_callback.html', context)
+
+@login_required
+def test_authorization_view(request):
+    """
+    Test view to simulate initiating an OAuth authorization flow.
+    This will redirect to the authorization endpoint with appropriate parameters.
+    """
+    # Get the user's OAuth application (this is normally used by the destination service)
+    application = get_user_application(request.user)
+    
+    # Use our own callback URL for the test flow
+    scheme = request.scheme
+    host = request.get_host()
+    redirect_uri = f"{scheme}://{host}/callback"
+    
+    # Update the application's redirect URIs if needed
+    if redirect_uri not in application.redirect_uris:
+        if application.redirect_uris:
+            application.redirect_uris = f"{application.redirect_uris} {redirect_uri}"
+        else:
+            application.redirect_uris = redirect_uri
+        application.save()
+        logger.info(f"Added {redirect_uri} to redirect URIs for application {application.client_id}")
+    
+    # Build the authorization URL
+    params = {
+        'client_id': application.client_id,
+        'response_type': 'code',
+        'scope': 'activitypub_account_portability',
+        'redirect_uri': redirect_uri,
+        'state': 'test_state_123'  # In a real app, this would be a secure random string
+    }
+    
+    # Convert params to URL query string
+    query_string = '&'.join([f"{key}={value}" for key, value in params.items()])
+    auth_url = f"{reverse('oauth2_provider:authorize')}?{query_string}"
+    
+    return redirect(auth_url)
+
+@login_required
+def test_error_view(request):
+    """
+    Test view to simulate an OAuth error.
+    This renders the error template with a sample error.
+    """
+    error = {
+        'error': 'invalid_request',
+        'description': 'This is a test error to preview the error template.',
+        'uri': None
+    }
+    
+    return render(request, 'oauth2_provider/error.html', {'error': error})

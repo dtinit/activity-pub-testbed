@@ -1,0 +1,298 @@
+.oauth-authorize {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+  
+  .authorization-container {
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    padding: 2rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    
+    h1 {
+      color: #333;
+      margin-bottom: 1.5rem;
+      font-size: 1.8rem;
+    }
+  }
+  
+  .lead {
+    font-size: 1.2rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .scope-explanation {
+    background-color: #fff;
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    border-left: 4px solid #4285f4;
+    
+    h2 {
+      font-size: 1.4rem;
+      margin-bottom: 1rem;
+      color: #4285f4;
+    }
+    
+    ul {
+      margin: 1rem 0 1rem 1.5rem;
+    }
+    
+    li {
+      margin-bottom: 0.5rem;
+    }
+  }
+  
+  .security-note {
+    background-color: #fff8e1;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+    border-left: 4px solid #ffb300;
+  }
+  
+  .authorize-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 2rem;
+    
+    input[type="submit"] {
+      margin-left: 1rem;
+      padding: 0.6rem 1.2rem;
+      border-radius: 4px;
+      border: none;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    
+    input[name="allow"] {
+      background-color: #4285f4;
+      color: white;
+      
+      &:hover {
+        background-color: #3367d6;
+      }
+    }
+    
+    input[value="Cancel"] {
+      background-color: #f5f5f5;
+      color: #333;
+      
+      &:hover {
+        background-color: #e0e0e0;
+      }
+    }
+  }
+}
+
+.oauth-error {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+  
+  .error-container {
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    padding: 2rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    
+    h1 {
+      color: #d32f2f;
+      margin-bottom: 1.5rem;
+      font-size: 1.8rem;
+    }
+  }
+  
+  .error-message {
+    display: flex;
+    margin-bottom: 2rem;
+    background-color: #fff;
+    border-radius: 6px;
+    padding: 1.5rem;
+    border-left: 4px solid #d32f2f;
+  }
+  
+  .error-icon {
+    flex: 0 0 auto;
+    margin-right: 1.5rem;
+    color: #d32f2f;
+  }
+  
+  .error-details {
+    flex: 1 1 auto;
+    
+    h2 {
+      font-size: 1.4rem;
+      margin-bottom: 0.5rem;
+      color: #d32f2f;
+      text-transform: capitalize;
+    }
+    
+    p {
+      margin-bottom: 1.5rem;
+    }
+  }
+  
+  .error-help {
+    background-color: #f5f5f5;
+    border-radius: 4px;
+    padding: 1rem;
+    margin-top: 1rem;
+    
+    h3 {
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+      color: #333;
+    }
+    
+    ul {
+      margin: 0.5rem 0 0.5rem 1.5rem;
+    }
+    
+    li {
+      margin-bottom: 0.5rem;
+    }
+  }
+  
+  .error-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 2rem;
+  }
+  
+  .btn {
+    padding: 0.6rem 1.2rem;
+    border-radius: 4px;
+    border: none;
+    font-size: 1rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    
+    &.btn-primary {
+      background-color: #4285f4;
+      color: white;
+      
+      &:hover {
+        background-color: #3367d6;
+      }
+    }
+  }
+  
+  .error-more-info {
+    margin-top: 2rem;
+    font-size: 0.9rem;
+    text-align: center;
+    color: #666;
+  }
+}
+
+.oauth-callback {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+  
+  .callback-container {
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    padding: 2rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    
+    h1 {
+      color: #333;
+      margin-bottom: 1.5rem;
+      font-size: 1.8rem;
+    }
+    
+    h2 {
+      font-size: 1.4rem;
+      margin-bottom: 1rem;
+    }
+    
+    h3 {
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+      margin-top: 1rem;
+    }
+  }
+  
+  .callback-success {
+    background-color: #e8f5e9;
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    border-left: 4px solid #4caf50;
+  }
+  
+  .callback-error {
+    background-color: #ffebee;
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    border-left: 4px solid #d32f2f;
+  }
+  
+  .code-container, .state-container {
+    background-color: #fff;
+    border-radius: 4px;
+    padding: 1rem;
+    margin-top: 1rem;
+    
+    pre {
+      background-color: #f5f5f5;
+      border-radius: 3px;
+      padding: 0.75rem;
+      overflow-x: auto;
+      font-family: monospace;
+      margin: 0.5rem 0;
+    }
+  }
+  
+  .code-note, .state-note {
+    font-size: 0.9rem;
+    color: #666;
+    margin-top: 0.5rem;
+  }
+  
+  .oauth-flow-explanation {
+    background-color: #e3f2fd;
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin: 2rem 0;
+    border-left: 4px solid #2196f3;
+    
+    ol {
+      margin-left: 1.5rem;
+      margin-bottom: 1rem;
+      
+      li {
+        margin-bottom: 0.5rem;
+      }
+    }
+  }
+  
+  .callback-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 2rem;
+    
+    .btn {
+      padding: 0.6rem 1.2rem;
+      border-radius: 4px;
+      border: none;
+      font-size: 1rem;
+      cursor: pointer;
+      text-decoration: none;
+      
+      &.btn-primary {
+        background-color: #4285f4;
+        color: white;
+        
+        &:hover {
+          background-color: #3367d6;
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{% extends "_base.html" %}
+
+{% block content %}
+<main class="oauth-callback">
+  <div class="callback-container">
+    <h1>OAuth Authorization Result</h1>
+    
+    {% if error %}
+    <div class="callback-error">
+      <h2>Authorization Failed</h2>
+      <p>Error: {{ error }}</p>
+      {% if error_description %}
+      <p>Description: {{ error_description }}</p>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="callback-success">
+      <h2>Authorization Successful</h2>
+      <p>The authorization code has been received successfully.</p>
+      
+      <div class="code-container">
+        <h3>Authorization Code:</h3>
+        <pre class="code">{{ code }}</pre>
+        <p class="code-note">This code would be used by the destination service to request an access token.</p>
+      </div>
+      
+      <div class="state-container">
+        <h3>State:</h3>
+        <pre class="state">{{ state }}</pre>
+        <p class="state-note">The state parameter helps prevent CSRF attacks and should be verified by the client.</p>
+      </div>
+    </div>
+    {% endif %}
+    
+    <div class="oauth-flow-explanation">
+      <h3>What Just Happened?</h3>
+      <p>
+        You've just gone through the first part of the OAuth 2.0 Authorization Code flow:
+      </p>
+      <ol>
+        <li>Your application requested authorization by redirecting to the authorization endpoint</li>
+        <li>You (the user) approved the request</li>
+        <li>The authorization server redirected back to this callback URL with an authorization code</li>
+      </ol>
+      
+      <p>
+        In a real implementation, the next steps would be:
+      </p>
+      <ol start="4">
+        <li>The client application would exchange this code for an access token</li>
+        <li>The client would use the access token to access the protected resources</li>
+      </ol>
+    </div>
+    
+    <div class="callback-actions">
+      <a href="/" class="btn btn-primary">Return to Home</a>
+    </div>
+  </div>
+</main>
+{% endblock %}
