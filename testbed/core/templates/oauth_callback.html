@@ -53,7 +53,12 @@
     </div>
     
     <div class="callback-actions">
-      <a href="/" class="btn btn-primary">Return to Home</a>
+      {% if code and not error %}
+      <a href="{% url 'test-oauth-token' %}?code={{ code }}&state={{ state }}" class="btn btn-primary">
+        Exchange Code for Token →
+      </a>
+      {% endif %}
+      <a href="/" class="btn {% if code and not error %}btn-secondary{% else %}btn-primary{% endif %}">Return to Home</a>
     </div>
   </div>
 </main>

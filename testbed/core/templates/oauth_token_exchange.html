@@ -1,0 +1,145 @@
+{% extends "_base.html" %}
+
+{% block content %}
+<main class="oauth-token-exchange">
+  <div class="token-container">
+    <h1>OAuth Token Exchange</h1>
+    
+    <div class="code-section">
+      <h2>Authorization Code</h2>
+      {% if code %}
+      <div class="code-container">
+        <pre class="code">{{ code }}</pre>
+        <p>This authorization code was received from the authorization server after user approval.</p>
+        <p class="alert alert-warning">
+          <strong>Note:</strong> Authorization codes expire quickly! Our server is configured with a 10-minute expiration,
+          but many OAuth providers use much shorter timeframes (30-60 seconds).
+        </p>
+      </div>
+      {% else %}
+      <div class="error-message">
+        <p>No authorization code was provided.</p>
+      </div>
+      {% endif %}
+      
+      {% if state %}
+      <div class="state-container">
+        <h3>State Parameter:</h3>
+        <pre class="state">{{ state }}</pre>
+      </div>
+      {% endif %}
+      
+      {% if error %}
+      <div class="authorization-error">
+        <h3>Authorization Error:</h3>
+        <pre class="error">{{ error }}</pre>
+      </div>
+      {% endif %}
+    </div>
+    
+    <div class="token-exchange-section">
+      <h2>Token Exchange Results</h2>
+      
+      {% if token_error %}
+      <div class="token-error">
+        <h3>Token Exchange Failed</h3>
+        <p>{{ token_error }}</p>
+        
+        <div class="error-explanation">
+          <h4>Common Reasons for Token Exchange Failures:</h4>
+          <ul>
+            <li><strong>Code Expiration:</strong> The authorization code has expired (only valid for 10 minutes)</li>
+            <li><strong>Code Already Used:</strong> Authorization codes are one-time use only</li>
+            <li><strong>Redirect URI Mismatch:</strong> The redirect URI must exactly match the one used during authorization</li>
+            <li><strong>Invalid Client:</strong> Client credentials (ID/secret) are incorrect or the client is not authorized</li>
+          </ul>
+          <p>In real-world applications, your code would automatically handle these errors by redirecting the user back to the authorization step.</p>
+        </div>
+      </div>
+      {% elif token_response %}
+      <div class="token-success">
+        <h3>Access Token Received</h3>
+        
+        <div class="token-details">
+          <h4>Access Token:</h4>
+          <pre class="token">{{ token_response.access_token }}</pre>
+          
+          {% if token_response.refresh_token %}
+          <h4>Refresh Token:</h4>
+          <pre class="refresh-token">{{ token_response.refresh_token }}</pre>
+          {% endif %}
+          
+          <h4>Token Type:</h4>
+          <pre>{{ token_response.token_type }}</pre>
+          
+          <h4>Expires In:</h4>
+          <pre>{{ token_response.expires_in }} seconds</pre>
+          
+          {% if token_response.scope %}
+          <h4>Scope:</h4>
+          <pre>{{ token_response.scope }}</pre>
+          {% endif %}
+          
+          <div class="raw-response">
+            <h4>Complete Response:</h4>
+            <pre>{{ token_response|pprint }}</pre>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="no-exchange">
+        <p>No token exchange was attempted.</p>
+      </div>
+      {% endif %}
+    </div>
+    
+    <div class="token-usage-section">
+      <h2>Using the Access Token</h2>
+      <p>
+        In a real application, you would use the access token to access protected resources
+        by including it in the Authorization header of your requests:
+      </p>
+      <pre class="code-example">
+Authorization: Bearer {{ token_response.access_token|default:"YOUR_ACCESS_TOKEN" }}
+      </pre>
+      
+      <h3>Example API Request</h3>
+      <pre class="code-example">
+import requests
+
+headers = {
+    'Authorization': 'Bearer {{ token_response.access_token|default:"YOUR_ACCESS_TOKEN" }}',
+}
+
+response = requests.get('https://api.example.com/activity-pub/user', headers=headers)
+      </pre>
+    </div>
+    
+    <div class="oauth-flow-explanation">
+      <h2>OAuth 2.0 Flow Summary</h2>
+      <ol>
+        <li>Client requests authorization from resource owner (Step 1 of OAuth flow)</li>
+        <li>Resource owner grants authorization (Step 2)</li>
+        <li>Client receives authorization code (Step 3)</li>
+        <li>Client exchanges authorization code for access token (Step 4) - <strong>This page demonstrates this step</strong></li>
+        <li>Client uses access token to access protected resources (Step 5)</li>
+      </ol>
+      
+      <div class="security-note">
+        <h3>Security Implementation Notes:</h3>
+        <ul>
+          <li>We're using HTTP Basic Authentication for client credentials (recommended by OAuth 2.0 spec)</li>
+          <li>State parameters are cryptographically secure random values validated on the server</li>
+          <li>In this demo, 401 errors are expected and educational - they show how real OAuth flows handle errors</li>
+          <li>For real implementations, you would use proper error handling and automatic refresh of expired tokens</li>
+        </ul>
+      </div>
+    </div>
+    
+    <div class="navigation-links">
+      <a href="{% url 'test-oauth-authorize' %}" class="btn btn-primary">Start New Authorization Flow</a>
+      <a href="/" class="btn">Return to Home</a>
+    </div>
+  </div>
+</main>
+{% endblock %}

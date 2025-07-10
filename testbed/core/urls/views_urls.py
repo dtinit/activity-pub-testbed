@@ -6,6 +6,7 @@ from testbed.core.views import (
     test_authorization_view,
     test_error_view,
     oauth_callback,
+    test_token_exchange_view,
     )
 
 urlpatterns = [
@@ -17,5 +18,6 @@ urlpatterns = [
     # OAuth Testing Views
     path("test/oauth/authorize/", test_authorization_view, name="test-oauth-authorize"),
     path("test/oauth/error/", test_error_view, name="test-oauth-error"),
+    path("test/oauth/token/", test_token_exchange_view, name="test-oauth-token"),
     path("callback", oauth_callback, name="oauth-callback"),
 ]
