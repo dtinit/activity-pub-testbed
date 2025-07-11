@@ -1,0 +1,54 @@
+{% extends "_base.html" %}
+
+{% block content %}
+<main class="oauth-authorize">
+  <div class="authorization-container">
+    <h1>Account Data Transfer Request</h1>
+    
+    <div class="authorization-info">
+      <p class="lead">
+        <strong>{{ application.name }}</strong> is requesting permission to transfer your ActivityPub account data.
+      </p>
+      
+      <div class="scope-explanation">
+        <h2>What does this mean?</h2>
+        <p>
+          This is part of the LOLA account portability process, which allows you to
+          move your ActivityPub account from this service to another service.
+        </p>
+        <p>
+          By approving this request, you are authorizing <strong>{{ application.name }}</strong> to:
+        </p>
+        <ul>
+          <li>Access your posts, follows, likes, and other account data</li>
+          <li>Transfer this data to the destination service</li>
+          <li>Create a new account on the destination service with your data</li>
+        </ul>
+        <p class="security-note">
+          <strong>Security Note:</strong> This authorization will only work for the registered destination service
+          you initiated this request from. The data will only be sent to <strong>{{ application.name }}</strong>.
+        </p>
+      </div>
+    </div>
+    
+    <div class="authorize-actions">
+      <form method="post" action="{% url 'oauth2_provider:authorize' %}">
+        {% csrf_token %}
+        
+        {% for field in form %}
+          {% if field.is_hidden %}
+            {{ field }}
+          {% endif %}
+        {% endfor %}
+        
+        <div class="control-group">
+          <div class="controls">
+            <input type="submit" class="btn btn-large btn-primary" name="allow" value="Authorize Data Transfer" />
+            <input type="submit" class="btn btn-large" value="Cancel" />
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</main>
+{% endblock %}

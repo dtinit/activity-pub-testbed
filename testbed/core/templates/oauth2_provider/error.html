@@ -1,0 +1,47 @@
+{% extends "_base.html" %}
+
+{% block content %}
+<main class="oauth-error">
+  <div class="error-container">
+    <h1>Authorization Error</h1>
+    
+    <div class="error-message">
+      <div class="error-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      </div>
+      
+      <div class="error-details">
+        <h2>{{ error.error }}</h2>
+        <p>{{ error.description }}</p>
+        
+        <div class="error-help">
+          <h3>What happened?</h3>
+          <p>
+            There was a problem with the account transfer authorization request. This could be due to:
+          </p>
+          <ul>
+            <li>An invalid or missing parameter in the request</li>
+            <li>The destination service isn't properly registered</li>
+            <li>The requested permissions are invalid</li>
+            <li>The redirect URL doesn't match what was registered</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    
+    <div class="error-actions">
+      <a href="/" class="btn btn-primary">Return to Home</a>
+    </div>
+    
+    {% if error.uri %}
+    <div class="error-more-info">
+      <p>For more information, please visit: <a href="{{ error.uri }}">{{ error.uri }}</a></p>
+    </div>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}
