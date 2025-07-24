@@ -16,11 +16,19 @@ class OAuthApplicationForm(forms.ModelForm):
                 'class': 'form-control',
                 'placeholder': 'My ActivityPub Service'
             }),
-            'client_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Client ID'}),
-            'client_secret': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Client Secret'}),
+            'client_id': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Client ID',
+                'readonly': 'readonly'
+            }),
+            'client_secret': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Client Secret',
+                'readonly': 'readonly'
+            }),
             'redirect_uris': forms.TextInput(attrs={
                 'class': 'form-control', 
-                'placeholder': 'Enter a valid URL (e.g., http://localhost:8000/callback)'
+                'placeholder': 'Enter a valid URLs (e.g., http://localhost:8000/callback). Add multiples separated by spaces'
             }),
         }
     
@@ -38,6 +46,20 @@ class OAuthApplicationForm(forms.ModelForm):
                 )
         
         return uris
+    
+    # Override save method to prevent updating client_id and client_secret
+    def save(self, commit=True):
+        instance = super(OAuthApplicationForm, self).save(commit=False)
+        
+        # If this is an existing instance, preserve the original credentials
+        if instance.pk:
+            original = Application.objects.get(pk=instance.pk)
+            instance.client_id = original.client_id
+            instance.client_secret = original.client_secret
+            
+        if commit:
+            instance.save()
+        return instance
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
