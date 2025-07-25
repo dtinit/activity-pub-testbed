@@ -28,7 +28,7 @@ class OAuthApplicationForm(forms.ModelForm):
             }),
             'redirect_uris': forms.TextInput(attrs={
                 'class': 'form-control', 
-                'placeholder': 'Enter a valid URLs (e.g., http://localhost:8000/callback). Add multiples separated by spaces'
+                'placeholder': 'Enter a valid URL (e.g., http://localhost:8000/callback). Add multiples separated by spaces'
             }),
         }
     
@@ -44,6 +44,9 @@ class OAuthApplicationForm(forms.ModelForm):
                 raise forms.ValidationError(
                     "Each URI must start with http:// or https://"
                 )
+        
+        if hasattr(self, 'instance') and self.instance and self.instance.authorization_grant_type == 'authorization-code' and not uris:
+            raise forms.ValidationError("Redirect URL is required for authorization code grant type")
         
         return uris
     

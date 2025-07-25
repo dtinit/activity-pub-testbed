@@ -72,7 +72,17 @@ def index(request):
             messages.success(request, "OAuth connection updated successfully.")
             return redirect("/")  # Redirect to index page instead of using named URL
         else:
-            messages.error(request, "There was an error updating your OAuth connection.")
+            error_message = "There was an error updating your OAuth connection:"
+            
+            # Handle all redirect_uris errors
+            if 'redirect_uris' in oauth_form.errors:
+                # Add the error class to the field
+                oauth_form.fields['redirect_uris'].widget.attrs['class'] += ' error-field'
+                
+                # Get the specific error message
+                redirect_error = oauth_form.errors['redirect_uris'][0]
+                error_message += f"<br>• {redirect_error}"
+            messages.error(request, error_message)
     else:
         # Initialize form with the application instance
         oauth_form = OAuthApplicationForm(instance=application)
