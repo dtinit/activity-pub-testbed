@@ -56,6 +56,16 @@
     box-sizing: border-box;
     font-size: 1em;
   }
+  
+  .oauth-form .errorlist {
+    display: none;
+  }
+  
+  .oauth-form .error-field {
+    border-color: #a94442;
+    border-width: 2px;
+    background-color: #fff8f8;
+  }
   .oauth-form .btn {
     background: #1976d2;
     color: #fff;

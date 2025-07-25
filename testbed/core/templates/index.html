@@ -5,7 +5,7 @@
   {% if messages %}
   <ul class="messages">
     {% for message in messages %}
-    <p class="{{ message.tags }}">{{ message }}</p>
+    <p class="{{ message.tags }}">{{ message|safe }}</p>
     {% endfor %}
   </ul>
   {% endif %}
