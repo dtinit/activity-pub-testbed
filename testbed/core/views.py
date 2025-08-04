@@ -63,7 +63,8 @@ def index(request):
     user_actors = Actor.objects.filter(user=request.user)
     
     # Get the user's OAuth application using our utility function
-    application = get_user_application(request.user)
+    # Pass the request object to allow storing the client secret in the session
+    application = get_user_application(request.user, request)
 
     if request.method == "POST":
         oauth_form = OAuthApplicationForm(request.POST, instance=application)
@@ -140,7 +141,8 @@ def test_authorization_view(request):
     This will redirect to the authorization endpoint with appropriate parameters.
     """
     # Get the user's OAuth application (this is normally used by the destination service)
-    application = get_user_application(request.user)
+    # Pass the request object to allow storing the client secret in the session
+    application = get_user_application(request.user, request)
     
     # Use our own callback URL for the test flow
     scheme = request.scheme
@@ -219,11 +221,21 @@ def test_token_exchange_view(request):
         return render(request, 'oauth_token_exchange.html', context)
     
     # Get the application for client credentials
-    application = get_user_application(request.user)
+    application = get_user_application(request.user, request)
     
     # Prepare token request parameters
     token_url = f"{request.scheme}://{request.get_host()}/oauth/token/"
     redirect_uri = f"{request.scheme}://{request.get_host()}/callback"
+    
+    # Check if we have a raw client secret available
+    if not hasattr(application, 'raw_client_secret') or not application.raw_client_secret:
+        logger.error(f"Raw client secret not available for token exchange. Client ID: {application.client_id}")
+        context['token_error'] = "Client secret not available. This may happen if your session expired. Try restarting the OAuth flow."
+        return render(request, 'oauth_token_exchange.html', context)
+        
+    # Log client credentials status (without exposing the actual secret)
+    logger.info(f"Client credentials prepared for token exchange. Client ID: {application.client_id}")
+    logger.info(f"Raw client secret available: {bool(application.raw_client_secret)}")
     
     # Prepare the data for token exchange
     # This follows the OAuth 2.0 specification for token requests
@@ -231,22 +243,22 @@ def test_token_exchange_view(request):
         'grant_type': 'authorization_code',
         'code': code,
         'redirect_uri': redirect_uri,
-        'client_id': application.client_id,
-        'client_secret': application.client_secret,
+        # We'll use HTTP Basic Auth instead of including these in the body
+        # 'client_id': application.client_id,
+        # 'client_secret': application.raw_client_secret,
     }
     
     try:
         # Make the token request
         logger.info(f"Attempting to exchange authorization code for token")
         
-        # Log the complete request details for debugging
+        # Log the complete request details for debugging (except the secret)
         logger.info(f"Token request URL: {token_url}")
         logger.info(f"Token request parameters: {token_data}")
         
-        # Use HTTP Basic Authentication for client credentials (preferred method)
-        # Remove client_secret from form parameters
-        client_id = token_data.pop('client_id')
-        client_secret = token_data.pop('client_secret')
+        # Get client credentials
+        client_id = application.client_id
+        client_secret = application.raw_client_secret
         
         # Set standard content type header for form data
         headers = {
@@ -254,13 +266,37 @@ def test_token_exchange_view(request):
             'Accept': 'application/json'
         }
         
-        # Make the request with Basic Authentication for client credentials
+        # OAuth 2.0 spec allows for two methods of client authentication:
+        # 1. HTTP Basic Authentication (preferred and more secure)
+        # 2. Including client credentials in the request body
+        
+        # First try: Use HTTP Basic Authentication for client credentials (preferred method)
+        logger.info("Attempting token exchange using HTTP Basic Authentication")
         token_response = requests.post(
             token_url, 
-            data=token_data, 
+            data=token_data.copy(),  # Use a copy to avoid modifying the original
             headers=headers,
             auth=(client_id, client_secret)  # HTTP Basic Authentication
         )
+        
+        # If first method fails with 401 Unauthorized, try the alternative method
+        if token_response.status_code == 401:
+            logger.info("HTTP Basic Authentication failed. Trying with credentials in request body.")
+            # Create a new copy of token_data with client credentials included
+            body_auth_data = token_data.copy()
+            body_auth_data['client_id'] = client_id
+            body_auth_data['client_secret'] = client_secret
+            
+            # Make the request with credentials in the request body
+            token_response = requests.post(
+                token_url, 
+                data=body_auth_data,
+                headers=headers
+            )
+            
+            # Log which method succeeded
+            if token_response.status_code == 200:
+                logger.info("Token exchange succeeded using request body authentication")
         
         # Check if the request was successful
         if token_response.status_code == 200:
