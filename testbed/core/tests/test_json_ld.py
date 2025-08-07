@@ -52,7 +52,13 @@ def test_activity_types_in_outbox(outbox, create_activity, like_activity, follow
     outbox.add_activity(like_activity)
     outbox.add_activity(follow_activity)
 
-    json_ld = build_outbox_json_ld(outbox)
+    # Use authenticated context to see all activities regardless of visibility
+    auth_context = {
+        'is_authenticated': True,
+        'has_portability_scope': True,
+        'request': None
+    }
+    json_ld = build_outbox_json_ld(outbox, auth_context)
     
     # Check that we have all activity types
     activity_types = {item["type"] for item in json_ld["items"]}

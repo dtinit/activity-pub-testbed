@@ -178,7 +178,13 @@ def test_build_outbox_json_ld():
     outbox.add_activity(like_activity)
     outbox.add_activity(follow_activity)
     
-    json_ld = build_outbox_json_ld(outbox)
+    # Use authenticated context to see all activities regardless of visibility
+    auth_context = {
+        'is_authenticated': True,
+        'has_portability_scope': True,
+        'request': None
+    }
+    json_ld = build_outbox_json_ld(outbox, auth_context)
     
     # Check outbox structure
     assert json_ld["@context"] == build_basic_context()

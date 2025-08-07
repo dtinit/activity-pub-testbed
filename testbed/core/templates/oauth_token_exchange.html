@@ -102,6 +102,41 @@
           </div>
         </div>
       </div>
+      
+      {% if token_response.access_token and source_actor %}
+      <div class="lola-testing">
+        <h3>🧪 Test LOLA ActivityPub Endpoints</h3>
+        <p>Your <strong>Source Actor</strong> with LOLA portability scope:</p>
+        
+        <div class="actor">
+          <div>Username: {{ source_actor.username }}</div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/?format=json&auth_token={{ token_response.access_token }}" target="_blank">Details (with LOLA fields)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/outbox?format=json&auth_token={{ token_response.access_token }}" target="_blank">Outbox (all activities)</a></div>
+        </div>
+        
+        <p><strong>Compare with public versions (no authentication):</strong></p>
+        <div class="actor">
+          <div>Username: {{ source_actor.username }} (Public)</div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/?format=json" target="_blank">Details (basic ActivityPub)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/outbox?format=json" target="_blank">Outbox (public only)</a></div>
+        </div>
+        
+        <div class="expected-results">
+          <h4>🔍 What You Should See:</h4>
+          <ul>
+            <li><strong>LOLA Links:</strong> Extra fields like <code>accountPortabilityOauth</code>, <code>content</code>, <code>blocked</code>, <code>migration</code></li>
+            <li><strong>LOLA Outbox:</strong> Higher <code>totalItems</code> count (includes private activities)</li>
+            <li><strong>Public Links:</strong> Basic ActivityPub data only, lower activity count</li>
+          </ul>
+        </div>
+      </div>
+      {% elif token_response.access_token and not source_actor %}
+      <div class="lola-testing">
+        <h3>⚠️ No Source Actor Available</h3>
+        <p>You don't have a source actor set up yet. Please visit the <a href="/">home page</a> to set up your actors for LOLA testing.</p>
+      </div>
+      {% endif %}
+      
       {% else %}
       <div class="no-exchange">
         <p>No token exchange was attempted.</p>
@@ -157,5 +192,112 @@ response = requests.get('https://api.example.com/activity-pub/user', headers=hea
       <a href="/" class="btn">Return to Home</a>
     </div>
   </div>
+
+  {% if token_response.access_token %}
+  <script>
+  function testActorWithAuth(actorId) {
+      const token = '{{ token_response.access_token }}';
+      const url = `/api/actors/${actorId}/?format=json`;
+      
+      fetch(url, {
+          headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/activity+json'
+          }
+      })
+      .then(response => response.json())
+      .then(data => {
+          const newWindow = window.open('', '_blank');
+          newWindow.document.write(`
+              <html>
+                  <head>
+                      <title>🔒 LOLA Actor Response</title>
+                      <style>
+                          body { font-family: monospace; padding: 20px; background: #f8f9fa; }
+                          .highlight { background: yellow; font-weight: bold; padding: 2px; }
+                          .lola-field { color: #28a745; font-weight: bold; }
+                          pre { background: white; padding: 15px; border-radius: 5px; border: 1px solid #ddd; }
+                          .notice { background: #d1ecf1; padding: 10px; border-radius: 5px; margin: 10px 0; }
+                      </style>
+                  </head>
+                  <body>
+                      <h1>🔒 LOLA-Enhanced Actor Response</h1>
+                      <div class="notice">
+                          <strong>✅ Authentication:</strong> Using OAuth token with 'activitypub_account_portability' scope
+                      </div>
+                      <h2>🔍 Notice the LOLA-specific fields:</h2>
+                      <ul>
+                          <li><span class="lola-field">accountPortabilityOauth</span> - OAuth endpoint for account portability</li>
+                          <li><span class="lola-field">content</span> - Content collection endpoint</li>
+                          <li><span class="lola-field">blocked</span> - Blocked actors endpoint</li>
+                          <li><span class="lola-field">migration</span> - Migration outbox endpoint</li>
+                      </ul>
+                      <pre>${JSON.stringify(data, null, 2)
+                          .replace(/"accountPortabilityOauth"/g, '<span class="highlight">"accountPortabilityOauth"</span>')
+                          .replace(/"content"/g, '<span class="highlight">"content"</span>')
+                          .replace(/"blocked"/g, '<span class="highlight">"blocked"</span>')
+                          .replace(/"migration"/g, '<span class="highlight">"migration"</span>')
+                      }</pre>
+                  </body>
+              </html>
+          `);
+      })
+      .catch(error => {
+          alert('Error fetching LOLA actor data: ' + error);
+          console.error('Error:', error);
+      });
+  }
+
+  function testOutboxWithAuth(actorId) {
+      const token = '{{ token_response.access_token }}';
+      const url = `/api/actors/${actorId}/outbox?format=json`;
+      
+      fetch(url, {
+          headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/activity+json'
+          }
+      })
+      .then(response => response.json())
+      .then(data => {
+          const newWindow = window.open('', '_blank');
+          newWindow.document.write(`
+              <html>
+                  <head>
+                      <title>🔒 LOLA Outbox Response</title>
+                      <style>
+                          body { font-family: monospace; padding: 20px; background: #f8f9fa; }
+                          .highlight { background: yellow; font-weight: bold; padding: 2px; }
+                          .count-highlight { background: #d4edda; padding: 5px; border-radius: 3px; }
+                          pre { background: white; padding: 15px; border-radius: 5px; border: 1px solid #ddd; }
+                          .notice { background: #d1ecf1; padding: 10px; border-radius: 5px; margin: 10px 0; }
+                      </style>
+                  </head>
+                  <body>
+                      <h1>🔒 LOLA-Enhanced Outbox Response</h1>
+                      <div class="notice">
+                          <strong>✅ Authentication:</strong> Using OAuth token with 'activitypub_account_portability' scope<br>
+                          <strong>🔓 Access Level:</strong> All activities (public + private)
+                      </div>
+                      <h2>📊 Total Items: <span class="count-highlight">${data.totalItems || 0}</span></h2>
+                      <p>Compare this count with the public outbox (no authentication) to see the difference!</p>
+                      <h3>📋 Activity Types Included:</h3>
+                      <ul>
+                          <li>✅ Public activities (visible to everyone)</li>
+                          <li>✅ Private activities (only with LOLA scope)</li>
+                          <li>✅ Create, Like, Follow activities</li>
+                      </ul>
+                      <pre>${JSON.stringify(data, null, 2)}</pre>
+                  </body>
+              </html>
+          `);
+      })
+      .catch(error => {
+          alert('Error fetching LOLA outbox data: ' + error);
+          console.error('Error:', error);
+      });
+  }
+  </script>
+  {% endif %}
 </main>
 {% endblock %}

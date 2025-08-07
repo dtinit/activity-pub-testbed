@@ -1,5 +1,5 @@
 # from rest_framework.generics import RetrieveAPIView 
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes
 from rest_framework.response import Response
 from django.shortcuts import redirect
 from django.contrib.auth.decorators import user_passes_test
@@ -14,6 +14,7 @@ from testbed.core.utils.oauth_utils import (
     store_state_in_session,
     validate_state_from_session
 )
+from testbed.core.utils.authentication import OptionalOAuth2Authentication
 from testbed.core.forms.oauth_connection_form import OAuthApplicationForm
 from django.contrib import messages
 from django.urls import reverse
@@ -23,14 +24,62 @@ import requests
 logger = logging.getLogger(__name__)
 
 @api_view(['GET'])
+@authentication_classes([OptionalOAuth2Authentication])
 def actor_detail(request, pk):
+    """
+    ActivityPub Actor endpoint with LOLA portability support.
+    
+    Returns basic ActivityPub data for unauthenticated requests,
+    and enhanced LOLA data for authenticated requests with portability scope.
+    """
     actor = get_object_or_404(Actor, pk=pk)
-    return Response(build_actor_json_ld(actor))
+    
+    # Create authentication context for JSON-LD builder
+    auth_context = {
+        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
+        'has_portability_scope': getattr(request, 'has_portability_scope', False),
+        'request': request
+    }
+    
+    # Build response with authentication context
+    data = build_actor_json_ld(actor, auth_context)
+    response = Response(data)
+    
+    # Set ActivityPub content-type only for JSON responses (preserves DRF browsable API)
+    if request.accepted_renderer.format == 'json':
+        response['Content-Type'] = 'application/activity+json'
+        response['Access-Control-Allow-Origin'] = '*'  # Enable federation
+    
+    return response
 
 @api_view(['GET'])
+@authentication_classes([OptionalOAuth2Authentication])
 def portability_outbox_detail(request, pk):
+    """
+    ActivityPub Outbox endpoint with LOLA content filtering.
+    
+    Returns public activities for unauthenticated requests,
+    and all activities for authenticated requests with portability scope.
+    """
     outbox = get_object_or_404(PortabilityOutbox, actor_id=pk)
-    return Response(build_outbox_json_ld(outbox))
+    
+    # Create authentication context for JSON-LD builder
+    auth_context = {
+        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
+        'has_portability_scope': getattr(request, 'has_portability_scope', False),
+        'request': request
+    }
+    
+    # Build response with authentication-based content filtering
+    data = build_outbox_json_ld(outbox, auth_context)
+    response = Response(data)
+    
+    # Set ActivityPub content-type only for JSON responses (preserves DRF browsable API)
+    if request.accepted_renderer.format == 'json':
+        response['Content-Type'] = 'application/activity+json'
+        response['Access-Control-Allow-Origin'] = '*'  # Enable federation
+    
+    return response
 
 # Restrict the view to staff users using the @user_passes_test decorator
 @user_passes_test(lambda u: u.is_staff)  # Restrict to staff
@@ -207,12 +256,17 @@ def test_token_exchange_view(request):
     state = request.GET.get('state')
     error = request.GET.get('error')
     
+    # Get the user's source actor for LOLA testing
+    user_actors = Actor.objects.filter(user=request.user)
+    source_actor = user_actors.filter(role=Actor.ROLE_SOURCE).first()
+    
     context = {
         'code': code,
         'state': state,
         'error': error,
         'token_response': None,
         'token_error': None,
+        'source_actor': source_actor,  # Add source actor for LOLA testing
     }
     
     # If we have an error or no code, don't attempt token exchange
