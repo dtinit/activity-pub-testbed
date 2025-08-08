@@ -3,18 +3,50 @@ from .json_ld_utils import (build_basic_context,
                             build_actor_id,
                             build_activity_id,
                             build_note_id,
-                            build_outbox_id)
+                            build_outbox_id,
+                            build_oauth_endpoint_url)
 from .models import CreateActivity, LikeActivity, FollowActivity
 
-def build_actor_json_ld(actor):
-    return {
+def build_actor_json_ld(actor, auth_context=None):
+    """
+    Build JSON-LD Actor with optional LOLA enhancements.
+    
+    Args:
+        actor: The Actor model instance
+        auth_context: Optional authentication context dict with keys:
+            - is_authenticated: boolean
+            - has_portability_scope: boolean  
+            - request: HTTP request object
+    
+    Returns:
+        Dict containing ActivityPub Actor with conditional LOLA fields
+    """
+    # Base ActivityPub Actor (always included)
+    actor_data = {
         "@context": build_actor_context(),
         "type": "Person",
         "id": build_actor_id(actor.id),
         "preferredUsername": actor.username,
         "name": actor.username,
+        # Standard ActivityPub collections
+        "inbox": f"{build_actor_id(actor.id)}/inbox",
+        "outbox": f"{build_actor_id(actor.id)}/outbox",
+        "followers": f"{build_actor_id(actor.id)}/followers",
+        "following": f"{build_actor_id(actor.id)}/following",
         "previously": actor.previously or [], # Ensure it's always a list
     }
+    
+    # Add LOLA fields ONLY when authenticated with portability scope
+    if auth_context and auth_context.get('has_portability_scope'):
+        # Required LOLA discovery field
+        actor_data["accountPortabilityOauth"] = build_oauth_endpoint_url(auth_context['request'])
+        
+        # Optional LOLA discovery fields
+        actor_data["content"] = f"{build_actor_id(actor.id)}/content"
+        actor_data["blocked"] = f"{build_actor_id(actor.id)}/blocked"
+        actor_data["migration"] = f"{build_actor_id(actor.id)}/outbox"
+    
+    return actor_data
 
 def build_note_json_ld(note):
     return {
@@ -92,12 +124,32 @@ def build_follow_activity_json_ld(activity):
     return base
 
 
-def build_outbox_json_ld(outbox):
+def build_outbox_json_ld(outbox, auth_context=None):
+    """
+    Build outbox JSON-LD with authentication-based content filtering.
+    
+    Args:
+        outbox: The PortabilityOutbox model instance
+        auth_context: Optional authentication context dict with keys:
+            - is_authenticated: boolean
+            - has_portability_scope: boolean  
+            - request: HTTP request object
+    
+    Returns:
+        Dict containing ActivityPub OrderedCollection with filtered activities
+    """
     create_activities = list(outbox.activities_create.all())
     like_activities = list(outbox.activities_like.all())
     follow_activities = list(outbox.activities_follow.all())
 
     all_activities = create_activities + like_activities + follow_activities
+    
+    # Filter content based on authentication and scope
+    if not auth_context or not auth_context.get('has_portability_scope'):
+        # Public only for unauthenticated requests or requests without portability scope
+        all_activities = [activity for activity in all_activities if activity.visibility == 'public']
+    # LOLA authenticated requests with portability scope get ALL activities (public + private)
+    
     all_activities.sort(key=lambda x: x.timestamp, reverse=True)
 
     def build_activity_json_ld(activity):

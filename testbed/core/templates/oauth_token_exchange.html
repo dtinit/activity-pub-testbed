@@ -52,7 +52,23 @@
             <li><strong>Code Already Used:</strong> Authorization codes are one-time use only</li>
             <li><strong>Redirect URI Mismatch:</strong> The redirect URI must exactly match the one used during authorization</li>
             <li><strong>Invalid Client:</strong> Client credentials (ID/secret) are incorrect or the client is not authorized</li>
+            <li><strong>Session Expiration:</strong> The client secret may be missing from your session (our implementation stores it there temporarily)</li>
           </ul>
+          
+          <h4>How to Fix "invalid_client" Error:</h4>
+          <ol>
+            <li><strong>Restart the OAuth Flow:</strong> Click "Start New Authorization Flow" below to begin the process from the beginning</li>
+            <li><strong>Complete the Flow in One Session:</strong> Authorization, callback, and token exchange should be done in a single browser session</li>
+            <li><strong>Check Client Authentication:</strong> We try both HTTP Basic Authentication and request body authentication methods automatically</li>
+            <li><strong>Verify Redirect URI:</strong> Ensure the callback URI exactly matches what was used in the authorization request</li>
+          </ol>
+          
+          <div class="alert alert-info">
+            <strong>Note:</strong> In this testbed implementation, client secrets are intentionally stored in the session to avoid storing raw secrets in the database. 
+            This means that if you restart your browser or clear cookies, you'll need to restart the OAuth flow. 
+            In production systems, client secrets would be securely stored and managed by the client application.
+          </div>
+          
           <p>In real-world applications, your code would automatically handle these errors by redirecting the user back to the authorization step.</p>
         </div>
       </div>
@@ -86,6 +102,41 @@
           </div>
         </div>
       </div>
+      
+      {% if token_response.access_token and source_actor %}
+      <div class="lola-testing">
+        <h3>🧪 Test LOLA ActivityPub Endpoints</h3>
+        <p>Your <strong>Source Actor</strong> with LOLA portability scope:</p>
+        
+        <div class="actor">
+          <div>Username: {{ source_actor.username }}</div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/?format=json&auth_token={{ token_response.access_token }}" target="_blank">Details (with LOLA fields)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/outbox?format=json&auth_token={{ token_response.access_token }}" target="_blank">Outbox (all activities)</a></div>
+        </div>
+        
+        <p><strong>Compare with public versions (no authentication):</strong></p>
+        <div class="actor">
+          <div>Username: {{ source_actor.username }} (Public)</div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/?format=json" target="_blank">Details (basic ActivityPub)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/outbox?format=json" target="_blank">Outbox (public only)</a></div>
+        </div>
+        
+        <div class="expected-results">
+          <h4>🔍 What You Should See:</h4>
+          <ul>
+            <li><strong>LOLA Links:</strong> Extra fields like <code>accountPortabilityOauth</code>, <code>content</code>, <code>blocked</code>, <code>migration</code></li>
+            <li><strong>LOLA Outbox:</strong> Higher <code>totalItems</code> count (includes private activities)</li>
+            <li><strong>Public Links:</strong> Basic ActivityPub data only, lower activity count</li>
+          </ul>
+        </div>
+      </div>
+      {% elif token_response.access_token and not source_actor %}
+      <div class="lola-testing">
+        <h3>⚠️ No Source Actor Available</h3>
+        <p>You don't have a source actor set up yet. Please visit the <a href="/">home page</a> to set up your actors for LOLA testing.</p>
+      </div>
+      {% endif %}
+      
       {% else %}
       <div class="no-exchange">
         <p>No token exchange was attempted.</p>

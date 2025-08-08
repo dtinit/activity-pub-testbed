@@ -22,7 +22,16 @@ def get_user_application(user, request=None):
     Get or create an OAuth application for a user.
     
     If request is provided, stores the raw client secret in the session
-    for later use in token exchange requests.
+    for later use in token exchange requests. For security reasons, the raw client secret
+    is never stored in the database, only the hashed version. We keep the raw version
+    in the session temporarily to enable token exchange in the OAuth flow.
+    
+    Args:
+        user: The user to get/create an application for
+        request: Optional request object with session for storing client secret
+        
+    Returns:
+        Application instance with raw_client_secret attribute if available
     """
     # Check if user already has an application
     applications = Application.objects.filter(user=user)
@@ -35,11 +44,20 @@ def get_user_application(user, request=None):
             logger.warning(f"User {user.username} has multiple OAuth applications. Using the first one.")
         logger.info(f"Retrieved existing OAuth application for user {user.username}")
         
+        # Initialize the raw client secret attribute to None
+        application.raw_client_secret = None
+        
         # If we have the raw client secret in session, use it (needed for token exchange)
         if request and CLIENT_SECRET_SESSION_KEY in request.session:
             # Attach the raw client_secret as an attribute for token exchange
             application.raw_client_secret = request.session[CLIENT_SECRET_SESSION_KEY]
             logger.info("Using raw client secret from session for token exchange")
+        elif request:
+            logger.warning(f"Raw client secret not found in session for user {user.username}. This will prevent token exchange.")
+            # We could potentially implement a client secret recovery mechanism here if needed
+            
+        # Add client ID to the log for troubleshooting
+        logger.info(f"Application details - Client ID: {application.client_id}, Has raw secret: {hasattr(application, 'raw_client_secret') and application.raw_client_secret is not None}")
         
         return application
     

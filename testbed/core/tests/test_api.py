@@ -2,6 +2,8 @@ import pytest
 from rest_framework.test import APIClient
 from rest_framework import status
 from django.urls import reverse
+from django.contrib.auth import get_user_model
+from oauth2_provider.models import Application, AccessToken
 from testbed.core.models import Actor
 from testbed.core.factories import ActorFactory
 from testbed.core.tests.conftest import create_isolated_actor
@@ -11,6 +13,8 @@ from testbed.core.json_ld_utils import (
     build_actor_id,
     build_outbox_id,
 )
+
+User = get_user_model()
 
 # Test actor detail API endpoint
 @pytest.mark.django_db
@@ -66,3 +70,282 @@ def test_actor_not_found():
 def test_outbox_not_found():
     response = APIClient().get(reverse("actor-outbox", kwargs={"pk": 99999}))
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# LOLA Authentication Tests
+
+"""
+Tests the complete request-response cycle with different authentication states
+to verify that endpoints properly serve enhanced data for LOLA-authenticated requests.
+"""
+class TestLOLAAuthenticationAPI:    
+
+    # Create OAuth application for testing
+    @pytest.fixture
+    def oauth_application(self, db):
+        return Application.objects.create(
+            name="LOLA Test Application",
+            client_type=Application.CLIENT_CONFIDENTIAL,
+            authorization_grant_type=Application.GRANT_AUTHORIZATION_CODE,
+            redirect_uris="http://localhost:8000/callback/",
+        )
+    
+    # Create user for OAuth token testing
+    @pytest.fixture
+    def authenticated_user(self, db):
+        return User.objects.create_user(
+            username='lola_test_user',
+            email='lola@test.example.com',
+            password='test123password'
+        )
+    
+    # Create access token with LOLA portability scope
+    @pytest.fixture
+    def lola_token(self, oauth_application, authenticated_user):
+        from datetime import datetime, timezone, timedelta
+        return AccessToken.objects.create(
+            user=authenticated_user,
+            application=oauth_application,
+            token='lola-portability-token-12345',
+            scope='activitypub_account_portability read write',
+            expires=datetime.now(timezone.utc) + timedelta(hours=1)  # Expires in 1 hour
+        )
+    
+    # Create access token without LOLA portability scope
+    @pytest.fixture
+    def basic_token(self, oauth_application, authenticated_user):
+        from datetime import datetime, timezone, timedelta
+        return AccessToken.objects.create(
+            user=authenticated_user,
+            application=oauth_application,
+            token='basic-oauth-token-67890',
+            scope='read write',
+            expires=datetime.now(timezone.utc) + timedelta(hours=1)  # Expires in 1 hour
+        )
+    
+    # Test that unauthenticated requests return basic ActivityPub data only
+    @pytest.mark.django_db
+    def test_actor_detail_unauthenticated_returns_basic_activitypub(self):
+        actor = create_isolated_actor("unauthenticated_test")
+        client = APIClient()
+        
+        response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
+        
+        # Should succeed with basic ActivityPub response
+        assert response.status_code == status.HTTP_200_OK
+        
+        data = response.data
+        # Should have standard ActivityPub fields
+        assert data["@context"] == build_actor_context()
+        assert data["type"] == "Person"
+        assert data["id"] == build_actor_id(actor.id)
+        assert data["preferredUsername"] == actor.username
+        
+        # Should NOT have LOLA-specific fields
+        assert "accountPortabilityOauth" not in data
+        assert "content" not in data
+        assert "blocked" not in data
+        assert "migration" not in data
+    
+    # Test that LOLA-authenticated requests return enhanced data with collection URLs
+    @pytest.mark.django_db
+    def test_actor_detail_with_lola_scope_returns_enhanced_data(self, lola_token):
+        actor = create_isolated_actor("lola_enhanced_test")
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
+        
+        response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
+        
+        # Should succeed with enhanced response
+        assert response.status_code == status.HTTP_200_OK
+        
+        data = response.data
+        # Should have standard ActivityPub fields
+        assert data["@context"] == build_actor_context()
+        assert data["type"] == "Person"
+        assert data["id"] == build_actor_id(actor.id)
+        assert data["preferredUsername"] == actor.username
+        
+        # Should HAVE LOLA-specific collection URLs
+        assert "accountPortabilityOauth" in data
+        assert "content" in data
+        assert "blocked" in data
+        assert "migration" in data
+        
+        # Verify LOLA URLs are properly formatted
+        assert data["accountPortabilityOauth"].endswith("/oauth/authorize/")
+        assert data["content"].endswith(f"/actors/{actor.id}/content")
+        assert data["blocked"].endswith(f"/actors/{actor.id}/blocked")
+        assert data["migration"].endswith(f"/actors/{actor.id}/outbox")
+    
+    # Test that authenticated requests without LOLA scope return basic data
+    @pytest.mark.django_db
+    def test_actor_detail_with_basic_token_returns_basic_data(self, basic_token):
+        actor = create_isolated_actor("basic_token_test")
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {basic_token.token}')
+        
+        response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
+        
+        # Should succeed but return basic data (no LOLA scope)
+        assert response.status_code == status.HTTP_200_OK
+        
+        data = response.data
+        # Should have standard fields
+        assert data["type"] == "Person"
+        assert data["preferredUsername"] == actor.username
+        
+        # Should NOT have LOLA fields (lacks portability scope)
+        assert "accountPortabilityOauth" not in data
+        assert "content" not in data
+        assert "blocked" not in data
+        assert "migration" not in data
+    
+    # Test that URL parameter authentication works for LOLA testing
+    @pytest.mark.django_db
+    def test_actor_detail_url_parameter_authentication(self, lola_token):
+        actor = create_isolated_actor("url_param_test")
+        client = APIClient()
+        
+        # Use auth_token URL parameter instead of Authorization header
+        url = reverse("actor-detail", kwargs={"pk": actor.id})
+        response = client.get(f"{url}?auth_token={lola_token.token}")
+        
+        assert response.status_code == status.HTTP_200_OK
+        
+        data = response.data
+        # Should have LOLA fields (proves URL parameter auth worked)
+        assert "accountPortabilityOauth" in data
+        assert "content" in data
+        assert "blocked" in data
+    
+    # Test that outbox shows different content based on authentication
+    @pytest.mark.django_db
+    def test_outbox_content_filtering_by_authentication(self, lola_token):
+        actor = create_isolated_actor("outbox_filtering_test")
+        client = APIClient()
+        
+        # Test unauthenticated outbox (public activities only)
+        public_response = client.get(reverse("actor-outbox", kwargs={"pk": actor.id}))
+        assert public_response.status_code == status.HTTP_200_OK
+        
+        public_data = public_response.data
+        public_count = public_data["totalItems"]
+        
+        # Test LOLA-authenticated outbox (all activities)
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
+        lola_response = client.get(reverse("actor-outbox", kwargs={"pk": actor.id}))
+        assert lola_response.status_code == status.HTTP_200_OK
+        
+        lola_data = lola_response.data
+        lola_count = lola_data["totalItems"]
+        
+        # Both should have valid outbox structure
+        assert public_data["@context"] == build_basic_context()
+        assert public_data["type"] == "OrderedCollection"
+        assert lola_data["@context"] == build_basic_context()
+        assert lola_data["type"] == "OrderedCollection"
+        
+        # LOLA version should show >= public count (includes private activities)
+        assert lola_count >= public_count
+        
+        # Both should have proper outbox ID
+        expected_outbox_id = build_outbox_id(actor.id)
+        assert public_data["id"] == expected_outbox_id
+        assert lola_data["id"] == expected_outbox_id
+    
+    # Test that demonstrates clear differences between public and LOLA responses
+    @pytest.mark.django_db
+    def test_side_by_side_authentication_comparison(self, lola_token):
+        actor = create_isolated_actor("comparison_test")
+        
+        # Public request
+        public_client = APIClient()
+        public_response = public_client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
+        public_data = public_response.data
+        
+        # LOLA request
+        lola_client = APIClient()
+        lola_client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
+        lola_response = lola_client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
+        lola_data = lola_response.data
+        
+        # Both should succeed
+        assert public_response.status_code == status.HTTP_200_OK
+        assert lola_response.status_code == status.HTTP_200_OK
+        
+        # Both should have identical basic fields
+        basic_fields = ["@context", "type", "id", "preferredUsername", "name", "previously"]
+        for field in basic_fields:
+            assert public_data[field] == lola_data[field]
+        
+        # Only LOLA should have enhanced fields
+        lola_fields = ["accountPortabilityOauth", "content", "blocked", "migration"]
+        for field in lola_fields:
+            assert field not in public_data
+            assert field in lola_data
+            assert isinstance(lola_data[field], str)  # Should be URL strings
+    
+    # Test that invalid tokens gracefully degrade to unauthenticated behavior
+    @pytest.mark.django_db
+    def test_invalid_token_graceful_degradation(self):
+        actor = create_isolated_actor("invalid_token_test")
+        client = APIClient()
+        
+        # Use completely invalid token
+        client.credentials(HTTP_AUTHORIZATION='Bearer invalid-nonexistent-token-xyz')
+        response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
+        
+        # Should succeed with public data (graceful degradation)
+        assert response.status_code == status.HTTP_200_OK
+        
+        data = response.data
+        assert data["type"] == "Person"
+        # Should NOT have LOLA fields (invalid token treated as unauthenticated)
+        assert "accountPortabilityOauth" not in data
+        assert "content" not in data
+        assert "blocked" not in data
+    
+    # Test graceful handling of malformed authorization headers
+    @pytest.mark.django_db
+    def test_malformed_authorization_header_handling(self):
+        actor = create_isolated_actor("malformed_header_test")
+        client = APIClient()
+        
+        test_cases = [
+            "Bearer",  # Missing token
+            "Basic invalid-format",  # Wrong auth type
+            "Bearer  ",  # Empty token
+            "InvalidFormat token",  # Malformed header
+        ]
+        
+        for malformed_header in test_cases:
+            client.credentials(HTTP_AUTHORIZATION=malformed_header)
+            response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
+            
+            # Should succeed with public data for all malformed cases
+            assert response.status_code == status.HTTP_200_OK
+            data = response.data
+            assert data["type"] == "Person"
+            # Should NOT have LOLA fields
+            assert "accountPortabilityOauth" not in data
+    
+    # Test that content-type headers are set correctly for API responses
+    @pytest.mark.django_db
+    def test_content_type_headers_set_correctly(self, lola_token):
+        actor = create_isolated_actor("content_type_test")
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
+        
+        # Request with format=json 
+        response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}), {"format": "json"})
+        
+        assert response.status_code == status.HTTP_200_OK
+        # Should have JSON content type (DRF default for format=json)
+        assert response["Content-Type"] == "application/json"
+        # Should have CORS header for federation
+        assert response["Access-Control-Allow-Origin"] == "*"
+        
+        # Should still have LOLA fields
+        data = response.data
+        assert "accountPortabilityOauth" in data

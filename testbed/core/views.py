@@ -1,5 +1,5 @@
 # from rest_framework.generics import RetrieveAPIView 
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes
 from rest_framework.response import Response
 from django.shortcuts import redirect
 from django.contrib.auth.decorators import user_passes_test
@@ -14,6 +14,7 @@ from testbed.core.utils.oauth_utils import (
     store_state_in_session,
     validate_state_from_session
 )
+from testbed.core.utils.authentication import OptionalOAuth2Authentication
 from testbed.core.forms.oauth_connection_form import OAuthApplicationForm
 from django.contrib import messages
 from django.urls import reverse
@@ -23,14 +24,62 @@ import requests
 logger = logging.getLogger(__name__)
 
 @api_view(['GET'])
+@authentication_classes([OptionalOAuth2Authentication])
 def actor_detail(request, pk):
+    """
+    ActivityPub Actor endpoint with LOLA portability support.
+    
+    Returns basic ActivityPub data for unauthenticated requests,
+    and enhanced LOLA data for authenticated requests with portability scope.
+    """
     actor = get_object_or_404(Actor, pk=pk)
-    return Response(build_actor_json_ld(actor))
+    
+    # Create authentication context for JSON-LD builder
+    auth_context = {
+        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
+        'has_portability_scope': getattr(request, 'has_portability_scope', False),
+        'request': request
+    }
+    
+    # Build response with authentication context
+    data = build_actor_json_ld(actor, auth_context)
+    response = Response(data)
+    
+    # Set ActivityPub content-type only for JSON responses (preserves DRF browsable API)
+    if request.accepted_renderer.format == 'json':
+        response['Content-Type'] = 'application/activity+json'
+        response['Access-Control-Allow-Origin'] = '*'  # Enable federation
+    
+    return response
 
 @api_view(['GET'])
+@authentication_classes([OptionalOAuth2Authentication])
 def portability_outbox_detail(request, pk):
+    """
+    ActivityPub Outbox endpoint with LOLA content filtering.
+    
+    Returns public activities for unauthenticated requests,
+    and all activities for authenticated requests with portability scope.
+    """
     outbox = get_object_or_404(PortabilityOutbox, actor_id=pk)
-    return Response(build_outbox_json_ld(outbox))
+    
+    # Create authentication context for JSON-LD builder
+    auth_context = {
+        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
+        'has_portability_scope': getattr(request, 'has_portability_scope', False),
+        'request': request
+    }
+    
+    # Build response with authentication-based content filtering
+    data = build_outbox_json_ld(outbox, auth_context)
+    response = Response(data)
+    
+    # Set ActivityPub content-type only for JSON responses (preserves DRF browsable API)
+    if request.accepted_renderer.format == 'json':
+        response['Content-Type'] = 'application/activity+json'
+        response['Access-Control-Allow-Origin'] = '*'  # Enable federation
+    
+    return response
 
 # Restrict the view to staff users using the @user_passes_test decorator
 @user_passes_test(lambda u: u.is_staff)  # Restrict to staff
@@ -63,7 +112,8 @@ def index(request):
     user_actors = Actor.objects.filter(user=request.user)
     
     # Get the user's OAuth application using our utility function
-    application = get_user_application(request.user)
+    # Pass the request object to allow storing the client secret in the session
+    application = get_user_application(request.user, request)
 
     if request.method == "POST":
         oauth_form = OAuthApplicationForm(request.POST, instance=application)
@@ -140,7 +190,8 @@ def test_authorization_view(request):
     This will redirect to the authorization endpoint with appropriate parameters.
     """
     # Get the user's OAuth application (this is normally used by the destination service)
-    application = get_user_application(request.user)
+    # Pass the request object to allow storing the client secret in the session
+    application = get_user_application(request.user, request)
     
     # Use our own callback URL for the test flow
     scheme = request.scheme
@@ -205,12 +256,17 @@ def test_token_exchange_view(request):
     state = request.GET.get('state')
     error = request.GET.get('error')
     
+    # Get the user's source actor for LOLA testing
+    user_actors = Actor.objects.filter(user=request.user)
+    source_actor = user_actors.filter(role=Actor.ROLE_SOURCE).first()
+    
     context = {
         'code': code,
         'state': state,
         'error': error,
         'token_response': None,
         'token_error': None,
+        'source_actor': source_actor,  # Add source actor for LOLA testing
     }
     
     # If we have an error or no code, don't attempt token exchange
@@ -219,11 +275,21 @@ def test_token_exchange_view(request):
         return render(request, 'oauth_token_exchange.html', context)
     
     # Get the application for client credentials
-    application = get_user_application(request.user)
+    application = get_user_application(request.user, request)
     
     # Prepare token request parameters
     token_url = f"{request.scheme}://{request.get_host()}/oauth/token/"
     redirect_uri = f"{request.scheme}://{request.get_host()}/callback"
+    
+    # Check if we have a raw client secret available
+    if not hasattr(application, 'raw_client_secret') or not application.raw_client_secret:
+        logger.error(f"Raw client secret not available for token exchange. Client ID: {application.client_id}")
+        context['token_error'] = "Client secret not available. This may happen if your session expired. Try restarting the OAuth flow."
+        return render(request, 'oauth_token_exchange.html', context)
+        
+    # Log client credentials status (without exposing the actual secret)
+    logger.info(f"Client credentials prepared for token exchange. Client ID: {application.client_id}")
+    logger.info(f"Raw client secret available: {bool(application.raw_client_secret)}")
     
     # Prepare the data for token exchange
     # This follows the OAuth 2.0 specification for token requests
@@ -231,22 +297,22 @@ def test_token_exchange_view(request):
         'grant_type': 'authorization_code',
         'code': code,
         'redirect_uri': redirect_uri,
-        'client_id': application.client_id,
-        'client_secret': application.client_secret,
+        # We'll use HTTP Basic Auth instead of including these in the body
+        # 'client_id': application.client_id,
+        # 'client_secret': application.raw_client_secret,
     }
     
     try:
         # Make the token request
         logger.info(f"Attempting to exchange authorization code for token")
         
-        # Log the complete request details for debugging
+        # Log the complete request details for debugging (except the secret)
         logger.info(f"Token request URL: {token_url}")
         logger.info(f"Token request parameters: {token_data}")
         
-        # Use HTTP Basic Authentication for client credentials (preferred method)
-        # Remove client_secret from form parameters
-        client_id = token_data.pop('client_id')
-        client_secret = token_data.pop('client_secret')
+        # Get client credentials
+        client_id = application.client_id
+        client_secret = application.raw_client_secret
         
         # Set standard content type header for form data
         headers = {
@@ -254,13 +320,37 @@ def test_token_exchange_view(request):
             'Accept': 'application/json'
         }
         
-        # Make the request with Basic Authentication for client credentials
+        # OAuth 2.0 spec allows for two methods of client authentication:
+        # 1. HTTP Basic Authentication (preferred and more secure)
+        # 2. Including client credentials in the request body
+        
+        # First try: Use HTTP Basic Authentication for client credentials (preferred method)
+        logger.info("Attempting token exchange using HTTP Basic Authentication")
         token_response = requests.post(
             token_url, 
-            data=token_data, 
+            data=token_data.copy(),  # Use a copy to avoid modifying the original
             headers=headers,
             auth=(client_id, client_secret)  # HTTP Basic Authentication
         )
+        
+        # If first method fails with 401 Unauthorized, try the alternative method
+        if token_response.status_code == 401:
+            logger.info("HTTP Basic Authentication failed. Trying with credentials in request body.")
+            # Create a new copy of token_data with client credentials included
+            body_auth_data = token_data.copy()
+            body_auth_data['client_id'] = client_id
+            body_auth_data['client_secret'] = client_secret
+            
+            # Make the request with credentials in the request body
+            token_response = requests.post(
+                token_url, 
+                data=body_auth_data,
+                headers=headers
+            )
+            
+            # Log which method succeeded
+            if token_response.status_code == 200:
+                logger.info("Token exchange succeeded using request body authentication")
         
         # Check if the request was successful
         if token_response.status_code == 200:
