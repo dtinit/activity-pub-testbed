@@ -1,14 +1,14 @@
-# **Phase 4: Token Exchange**
+# Phase 4: Token Exchange
 
 ![Phase 4](../images/phase-4-token-exchange.png)
 
-## **Overview**
+## Overview
 
 Phase 4 represents the critical security bridge between **user authorization** (Phase 2) and **protected resource access** (Phase 5) in our OAuth 2.0 flow. After a user grants consent and the client receives an authorization code (Phase 3), Phase 4 is where the **Destination Service (Client)** securely exchanges this temporary code for a longer-lived **access token** that grants actual API access permissions.
 
 In the context of LOLA account portability, this phase transforms the user's authorization decision into secure credentials that allow the Destination Service to begin the actual data transfer process from the Source Service.
 
-## **Objectives of Phase 4**
+## Objectives of Phase 4
 
 - Securely exchange the short-lived authorization code for a longer-lived access token.
 - Authenticate the client application using secure methods (HTTP Basic Authentication or request body).
@@ -17,7 +17,7 @@ In the context of LOLA account portability, this phase transforms the user's aut
 - Implement strict security controls to prevent token theft or misuse.
 - Provide clear error handling for common token exchange issues.
 
-## **Context in the LOLA Flow**
+## Context in the LOLA Flow
 
 Within the LOLA portability process:
 
@@ -28,9 +28,9 @@ Within the LOLA portability process:
 
 This phase acts as the "handshake" that establishes trust between services for data transfer. Once complete, the security context shifts from "proving authorization" to "accessing authorized resources."
 
-## **Core Components**
+## Core Components
 
-### **1. Token Request Construction**
+### 1. Token Request Construction
 
 The Destination Service constructs a token request with the following required parameters:
 
@@ -52,7 +52,7 @@ Authorization: Basic base64(client_id:client_secret)
 grant_type=authorization_code&code=SplxlOBeZQQYbYS6WxSbIA&redirect_uri=https%3A%2F%2Fdestination.example.com%2Fcallback
 ```
 
-### **2. Server-Side Token Generation**
+### 2. Server-Side Token Generation
 
 Upon receiving the token request, the Source Service performs multiple validation steps:
 
@@ -69,7 +69,7 @@ If all validations pass, the server generates:
 - Scope information
 - Token expiration time
 
-### **3. Token Response**
+### 3. Token Response
 
 The Source Service returns a standardized token response:
 
@@ -83,7 +83,7 @@ The Source Service returns a standardized token response:
 }
 ```
 
-### **4. Client-Side Token Storage**
+### 4. Client-Side Token Storage
 
 The Destination Service securely stores:
 
@@ -91,7 +91,7 @@ The Destination Service securely stores:
 - The refresh token (if provided) for obtaining new access tokens without user interaction
 - Token metadata including expiration and scope
 
-## **Implementation Details**
+## Implementation Details
 
 In our testbed implementation:
 
@@ -112,7 +112,7 @@ In our testbed implementation:
    - HTTP Basic Authentication (preferred according to OAuth spec)
    - Request body authentication (as a fallback)
 
-### **Client Authentication Methods**
+### Client Authentication Methods
 
 ```python
 # First try: Use HTTP Basic Authentication for client credentials (preferred method)
@@ -138,7 +138,7 @@ if token_response.status_code == 401:
     )
 ```
 
-### **Token Validation Process**
+### Token Validation Process
 
 The token endpoint performs sequential validation steps:
 
@@ -156,7 +156,7 @@ def validate_scopes(self, client_id, scopes, client, request, *args, **kwargs):
     return super().validate_scopes(client_id, scopes, client, request, *args, **kwargs)
 ```
 
-## **Security Considerations**
+## Security Considerations
 
 - **Client Authentication** – This phase is critical for security as it ensures only the legitimate client with correct credentials can exchange the code for tokens.
 
@@ -171,7 +171,7 @@ def validate_scopes(self, client_id, scopes, client, request, *args, **kwargs):
   - Never exposed to client-side code
   - Protected against CSRF attacks when used
 
-## **Error Handling**
+## Error Handling
 
 Common errors during token exchange include:
 
@@ -200,7 +200,7 @@ except:
     context['token_error'] = f"Error: HTTP {token_response.status_code} - {token_response.text}"
 ```
 
-## **Testing Interface**
+## Testing Interface
 
 Our implementation includes an testing interface in `oauth_token_exchange.html` that:
 
@@ -229,9 +229,9 @@ response = requests.get('https://api.example.com/activity-pub/user', headers=hea
 
 3. **Explains Errors** – Provides troubleshooting guidance for common token exchange errors.
 
-## **Best Practices Implemented**
+## Best Practices Implemented
 
-1. **Secure Client Secret Management** – Raw client secrets are never stored in the database, only securely hashed versions.
+1. **Session-Based Secret Management** – Client secrets are stored in raw form in the database for testbed simplicity, with secure session-based access during OAuth flows. Hashed storage is planned as a future security enhancement.
 
 2. **Robust Error Handling** – Clear error messages with proper HTTP status codes and OAuth error responses.
 
@@ -241,7 +241,7 @@ response = requests.get('https://api.example.com/activity-pub/user', headers=hea
 
 5. **Strict Validation** – Thorough validation of all parameters including redirect URI matching and scope validation.
 
-## **Configuration Settings**
+## Configuration Settings
 
 Our implementation has specific settings in Django's settings.py:
 
@@ -260,7 +260,7 @@ OAUTH2_PROVIDER = {
 }
 ```
 
-## **Future Enhancements**
+## Future Enhancements
 
 - **PKCE Support** – Enable Proof Key for Code Exchange for improved security with public clients.
 - **JWT Tokens** – Consider using JWT tokens with custom claims for enhanced security and portability.
@@ -268,7 +268,7 @@ OAUTH2_PROVIDER = {
 - **Monitoring and Alerts** – Add monitoring for unusual token exchange patterns that might indicate attacks.
 - **Rate Limiting** – Implement token endpoint rate limiting to prevent brute force attacks.
 
-## **Significance of Phase 4**
+## Significance of Phase 4
 
 This phase completes the secure authorization process and enables protected resource access:
 

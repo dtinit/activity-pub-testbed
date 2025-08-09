@@ -1,14 +1,14 @@
-# **Phase 2: Authorization Request & User Consent**
+# Phase 2: Authorization Request & User Consent
 
 ![Phase 2](../images/phase-2-authorization-request-and-user-consent.png)
 
-## **Overview**
+## Overview
 
 Phase 2 is the stage where the user explicitly authorizes the **Destination Service** to access their data from the **Source Service**. This phase introduces **user consent**, a core principle of OAuth 2.0 and the foundation of data portability in the LOLA implementation.
 
 In this phase, the Destination Service constructs an **authorization request** and redirects the user to the Source Service’s authorization endpoint. The Source Service handles user authentication (if necessary) and presents a **consent screen** detailing the data to be shared. Upon user approval, the process transitions into **Phase 3: Authorization Code & Callback Handling**.
 
-## **Objectives of Phase 2**
+## Objectives of Phase 2
 
 - Provide a secure mechanism for **user consent** within the OAuth flow.
 - Ensure the **Destination Service** properly constructs the authorization request, including all required parameters.
@@ -16,7 +16,7 @@ In this phase, the Destination Service constructs an **authorization request** a
 - Prevent **CSRF attacks** using a cryptographically secure state parameter.
 - Clearly communicate the scope and purpose of data sharing in the consent screen.
 
-## **Context in the LOLA Flow**
+## Context in the LOLA Flow
 
 Within LOLA portability:
 
@@ -26,9 +26,9 @@ Within LOLA portability:
 
 This explicit consent step differentiates LOLA from many typical OAuth implementations, which often request narrower scopes (e.g., profile or email access).
 
-## **Core Components**
+## Core Components
 
-### **1. Authorization URL Construction**
+### 1. Authorization URL Construction
 
 The **Destination Service** initiates the flow by building an authorization URL that includes the following parameters:
 
@@ -51,7 +51,7 @@ state=secureRandomState
 
 This URL is constructed dynamically in the **Destination Service’s** view, often using the current request’s scheme and host for the callback URI.
 
-### **2. State Parameter Security**
+### 2. State Parameter Security
 
 The state parameter is critical for **CSRF protection**:
 
@@ -72,7 +72,7 @@ This pattern prevents:
 - store_state_in_session()
 - validate_state_from_session()
 
-### **3. Consent Screen**
+### 3. Consent Screen
 
 The consent screen (authorize.html) is presented by the **Source Service** and includes:
 
@@ -88,7 +88,7 @@ The consent screen (authorize.html) is presented by the **Source Service** and i
 - Hidden fields for necessary OAuth parameters.
 - Clear visual hierarchy and plain language for user comprehension.
 
-### **4. Validation Logic**
+### 4. Validation Logic
 
 Custom validation is implemented in ActivityPubOAuth2Validator:
 
@@ -102,31 +102,31 @@ Custom validation is implemented in ActivityPubOAuth2Validator:
 
 This ensures that only valid, registered redirect URIs and scopes can proceed through the authorization process.
 
-## **Interaction Flow**
+## Interaction Flow
 
-### **1. Initiation**
+### 1. Initiation
 
 - User clicks “Import from [Source Service]” on the Destination Service.
 - Destination Service constructs the authorization URL with required parameters and a secure state.
 
-### **2. Redirection**
+### 2. Redirection
 
 - User’s browser is redirected to /oauth/authorize at the Source Service.
 
-### **3. Authentication**
+### 3. Authentication
 
 - If not already authenticated, the user logs into the Source Service.
 
-### **4. Consent Presentation**
+### 4. Consent Presentation
 
 - Source Service displays the consent screen, showing requested data and permissions.
 
-### **5. User Decision**
+### 5. User Decision
 
 - If approved: Source Service issues an authorization code and redirects to the registered redirect_uri.
 - If denied: Redirect occurs with error parameters indicating denial.
 
-## **Security Considerations**
+## Security Considerations
 
 - **State Parameter** – Prevents CSRF and replay attacks.
 - **Redirect URI Validation** – Defends against open redirect and code interception attacks.
@@ -135,9 +135,9 @@ This ensures that only valid, registered redirect URIs and scopes can proceed th
 - **Logging** – Records key events for auditability (invalid scopes, URIs, approvals).
 
 
-## **Implementation Example**
+## Implementation Example
 
-### **Authorization URL Construction (Destination Service)**
+### Authorization URL Construction (Destination Service)
 
 ```python
 @login_required
@@ -171,7 +171,7 @@ def test_authorization_view(request):
     return redirect(auth_url)
 ```
 
-## **Significance of Phase 2**
+## Significance of Phase 2
 
 This phase embodies the **core consent principle** of OAuth: the user explicitly approves the data transfer. By enforcing strict scope validation, secure redirect URI handling, and robust CSRF protection, Phase 2 ensures:
 
