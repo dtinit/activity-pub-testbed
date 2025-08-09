@@ -27,9 +27,3 @@ def build_note_id(note_id):
 
 def build_outbox_id(actor_id):
     return f"https://example.com/actors/{actor_id}/outbox"
-
-# Build OAuth authorization endpoint URL for LOLA discovery
-def build_oauth_endpoint_url(request):
-    scheme = request.scheme
-    host = request.get_host()
-    return f"{scheme}://{host}/oauth/authorize/"
