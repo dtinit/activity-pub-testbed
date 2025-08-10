@@ -1,6 +1,8 @@
 import factory
 from factory.django import DjangoModelFactory
 from django.contrib.auth.models import User
+from datetime import datetime, timezone, timedelta
+from oauth2_provider.models import Application, AccessToken
 from testbed.core.models import (
     Actor,
     Note,
@@ -129,3 +131,31 @@ class PortabilityOutboxFactory(DjangoModelFactory):
                 visibility="public"
             )
             self.add_activity(activity)
+
+# OAuth-related factories for testing authentication
+class ApplicationFactory(DjangoModelFactory):
+    class Meta:
+        model = Application
+    
+    name = factory.Sequence(lambda n: f"Test Application {n}")
+    client_type = Application.CLIENT_CONFIDENTIAL
+    authorization_grant_type = Application.GRANT_AUTHORIZATION_CODE
+    redirect_uris = "http://localhost:8000/callback/"
+
+class AccessTokenFactory(DjangoModelFactory):
+    class Meta:
+        model = AccessToken
+    
+    user = factory.SubFactory(UserOnlyFactory)
+    application = factory.SubFactory(ApplicationFactory)
+    token = factory.Sequence(lambda n: f"test-token-{n}")
+    scope = "read write"
+    expires = factory.LazyFunction(lambda: datetime.now(timezone.utc) + timedelta(hours=1))
+    
+    class Params:
+        lola_scope = factory.Trait(
+            scope='activitypub_account_portability read write'
+        )
+        expired = factory.Trait(
+            expires=factory.LazyFunction(lambda: datetime.now(timezone.utc) - timedelta(hours=1))
+        )
