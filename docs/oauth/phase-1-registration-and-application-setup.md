@@ -2,20 +2,20 @@
 
 ![Phase 1](../images/phase-1-registration-and-application-setup.png)
 
-## **Overview**
+## Overview
 
 Phase 1 establishes the foundation of our OAuth 2.0 implementation for the testbed. It covers the **registration of applications** (representing ActivityPub services) and the creation of **immutable OAuth credentials**. This step is essential to establish trust between the authorization server (Source Service) and the client applications (Destination Services) participating in the LOLA data portability flow.
 
-By completing this phase, each service obtains a unique **client ID** and **client secret** that identify it throughout the OAuth flow, enabling secure interactions during subsequent phases such as authorization, token exchange, and protected resource access.
+By completing this phase, each service obtains a unique **Client ID** and **Client Secret** that identify it throughout the OAuth flow, enabling secure interactions during subsequent phases such as authorization, token exchange, and protected resource access.
 
-## **Objectives of Phase 1**
+## Objectives of Phase 1
 
 - Enable new services to register with the Source Service and establish a trusted OAuth relationship.
-- Generate **immutable credentials** (client ID and client secret) that remain consistent for the lifetime of the application.
+- Generate **immutable credentials** (Client ID and Client Secret) that remain consistent for the lifetime of the application.
 - Provide a user interface and workflow for managing OAuth application settings.
 - Enforce **security best practices** by ensuring credentials are securely generated, stored, and not user-editable.
 
-## **Context in the LOLA Flow**
+## Context in the LOLA Flow
 
 Within the **LOLA** portability process:
 
@@ -25,9 +25,9 @@ Within the **LOLA** portability process:
 
 This **one user → one service → one application** model simplifies the flow while maintaining security and realism for testing ActivityPub implementations.
 
-## **Core Components**
+## Core Components
 
-### **1. OAuth Application Form**
+### 1. OAuth Application Form
 
 The OAuthApplicationForm (**`forms/oauth_connection_form.py`**) provides the interface for registering and configuring an OAuth application.
 
@@ -44,17 +44,18 @@ The OAuthApplicationForm (**`forms/oauth_connection_form.py`**) provides the int
 
 Proper validation and default configuration prevent common security pitfalls such as open redirect vulnerabilities or weak client handling.
 
-### **2. Credential Generation & Storage**
+### 2. Credential Generation & Storage
 
 Credential handling is implemented via the get_user_application() method (oauth_utils.py):
 
 - **Immutable Credential Creation:** If the user has no existing application, new credentials are generated using secure random functions.
 - **Session-Based Raw Secret Storage:**
-    - The client secret is hashed when stored in the database for security.
-    - The raw secret is temporarily stored in the user’s session and attached as a runtime-only attribute to the application object.
-    - This allows it to be used for token exchange later without exposing it beyond its intended lifespan.
+    - Client secrets are currently stored in raw form in the database for simplicity in the testbed environment.
+    - The raw secret is temporarily stored in the user's session and attached as a runtime-only attribute to the application object.
+    - This session storage enables token exchange during the OAuth flow without requiring database retrieval of the secret.
+    - **Note:** Hashed client secret storage is planned as a future security enhancement for production deployments.
 
-### **3. Index View**
+### 3. Index View
 
 The index() view serves as the **entry point** for Phase 1, integrating the form and utility logic:
 
@@ -63,14 +64,16 @@ The index() view serves as the **entry point** for Phase 1, integrating the form
 - Handles form submissions for updating application details like redirect URIs.
 - Enforces immutability of client ID and client secret through both frontend (read-only fields) and backend (overridden save() method) safeguards.
 
-## **Security Considerations**
+## Security Considerations
 
-- **Immutable Credentials:** Client ID and client secret cannot be edited after creation.
-- **Session Storage:** Raw secrets are stored only in secure server-side sessions and never persisted in plaintext.
+- **Immutable Credentials:** Client ID and Client Secret cannot be edited after creation.
+- **Current Storage Approach:** Client Secrets are stored in raw form in the database for testbed simplicity, with session-based access during OAuth flows.
+- **Session Management:** Raw secrets are temporarily stored in secure server-side sessions to enable token exchange without additional database queries.
 - **Redirect URI Validation:** Ensures callback URLs are safe and properly formatted; additional validation (e.g., allowlists, HTTPS-only) is recommended for production.
 - **Audit Logging:** Key events (credential creation, retrieval, anomalies) are logged for traceability.
+- **Future Security Enhancement:** Hashed Client Secret storage is planned for production deployments to enhance security.
 
-## **User Experience Flow**
+## User Experience Flow
 
 1. **Initial Registration (New Application):**
     - User accesses the registration form.
@@ -79,14 +82,14 @@ The index() view serves as the **entry point** for Phase 1, integrating the form
 2. **Subsequent Visits (Existing Application):**
     - Form is pre-filled with existing application data.
     - Credentials remain immutable; only redirect URIs or service name can be updated.
-    - Raw client secret may be retrieved from session if needed for token exchange.
+    - Raw Client Secret may be retrieved from session if needed for token exchange.
 3. **Update Flow:**
     - User can update non-sensitive fields (e.g., redirect URIs).
-    - Client secret regeneration is not part of this phase but may be considered for future enhancements.
+    - Client Secret regeneration is not part of this phase but may be considered for future enhancements.
 
-## **Implementation Details**
+## Implementation Details
 
-### **Form Snippet**
+### Form Snippet
 
 ```python
 class OAuthApplicationForm(forms.ModelForm):
@@ -103,7 +106,7 @@ class OAuthApplicationForm(forms.ModelForm):
         }
 ```
 
-### **Credential Handling Logic**
+### Credential Handling Logic
 
 ```python
 def get_user_application(user, request=None):
@@ -134,14 +137,14 @@ def get_user_application(user, request=None):
     return application
 ```
 
-## **Future Enhancements**
+## Future Enhancements
 
 - **Credential Rotation:** Implement a secure flow for regenerating client secrets when necessary.
 - **Advanced URI Validation:** Enforce HTTPS and allowlist domains in production environments.
 - **Scope Management:** Extend registration to include configurable scopes for fine-grained access control.
 - **Enhanced Auditing:** Expand logging for compliance with security frameworks (SOC 2, ISO 27001).
 
-## **Significance of Phase 1**
+## Significance of Phase 1
 
 This phase creates the **secure foundation** for the entire OAuth implementation in our testbed. By enforcing credential immutability, secure secret handling, and clear user workflows, we establish trust and ensure a robust basis for subsequent phases:
 
