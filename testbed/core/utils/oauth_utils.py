@@ -176,3 +176,23 @@ def validate_state_from_session(request, state):
         logger.warning("OAuth state parameter validation failed")
         
     return is_valid
+
+# OAuth Endpoint URL Construction
+def build_oauth_endpoint_url(request):
+    """
+    Build OAuth authorization endpoint URL for LOLA discovery.
+    
+    This function constructs the OAuth authorization endpoint URL that will be
+    included in ActivityPub Actor responses for LOLA account portability.
+    The URL allows other ActivityPub services to discover where users can
+    authorize access for account migration.
+    
+    Args:
+        request: The HTTP request object containing scheme and host information
+        
+    Returns:
+        String containing the fully qualified OAuth authorization endpoint URL
+    """
+    scheme = request.scheme
+    host = request.get_host()
+    return f"{scheme}://{host}/oauth/authorize/"

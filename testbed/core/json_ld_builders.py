@@ -3,8 +3,8 @@ from .json_ld_utils import (build_basic_context,
                             build_actor_id,
                             build_activity_id,
                             build_note_id,
-                            build_outbox_id,
-                            build_oauth_endpoint_url)
+                            build_outbox_id)
+from .utils.oauth_utils import build_oauth_endpoint_url
 from .models import CreateActivity, LikeActivity, FollowActivity
 
 def build_actor_json_ld(actor, auth_context=None):
