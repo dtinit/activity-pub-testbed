@@ -86,3 +86,6 @@ docs/_build/
 
 # collectstatic output
 staticfiles/
+
+# Personal development files
+personal-development/

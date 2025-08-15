@@ -323,48 +323,36 @@ The enhanced OAuth token exchange template (`testbed/core/templates/oauth_token_
 - Provides detailed error explanations for common OAuth failures
 - Includes troubleshooting guides for "invalid_client" and other errors
 
-#### 2. Live LOLA Testing
-When a token is successfully obtained, the interface provides:
+#### 2. Interactive LOLA Testing Links
+When a token is successfully obtained, the interface provides direct HTML links for testing LOLA authentication using URL parameter authentication:
 
 ```html
-<!-- Interactive links for testing -->
-<a href="/api/actors/1/?format=json&auth_token={token}" target="_blank">
+<!-- LOLA-authenticated links -->
+<a href="/api/actors/{{ source_actor.pk }}/?format=json&auth_token={{ token_response.access_token }}" target="_blank">
   Details (with LOLA fields)
 </a>
 
-<a href="/api/actors/1/outbox?format=json&auth_token={token}" target="_blank">
+<a href="/api/actors/{{ source_actor.pk }}/outbox?format=json&auth_token={{ token_response.access_token }}" target="_blank">
   Outbox (all activities)
 </a>
 
 <!-- Compare with public versions -->
-<a href="/api/actors/1/?format=json" target="_blank">
+<a href="/api/actors/{{ source_actor.pk }}/?format=json" target="_blank">
   Details (basic ActivityPub)
+</a>
+
+<a href="/api/actors/{{ source_actor.pk }}/outbox?format=json" target="_blank">
+  Outbox (public only)
 </a>
 ```
 
-#### 3. JavaScript Enhancement
-Interactive API testing with visual highlighting:
+**Key Features:**
+- Uses URL parameter authentication (`?auth_token=...`) for easy testing without JavaScript
+- Provides side-by-side comparison between LOLA-authenticated and public responses
+- Opens results in new tabs for easy comparison
+- Works directly in any browser without additional tools
 
-```javascript
-function testActorWithAuth(actorId) {
-    const token = '{{ token_response.access_token }}';
-    const url = `/api/actors/${actorId}/?format=json`;
-    
-    fetch(url, {
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/activity+json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        // Display response with LOLA fields highlighted
-        showEnhancedResponse(data);
-    });
-}
-```
-
-#### 4. Educational Content
+#### 3. Educational Content
 - OAuth 2.0 flow explanation
 - Security implementation notes  
 - Common error scenarios and solutions
@@ -380,63 +368,140 @@ function testActorWithAuth(actorId) {
 
 ## Test Coverage
 
-The implementation includes comprehensive test coverage across 14 different authentication scenarios in `testbed/core/tests/test_api.py`.
+The implementation includes comprehensive test coverage across multiple test files in `testbed/core/tests/` using pytest and factory-based testing patterns.
 
-### Test Categories
+### Test Structure
 
-#### 1. Basic API Functionality (4 tests)
+#### Core Test Files
+- `test_api.py` - Complete LOLA authentication API testing with 12 authentication scenarios
+- `test_models.py` - Model validation and business logic testing
+- `test_json_ld_builders.py` - JSON-LD builder functionality testing
+- `test_json_ld_utils.py` - JSON-LD utility function testing
+- `test_activities.py` - Activity model and outbox integration testing
+- `conftest.py` - Shared fixtures and helper functions
+
+#### LOLA Authentication Test Categories
+
+**1. Basic API Functionality (4 tests)**
 - `test_actor_detail_api()` - Standard Actor endpoint functionality
 - `test_outbox_api_for_source_actor()` - Standard outbox functionality  
 - `test_actor_not_found()` - 404 error handling
 - `test_outbox_not_found()` - 404 error handling
 
-#### 2. Authentication States (3 tests)
+**2. Authentication States (3 tests)**
 - `test_actor_detail_unauthenticated_returns_basic_activitypub()` - Public response validation
 - `test_actor_detail_with_lola_scope_returns_enhanced_data()` - LOLA response validation
 - `test_actor_detail_with_basic_token_returns_basic_data()` - Non-LOLA authenticated response
 
-#### 3. Content Filtering (2 tests)
+**3. Content Filtering (2 tests)**
 - `test_outbox_content_filtering_by_authentication()` - Public vs private activity filtering
 - `test_side_by_side_authentication_comparison()` - Direct comparison of response differences
 
-#### 4. Error Handling (3 tests)
+**4. Error Handling (2 tests)**
 - `test_invalid_token_graceful_degradation()` - Invalid token handling
-- `test_malformed_authorization_header_handling()` - Malformed header tolerance
-- `test_url_parameter_authentication()` - Alternative authentication method
+- `test_malformed_authorization_header_handling()` - Malformed header tolerance with parameterized test cases
 
-#### 5. Technical Implementation (2 tests)
+**5. Technical Implementation (2 tests)**
+- `test_actor_detail_url_parameter_authentication()` - URL parameter authentication method
 - `test_content_type_headers_set_correctly()` - HTTP header validation
-- OAuth application and token fixture setup
 
-### Test Fixtures
+### Test Fixtures and Factories
 
-Comprehensive fixtures provide realistic testing scenarios:
+The test suite uses a factory-based approach with helper functions for creating isolated test data:
 
+#### Core Fixtures (`conftest.py`)
 ```python
 @pytest.fixture
-def oauth_application(self, db):
-    return Application.objects.create(
-        name="LOLA Test Application",
-        client_type=Application.CLIENT_CONFIDENTIAL,
-        authorization_grant_type=Application.GRANT_AUTHORIZATION_CODE,
-    )
+def user():
+    return UserOnlyFactory()
 
-@pytest.fixture  
-def lola_token(self, oauth_application, authenticated_user):
-    return AccessToken.objects.create(
-        user=authenticated_user,
-        application=oauth_application,
-        scope='activitypub_account_portability read write',
-        # Token with LOLA scope
+@pytest.fixture
+def actor():
+    user = UserOnlyFactory(username="fixture_test_user")
+    return Actor.objects.create(
+        user=user,
+        username="fixture_test_actor_source",
+        role=Actor.ROLE_SOURCE,
     )
 
 @pytest.fixture
-def basic_token(self, oauth_application, authenticated_user):
-    return AccessToken.objects.create(
-        user=authenticated_user,
-        application=oauth_application,
-        scope='read write',  # No LOLA scope
+def populated_source_actor():
+    source_actor = User.objects.create_user(
+        username=f"populate_test_user_{random.randint(1000, 9999)}",
+        email="populate_test@example.com",
+        password="testpass123"
+    ).actors.get(role=Actor.ROLE_SOURCE)
+    
+    populate_source_actor_outbox(
+        source_actor=source_actor,
+        num_notes=3,
+        include_local_interactions=True
     )
+    
+    return source_actor
+```
+
+#### Helper Functions
+```python
+def create_isolated_actor(username_prefix, role=None):
+    # Creates an actor without triggering signals for additional objects
+    role = role or Actor.ROLE_SOURCE
+    user = UserOnlyFactory(username=f"{username_prefix}_user")
+    return Actor.objects.create(
+        user=user,
+        username=f"{username_prefix}_actor",
+        role=role
+    )
+
+def create_isolated_remote_like(username_prefix="remote_like_test"):
+    # Creates a LikeActivity for a remote object with an isolated actor
+    actor = create_isolated_actor(username_prefix)
+    return LikeActivityFactory(
+        actor=actor,
+        note=None,
+        object_url=f"https://remote.example/notes/{random.randint(1000, 9999)}",
+        object_data={"content": "Remote note content"},
+        visibility="public"
+    )
+```
+
+#### OAuth Token Factories
+```python
+# From factories.py
+class AccessTokenFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = AccessToken
+    
+    user = factory.SubFactory(UserOnlyFactory)
+    application = factory.SubFactory(ApplicationFactory)
+    scope = 'read write'
+    
+    @factory.trait
+    def lola_scope(self):
+        self.scope = 'activitypub_account_portability read write'
+```
+
+#### Test Class Structure (`test_api.py`)
+```python
+class TestLOLAAuthenticationAPI:
+    LOLA_SCOPE = 'activitypub_account_portability read write'
+    BASIC_SCOPE = 'read write'
+    
+    def assert_basic_activitypub_structure(self, data, actor):
+        assert data["@context"] == build_actor_context()
+        assert data["type"] == "Person"
+        assert data["id"] == build_actor_id(actor.id)
+        assert data["preferredUsername"] == actor.username
+        
+    def assert_has_lola_fields(self, data, actor):
+        assert "accountPortabilityOauth" in data
+        assert data["accountPortabilityOauth"].endswith("/oauth/authorize/")
+        # ... additional LOLA field validations
+    
+    def get_authenticated_client(self, token):
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
+        return client
 ```
 
 ### Test Validation Examples
