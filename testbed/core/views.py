@@ -5,7 +5,7 @@ from django.shortcuts import redirect
 from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse, JsonResponse
-from .models import Actor, PortabilityOutbox
+from .models import Actor, PortabilityOutbox, Following, Followers
 from .json_ld_builders import build_actor_json_ld, build_outbox_json_ld
 from django.contrib.auth.decorators import login_required
 from testbed.core.utils.oauth_utils import (
@@ -240,6 +240,119 @@ def test_error_view(request):
     }
     
     return render(request, 'oauth2_provider/error.html', {'error': error})
+
+
+@api_view(['GET'])
+@authentication_classes([OptionalOAuth2Authentication])
+def following_collection(request, pk):
+    """
+    LOLA Following collection endpoint.
+    
+    Returns who an actor is currently following in ActivityPub OrderedCollection format.
+    Per LOLA spec: "The Following collection as per https://www.w3.org/TR/activitypub/#following 
+    SHOULD be provided on the Actor object when accessed with the account migration authorization token."
+    
+    Note: While the collection URL only appears in LOLA-authenticated Actor objects,
+    the collection itself follows standard ActivityPub public access patterns.
+    """
+    actor = get_object_or_404(Actor, pk=pk)
+    
+    # Get all active following relationships for this actor
+    following_qs = Following.objects.filter(
+        actor=actor, 
+        status=Following.STATUS_ACTIVE
+    ).order_by('-created_at')
+    
+    # Build the collection items
+    items = []
+    for following in following_qs:
+        if following.target_actor:
+            # Local actor - return full Actor object
+            from .json_ld_builders import build_actor_json_ld
+            items.append(build_actor_json_ld(following.target_actor))
+        else:
+            # Remote actor - return cached actor data with URL
+            actor_data = following.target_actor_data.copy() if following.target_actor_data else {}
+            actor_data['id'] = following.target_actor_url
+            items.append(actor_data)
+    
+    # Build ActivityPub OrderedCollection
+    collection_data = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OrderedCollection", 
+        "id": f"{request.scheme}://{request.get_host()}/api/actors/{pk}/following",
+        "totalItems": len(items),
+        "orderedItems": items
+    }
+    
+    response = Response(collection_data)
+    
+    # Set ActivityPub content-type for federation
+    if request.accepted_renderer.format == 'json':
+        response['Content-Type'] = 'application/activity+json'
+        response['Access-Control-Allow-Origin'] = '*'
+    
+    return response
+
+
+@api_view(['GET'])
+@authentication_classes([OptionalOAuth2Authentication])
+def followers_collection(request, pk):
+    """
+    LOLA Followers collection endpoint.
+    
+    Returns who is currently following an actor in ActivityPub OrderedCollection format.
+    This is privacy-sensitive data that requires LOLA scope authentication.
+    Per LOLA implementation: Followers collection requires account migration authorization token.
+    """
+    actor = get_object_or_404(Actor, pk=pk)
+    
+    # Check authentication - this collection requires LOLA scope
+    if not getattr(request, 'has_portability_scope', False):
+        return Response(
+            {
+                "error": "unauthorized",
+                "description": "This collection requires activitypub_account_portability scope"
+            },
+            status=401
+        )
+    
+    # Get all active follower relationships for this actor
+    followers_qs = Followers.objects.filter(
+        actor=actor,
+        status=Followers.STATUS_ACTIVE
+    ).order_by('-created_at')
+    
+    # Build the collection items
+    items = []
+    for follower in followers_qs:
+        if follower.follower_actor:
+            # Local actor - return full Actor object
+            from .json_ld_builders import build_actor_json_ld
+            items.append(build_actor_json_ld(follower.follower_actor))
+        else:
+            # Remote actor - return cached actor data with URL
+            actor_data = follower.follower_actor_data.copy() if follower.follower_actor_data else {}
+            actor_data['id'] = follower.follower_actor_url
+            items.append(actor_data)
+    
+    # Build ActivityPub OrderedCollection
+    collection_data = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OrderedCollection",
+        "id": f"{request.scheme}://{request.get_host()}/api/actors/{pk}/followers", 
+        "totalItems": len(items),
+        "orderedItems": items
+    }
+    
+    response = Response(collection_data)
+    
+    # Set ActivityPub content-type for federation
+    if request.accepted_renderer.format == 'json':
+        response['Content-Type'] = 'application/activity+json'
+        response['Access-Control-Allow-Origin'] = '*'
+    
+    return response
 
 
 @api_view(['GET'])
