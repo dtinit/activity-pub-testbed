@@ -20,6 +20,7 @@ from django.contrib import messages
 from django.urls import reverse
 import logging
 import requests
+from django.urls import reverse
 
 logger = logging.getLogger(__name__)
 
@@ -239,6 +240,45 @@ def test_error_view(request):
     }
     
     return render(request, 'oauth2_provider/error.html', {'error': error})
+
+
+@api_view(['GET'])
+def oauth_authorization_server_metadata(request):
+    """
+    RFC8414-compliant OAuth Authorization Server Metadata endpoint for LOLA discovery.
+    
+    This endpoint enables automatic LOLA discovery by destination servers.
+    Per LOLA specification: "ActivityPub servers supporting this specification SHOULD 
+    include the URL of their portability authorization endpoint in their authorization 
+    server metadata document [RFC8414] using the activitypub_account_portability parameter."
+    """
+    # Build the base URL dynamically from the request
+    scheme = request.scheme
+    host = request.get_host()
+    base_url = f"{scheme}://{host}"
+    
+    metadata = {
+        "issuer": base_url,
+        "authorization_endpoint": f"{base_url}{reverse('oauth2_provider:authorize')}",
+        "token_endpoint": f"{base_url}{reverse('oauth2_provider:token')}",
+        "scopes_supported": [
+            "read", 
+            "write",
+            "activitypub_account_portability"
+        ],
+        "response_types_supported": [
+            "code"
+        ],
+        "grant_types_supported": [
+            "authorization_code"
+        ],
+        # LOLA-specific parameter for account portability endpoint discovery
+        "activitypub_account_portability": f"{base_url}{reverse('oauth2_provider:authorize')}"
+    }
+    
+    response = JsonResponse(metadata)
+    response['Access-Control-Allow-Origin'] = '*'  # Enable federation
+    return response
 
 
 # Token Exchange View
