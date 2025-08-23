@@ -123,13 +123,54 @@ Two core ActivityPub endpoints have been enhanced with LOLA authentication suppo
   
   // LOLA-specific fields (only with portability scope)
   "accountPortabilityOauth": "https://example.com/oauth/authorize/",
+  "following": "https://example.com/actors/1/following",
+  "followers": "https://example.com/actors/1/followers",
   "content": "https://example.com/actors/1/content",
   "blocked": "https://example.com/actors/1/blocked", 
   "migration": "https://example.com/actors/1/outbox"
 }
 ```
 
-### 2. Portability Outbox Endpoint
+### 2. LOLA Collections Endpoints
+
+**Following Collection**: `testbed/core/views.py` - `following_collection()`  
+**URL Pattern**: `/api/actors/{pk}/following`
+
+**Followers Collection**: `testbed/core/views.py` - `followers_collection()`  
+**URL Pattern**: `/api/actors/{pk}/followers`
+
+#### Two-Tier Privacy Model
+
+| Collection | Discovery | Access |
+|------------|-----------|--------|
+| Following | LOLA-gated | Public once discovered |
+| Followers | LOLA-gated | LOLA-gated |
+
+**Following Collection**: Public access once URL is discovered (follows ActivityPub standard)
+**Followers Collection**: LOLA authentication required for both discovery and access (privacy-sensitive data)
+
+#### Response Format
+
+```json
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "OrderedCollection", 
+  "id": "https://example.com/actors/1/following",
+  "totalItems": 42,
+  "items": [
+    // Local relationships: Full Actor objects
+    {
+      "type": "Person",
+      "id": "https://example.com/actors/2",
+      "preferredUsername": "localuser"
+    },
+    // Remote relationships: URL strings with cached data
+    "https://remote.example/users/remoteuser"
+  ]
+}
+```
+
+### 3. Portability Outbox Endpoint
 
 **Location**: `testbed/core/views.py` - `portability_outbox_detail()`  
 **URL Pattern**: `/api/actors/{pk}/outbox`
@@ -828,3 +869,17 @@ This maintains semantic compatibility while adding LOLA-specific vocabularies.
 - Interactive testing interface for manual verification
 - URL parameter authentication for easy template-based testing
 - Visual highlighting of LOLA-specific fields in responses
+
+## Related Documentation
+
+### LOLA Implementation Documentation
+- [LOLA Discovery System](lola-discovery.md) - RFC8414 discovery endpoint and federation requirements
+- [LOLA Collections Implementation](lola-collections.md) - Following/Followers collections with authentication patterns
+
+### Core OAuth Documentation
+- [OAuth Overview](oauth/overview.md) - High-level OAuth 2.0 implementation overview
+- [Phase 1: Registration and Application Setup](oauth/phase-1-registration-and-application-setup.md)
+- [Phase 2: Authorization Request and User Consent](oauth/phase-2-authorization-request-and-user-consent.md)
+- [Phase 3: Authorization Code and Callback Handling](oauth/phase-3-authorization-code-and-callback-handling.md)
+- [Phase 4: Token Exchange](oauth/phase-4-token-exchange.md)
+- [Phase 5: Protected Resource Access](oauth/phase-5-protected-resource-access.md)
