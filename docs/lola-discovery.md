@@ -43,7 +43,7 @@ Per RFC8414, the following fields are included:
 | `issuer` | Authorization server identifier | `"https://server.example"` |
 | `authorization_endpoint` | OAuth authorization URL | `"https://server.example/oauth/authorize/"` |
 | `token_endpoint` | OAuth token exchange URL | `"https://server.example/oauth/token/"` |
-| `scopes_supported` | Array of supported scopes | `["read", "write", "activitypub_account_portability"]` |
+| `scopes_supported` | Array of supported scopes | `["activitypub_account_portability"]` |
 | `response_types_supported` | Supported response types | `["code"]` |
 | `grant_types_supported` | Supported grant types | `["authorization_code"]` |
 
@@ -70,8 +70,6 @@ def oauth_authorization_server_metadata(request):
         "authorization_endpoint": f"{base_url}{reverse('oauth2_provider:authorize')}",
         "token_endpoint": f"{base_url}{reverse('oauth2_provider:token')}",
         "scopes_supported": [
-            "read", 
-            "write",
             "activitypub_account_portability"
         ],
         "response_types_supported": ["code"],
@@ -114,8 +112,6 @@ The `activitypub_account_portability` scope is included in `scopes_supported`:
 ```json
 {
   "scopes_supported": [
-    "read",
-    "write", 
     "activitypub_account_portability"
   ]
 }
@@ -151,8 +147,6 @@ curl https://source.example/.well-known/oauth-authorization-server
   "authorization_endpoint": "https://source.example/oauth/authorize/",
   "token_endpoint": "https://source.example/oauth/token/",
   "scopes_supported": [
-    "read",
-    "write", 
     "activitypub_account_portability"
   ],
   "response_types_supported": ["code"],

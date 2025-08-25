@@ -375,8 +375,6 @@ def oauth_authorization_server_metadata(request):
         "authorization_endpoint": f"{base_url}{reverse('oauth2_provider:authorize')}",
         "token_endpoint": f"{base_url}{reverse('oauth2_provider:token')}",
         "scopes_supported": [
-            "read", 
-            "write",
             "activitypub_account_portability"
         ],
         "response_types_supported": [
