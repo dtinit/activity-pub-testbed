@@ -4,7 +4,7 @@ from rest_framework import status
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from oauth2_provider.models import Application, AccessToken
-from testbed.core.models import Actor
+from testbed.core.models import Actor, Following, Followers
 from testbed.core.factories import ActorFactory, ApplicationFactory, AccessTokenFactory
 from testbed.core.tests.conftest import create_isolated_actor
 from testbed.core.json_ld_utils import (
@@ -312,3 +312,340 @@ class TestLOLAAuthenticationAPI:
         # Should still have LOLA fields
         data = response.data
         assert "accountPortabilityOauth" in data
+
+
+# LOLA Discovery Endpoint Tests
+
+"""
+Tests for .well-known/oauth-authorization-server endpoint
+RFC8414-compliant OAuth Authorization Server Metadata with LOLA extensions
+"""
+class TestLOLADiscoveryEndpoint:
+
+    @pytest.mark.django_db
+    def test_oauth_discovery_endpoint_returns_valid_metadata(self):
+        """Validate that discovery endpoint returns RFC8414-compliant OAuth metadata"""
+        client = APIClient()
+        
+        response = client.get('/.well-known/oauth-authorization-server')
+        
+        assert response.status_code == status.HTTP_200_OK
+        assert response['Content-Type'] == 'application/json'
+        assert response['Access-Control-Allow-Origin'] == '*'
+        
+        data = response.json()
+        
+        # Check required OAuth metadata fields
+        required_fields = [
+            'issuer', 'authorization_endpoint', 'token_endpoint',
+            'scopes_supported', 'response_types_supported', 'grant_types_supported'
+        ]
+        
+        for field in required_fields:
+            assert field in data, f"Missing required OAuth field: {field}"
+    
+    @pytest.mark.django_db
+    def test_discovery_includes_lola_scope_and_endpoint(self):
+        """Verify LOLA-specific parameters are included for account portability discovery"""
+        client = APIClient()
+        
+        response = client.get('/.well-known/oauth-authorization-server')
+        data = response.json()
+        
+        # LOLA scope should be supported
+        assert 'activitypub_account_portability' in data['scopes_supported']
+        
+        # LOLA endpoint parameter should be present
+        assert 'activitypub_account_portability' in data
+        assert data['activitypub_account_portability'].endswith('/oauth/authorize/')
+    
+    @pytest.mark.django_db
+    def test_discovery_endpoint_urls_are_absolute(self):
+        """Ensure all URLs in discovery response are absolute for federation compatibility"""
+        client = APIClient()
+        
+        response = client.get('/.well-known/oauth-authorization-server')
+        data = response.json()
+        
+        # All URL fields must be absolute for proper federation
+        url_fields = ['issuer', 'authorization_endpoint', 'token_endpoint', 'activitypub_account_portability']
+        
+        for field in url_fields:
+            url = data[field]
+            assert url.startswith('http'), f"{field} should be absolute URL: {url}"
+
+
+# LOLA Following Collection Tests
+
+"""
+Tests for Following collection endpoint with public access
+Following collection is publicly accessible per ActivityPub spec
+"""
+class TestFollowingCollectionEndpoint:
+
+    # Create test actors and following relationships
+    def setup_following_data(self):
+        source_actor = create_isolated_actor("following_source")
+        target_actor1 = create_isolated_actor("following_target1") 
+        target_actor2 = create_isolated_actor("following_target2")
+        
+        # Create active following relationships
+        Following.objects.create(
+            actor=source_actor,
+            target_actor=target_actor1,
+            status=Following.STATUS_ACTIVE
+        )
+        
+        Following.objects.create(
+            actor=source_actor,
+            target_actor=target_actor2, 
+            status=Following.STATUS_ACTIVE
+        )
+        
+        # Create inactive following (should be excluded from collection)
+        Following.objects.create(
+            actor=source_actor,
+            target_actor=create_isolated_actor("inactive_target"),
+            status=Following.STATUS_INACTIVE
+        )
+        
+        return source_actor, target_actor1, target_actor2
+
+    # Verify Following collection returns proper ActivityPub OrderedCollection format
+    @pytest.mark.django_db
+    def test_following_collection_structure(self):
+        source_actor, target1, target2 = self.setup_following_data()
+        client = APIClient()
+        
+        response = client.get(reverse("following-collection", kwargs={"pk": source_actor.id}))
+        
+        assert response.status_code == status.HTTP_200_OK
+        
+        data = response.data
+        
+        # Validate ActivityPub OrderedCollection structure
+        assert data["@context"] == "https://www.w3.org/ns/activitystreams"
+        assert data["type"] == "OrderedCollection"
+        assert data["id"].endswith(f"/actors/{source_actor.id}/following")
+        assert "totalItems" in data
+        assert "orderedItems" in data
+        
+        # Should only include active following relationships
+        assert data["totalItems"] == 2
+        assert len(data["orderedItems"]) == 2
+
+    # Validate that Following collection includes full Actor objects for local actors
+    @pytest.mark.django_db
+    def test_following_collection_includes_actor_objects(self):
+        source_actor, target1, target2 = self.setup_following_data()
+        client = APIClient()
+        
+        response = client.get(reverse("following-collection", kwargs={"pk": source_actor.id}))
+        data = response.data
+        
+        # Each item should be a complete Actor object
+        for item in data["orderedItems"]:
+            assert item["type"] == "Person"
+            assert "id" in item
+            assert "preferredUsername" in item
+            assert "name" in item
+
+    # Test Following collection handles empty state properly
+    @pytest.mark.django_db
+    def test_following_collection_empty_when_no_follows(self):        
+        actor_with_no_follows = create_isolated_actor("no_follows")
+        client = APIClient()
+        
+        response = client.get(reverse("following-collection", kwargs={"pk": actor_with_no_follows.id}))
+        
+        assert response.status_code == status.HTTP_200_OK
+        
+        data = response.data
+        assert data["totalItems"] == 0
+        assert data["orderedItems"] == []
+
+    # Verify proper ActivityPub headers for federation compatibility
+    @pytest.mark.django_db
+    def test_following_collection_federation_headers(self):
+        source_actor = create_isolated_actor("federation_test")
+        client = APIClient()
+        
+        response = client.get(reverse("following-collection", kwargs={"pk": source_actor.id}), {"format": "json"})
+        
+        assert response.status_code == status.HTTP_200_OK
+        # Should have proper ActivityPub content type and CORS for federation
+        assert response["Content-Type"] == "application/json"
+        assert response["Access-Control-Allow-Origin"] == "*"
+
+
+# LOLA Followers Collection Tests
+
+"""
+Tests for Followers collection endpoint with LOLA authentication requirement
+Followers collection is privacy-sensitive and requires LOLA scope
+"""
+class TestFollowersCollectionEndpoint:
+
+    # Create test actors and follower relationships
+    def setup_followers_data(self):
+        target_actor = create_isolated_actor("followers_target")
+        follower1 = create_isolated_actor("follower1")
+        follower2 = create_isolated_actor("follower2")
+        
+        # Create active follower relationships
+        Followers.objects.create(
+            actor=target_actor,
+            follower_actor=follower1,
+            status=Followers.STATUS_ACTIVE
+        )
+        
+        Followers.objects.create(
+            actor=target_actor,
+            follower_actor=follower2,
+            status=Followers.STATUS_ACTIVE
+        )
+        
+        # Create inactive follower (should be excluded)
+        Followers.objects.create(
+            actor=target_actor,
+            follower_actor=create_isolated_actor("inactive_follower"),
+            status=Followers.STATUS_INACTIVE
+        )
+        
+        return target_actor, follower1, follower2
+
+    # Verify Followers collection requires LOLA scope for access (privacy protection)
+    @pytest.mark.django_db
+    def test_followers_collection_requires_lola_authentication(self):
+        target_actor, follower1, follower2 = self.setup_followers_data()
+        client = APIClient()
+        
+        # Unauthenticated request should be denied
+        response = client.get(reverse("followers-collection", kwargs={"pk": target_actor.id}))
+        
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert "unauthorized" in response.data["error"]
+        assert "activitypub_account_portability" in response.data["description"]
+
+    # Test Followers collection access with proper LOLA authentication
+    @pytest.mark.django_db
+    def test_followers_collection_with_lola_token(self):
+        target_actor, follower1, follower2 = self.setup_followers_data()
+        lola_token = AccessTokenFactory(lola_scope=True)
+        
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
+        
+        response = client.get(reverse("followers-collection", kwargs={"pk": target_actor.id}))
+        
+        assert response.status_code == status.HTTP_200_OK
+        
+        data = response.data
+        
+        # Validate ActivityPub OrderedCollection structure
+        assert data["@context"] == "https://www.w3.org/ns/activitystreams"
+        assert data["type"] == "OrderedCollection"
+        assert data["id"].endswith(f"/actors/{target_actor.id}/followers")
+        
+        # Should show active followers only
+        assert data["totalItems"] == 2
+        assert len(data["orderedItems"]) == 2
+
+    # Verify that non-LOLA OAuth tokens are rejected (scope validation)
+    @pytest.mark.django_db
+    def test_followers_collection_rejects_basic_oauth_token(self):
+        target_actor, follower1, follower2 = self.setup_followers_data()
+        basic_token = AccessTokenFactory(scope='read write')  # No LOLA scope
+        
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {basic_token.token}')
+        
+        response = client.get(reverse("followers-collection", kwargs={"pk": target_actor.id}))
+        
+        # Should be denied even with valid OAuth token (wrong scope)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    # Validate Followers collection includes full Actor objects for local followers
+    @pytest.mark.django_db
+    def test_followers_collection_includes_complete_actor_data(self): 
+        target_actor, follower1, follower2 = self.setup_followers_data()
+        lola_token = AccessTokenFactory(lola_scope=True)
+        
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
+        
+        response = client.get(reverse("followers-collection", kwargs={"pk": target_actor.id}))
+        data = response.data
+        
+        # Each follower should be represented as a complete Actor object
+        for item in data["orderedItems"]:
+            assert item["type"] == "Person"
+            assert "id" in item
+            assert "preferredUsername" in item
+            assert "name" in item
+
+
+# LOLA Collection Discovery Tests
+
+"""
+Tests for LOLA collection URL discovery via Actor endpoint
+Following/Followers URLs only appear in LOLA-authenticated Actor responses
+"""
+class TestLOLACollectionDiscovery:
+
+    # Verify Following/Followers URLs only appear in LOLA-authenticated Actor responses
+    @pytest.mark.django_db
+    def test_collection_urls_appear_only_with_lola_auth(self):
+        actor = create_isolated_actor("discovery_test")
+        lola_token = AccessTokenFactory(lola_scope=True)
+        
+        # Public request should not show collection URLs
+        public_client = APIClient()
+        public_response = public_client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
+        public_data = public_response.data
+        
+        assert "following" not in public_data
+        assert "followers" not in public_data
+        
+        # LOLA-authenticated request should show collection URLs
+        lola_client = APIClient()
+        lola_client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
+        lola_response = lola_client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
+        lola_data = lola_response.data
+        
+        assert "following" in lola_data
+        assert "followers" in lola_data
+        assert lola_data["following"].endswith(f"/actors/{actor.id}/following")
+        assert lola_data["followers"].endswith(f"/actors/{actor.id}/followers")
+
+    # Validate that collection discovery demonstrates LOLA's privacy-first approach
+    @pytest.mark.django_db
+    def test_collection_discovery_demonstrates_lola_privacy_model(self):
+        actor = create_isolated_actor("privacy_demo")
+        lola_token = AccessTokenFactory(lola_scope=True)
+        basic_token = AccessTokenFactory(scope='read write')
+        
+        # Test three authentication states
+        clients = [
+            ("public", APIClient()),
+            ("basic_oauth", APIClient()),
+            ("lola_oauth", APIClient())
+        ]
+        
+        # Set up authentication
+        clients[1][1].credentials(HTTP_AUTHORIZATION=f'Bearer {basic_token.token}')
+        clients[2][1].credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
+        
+        # Test each authentication level
+        for auth_type, client in clients:
+            response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
+            data = response.data
+            
+            if auth_type == "lola_oauth":
+                # Only LOLA authentication should reveal collection URLs
+                assert "following" in data
+                assert "followers" in data
+            else:
+                # Public and basic OAuth should not see collection URLs
+                assert "following" not in data
+                assert "followers" not in data

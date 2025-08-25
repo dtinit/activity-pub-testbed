@@ -208,6 +208,158 @@ class Note(models.Model):
     def __str__(self):
         return f"Note by {self.actor.user.username}: {self.content[:30]}"
 
+class Following(models.Model):
+    """
+    LOLA Following collection model representing current relationship state.
+    
+    Per LOLA spec: "The Following collection as per https://www.w3.org/TR/activitypub/#following 
+    SHOULD be provided on the Actor object when accessed with the account migration authorization token."
+    
+    This model tracks who an actor is currently following, supporting both local and remote actors.
+    Unlike FollowActivity which represents historical events, this represents current state.
+    """
+    STATUS_ACTIVE = "active"
+    STATUS_INACTIVE = "inactive"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_INACTIVE, "Inactive"),
+    ]
+    
+    # The actor doing the following
+    actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="following_relationships")
+    
+    # Local actor being followed (for same-server relationships)
+    target_actor = models.ForeignKey(
+        Actor,
+        on_delete=models.CASCADE,
+        related_name="followed_by_relationships",
+        null=True,
+        blank=True
+    )
+    
+    # Remote actor being followed (for federation)
+    target_actor_url = models.URLField(
+        max_length=500,
+        help_text="ActivityPub Actor URL for remote follows",
+        null=True,
+        blank=True
+    )
+    target_actor_data = models.JSONField(
+        help_text="Cached metadata of the followed remote actor",
+        null=True,
+        blank=True,
+    )
+    
+    # Relationship state and metadata
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['actor', 'target_actor'],
+                name='unique_local_following',
+                condition=models.Q(target_actor__isnull=False)
+            ),
+            models.UniqueConstraint(
+                fields=['actor', 'target_actor_url'],
+                name='unique_remote_following',
+                condition=models.Q(target_actor_url__isnull=False)
+            )
+        ]
+    
+    def clean(self):
+        super().clean()
+        # Ensure exactly one target is specified (either local actor or remote URL+data)
+        if not self.target_actor and not (self.target_actor_url and self.target_actor_data):
+            raise ValidationError("Either local target_actor or remote actor data (URL and metadata) must be provided")
+        if self.target_actor and self.target_actor_url:
+            raise ValidationError("Cannot specify both local target_actor and remote target_actor_url")
+    
+    def __str__(self):
+        if self.target_actor:
+            return f'{self.actor.username} follows {self.target_actor.username} (local)'
+        username = self.target_actor_data.get('preferredUsername', 'unknown') if self.target_actor_data else 'unknown'
+        return f'{self.actor.username} follows {username} (remote)'
+
+
+class Followers(models.Model):
+    """
+    LOLA Followers collection model representing current follower state.
+    
+    This is privacy-sensitive data that requires LOLA scope authentication.
+    Per LOLA implementation: Followers collection requires account migration authorization token.
+    
+    This model tracks who is currently following an actor, supporting both local and remote followers.
+    Unlike FollowActivity which represents historical events, this represents current state.
+    """
+    STATUS_ACTIVE = "active"
+    STATUS_INACTIVE = "inactive"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_INACTIVE, "Inactive"),
+    ]
+    
+    # The actor being followed
+    actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="follower_relationships")
+    
+    # Local actor doing the following (for same-server relationships)
+    follower_actor = models.ForeignKey(
+        Actor,
+        on_delete=models.CASCADE,
+        related_name="following_others_relationships",
+        null=True,
+        blank=True
+    )
+    
+    # Remote actor doing the following (for federation)
+    follower_actor_url = models.URLField(
+        max_length=500,
+        help_text="ActivityPub Actor URL for remote followers",
+        null=True,
+        blank=True
+    )
+    follower_actor_data = models.JSONField(
+        help_text="Cached metadata of the remote follower actor",
+        null=True,
+        blank=True,
+    )
+    
+    # Relationship state and metadata  
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['actor', 'follower_actor'],
+                name='unique_local_follower',
+                condition=models.Q(follower_actor__isnull=False)
+            ),
+            models.UniqueConstraint(
+                fields=['actor', 'follower_actor_url'],
+                name='unique_remote_follower',
+                condition=models.Q(follower_actor_url__isnull=False)
+            )
+        ]
+    
+    def clean(self):
+        super().clean()
+        # Ensure exactly one follower is specified (either local actor or remote URL+data)
+        if not self.follower_actor and not (self.follower_actor_url and self.follower_actor_data):
+            raise ValidationError("Either local follower_actor or remote actor data (URL and metadata) must be provided")
+        if self.follower_actor and self.follower_actor_url:
+            raise ValidationError("Cannot specify both local follower_actor and remote follower_actor_url")
+    
+    def __str__(self):
+        if self.follower_actor:
+            return f'{self.follower_actor.username} follows {self.actor.username} (local)'
+        username = self.follower_actor_data.get('preferredUsername', 'unknown') if self.follower_actor_data else 'unknown'
+        return f'{username} follows {self.actor.username} (remote)'
+
+
 class PortabilityOutbox(models.Model):
     actor = models.OneToOneField(
         Actor, on_delete=models.CASCADE, related_name="portability_outbox"

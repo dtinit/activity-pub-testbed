@@ -10,6 +10,8 @@ from testbed.core.models import (
     LikeActivity,
     FollowActivity,
     PortabilityOutbox,
+    Following,
+    Followers,
 )
 
 # Base factory for creating Users without associated actors
@@ -131,6 +133,67 @@ class PortabilityOutboxFactory(DjangoModelFactory):
                 visibility="public"
             )
             self.add_activity(activity)
+
+
+# Factory for Following relationship model (current state, not historical activities)
+class FollowingFactory(DjangoModelFactory):
+    class Meta:
+        model = Following
+
+    actor = factory.SubFactory(ActorFactory)
+    target_actor = factory.SubFactory(ActorFactory)
+    status = Following.STATUS_ACTIVE
+    
+    # For local relationships, leave remote fields empty
+    target_actor_url = None
+    target_actor_data = None
+
+    class Params:
+        # Trait for remote following relationships
+        remote = factory.Trait(
+            target_actor=None,
+            target_actor_url=factory.Sequence(lambda n: f"https://remote.example/users/user_{n}"),
+            target_actor_data=factory.Dict({
+                'preferredUsername': factory.Faker('user_name'),
+                'name': factory.Faker('name'),
+                'type': 'Person'
+            })
+        )
+        
+        # Trait for inactive relationships
+        inactive = factory.Trait(
+            status=Following.STATUS_INACTIVE
+        )
+
+# Factory for Followers relationship model (current state, not historical activities)
+class FollowersFactory(DjangoModelFactory):
+    class Meta:
+        model = Followers
+
+    actor = factory.SubFactory(ActorFactory)
+    follower_actor = factory.SubFactory(ActorFactory)
+    status = Followers.STATUS_ACTIVE
+    
+    # For local relationships, leave remote fields empty
+    follower_actor_url = None
+    follower_actor_data = None
+
+    class Params:
+        # Trait for remote follower relationships
+        remote = factory.Trait(
+            follower_actor=None,
+            follower_actor_url=factory.Sequence(lambda n: f"https://remote.example/users/follower_{n}"),
+            follower_actor_data=factory.Dict({
+                'preferredUsername': factory.Faker('user_name'),
+                'name': factory.Faker('name'),
+                'type': 'Person'
+            })
+        )
+        
+        # Trait for inactive relationships
+        inactive = factory.Trait(
+            status=Followers.STATUS_INACTIVE
+        )
 
 # OAuth-related factories for testing authentication
 class ApplicationFactory(DjangoModelFactory):

@@ -17,10 +17,17 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
+from testbed.core.views import oauth_authorization_server_metadata
 
 urlpatterns = [
     # Admin Panel
     path("admin/", admin.site.urls),
+    # LOLA Discovery: RFC8414-compliant OAuth Authorization Server Metadata (root level for federation)
+    path(
+        ".well-known/oauth-authorization-server",
+        oauth_authorization_server_metadata,
+        name="oauth-server-metadata",
+    ),
     # API-specific endpoints (prefixed with '/api/')
     path("api/", include("testbed.core.urls.api_urls")),
     # allauth

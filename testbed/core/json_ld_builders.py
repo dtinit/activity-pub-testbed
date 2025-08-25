@@ -31,8 +31,6 @@ def build_actor_json_ld(actor, auth_context=None):
         # Standard ActivityPub collections
         "inbox": f"{build_actor_id(actor.id)}/inbox",
         "outbox": f"{build_actor_id(actor.id)}/outbox",
-        "followers": f"{build_actor_id(actor.id)}/followers",
-        "following": f"{build_actor_id(actor.id)}/following",
         "previously": actor.previously or [], # Ensure it's always a list
     }
     
@@ -41,7 +39,11 @@ def build_actor_json_ld(actor, auth_context=None):
         # Required LOLA discovery field
         actor_data["accountPortabilityOauth"] = build_oauth_endpoint_url(auth_context['request'])
         
-        # Optional LOLA discovery fields
+        # LOLA social collections (privacy-sensitive relationship data)
+        actor_data["followers"] = f"{build_actor_id(actor.id)}/followers"
+        actor_data["following"] = f"{build_actor_id(actor.id)}/following"
+        
+        # Additional LOLA discovery fields
         actor_data["content"] = f"{build_actor_id(actor.id)}/content"
         actor_data["blocked"] = f"{build_actor_id(actor.id)}/blocked"
         actor_data["migration"] = f"{build_actor_id(actor.id)}/outbox"
