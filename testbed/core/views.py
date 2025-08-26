@@ -263,13 +263,20 @@ def following_collection(request, pk):
         status=Following.STATUS_ACTIVE
     ).order_by('-created_at')
     
+    # Create authentication context for nested Actor objects
+    auth_context = {
+        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
+        'has_portability_scope': getattr(request, 'has_portability_scope', False),
+        'request': request
+    }
+    
     # Build the collection items
     items = []
     for following in following_qs:
         if following.target_actor:
-            # Local actor - return full Actor object
+            # Local actor - return full Actor object with dynamic URLs
             from .json_ld_builders import build_actor_json_ld
-            items.append(build_actor_json_ld(following.target_actor))
+            items.append(build_actor_json_ld(following.target_actor, auth_context))
         else:
             # Remote actor - return cached actor data with URL
             actor_data = following.target_actor_data.copy() if following.target_actor_data else {}
@@ -323,13 +330,20 @@ def followers_collection(request, pk):
         status=Followers.STATUS_ACTIVE
     ).order_by('-created_at')
     
+    # Create authentication context for nested Actor objects
+    auth_context = {
+        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
+        'has_portability_scope': getattr(request, 'has_portability_scope', False),
+        'request': request
+    }
+    
     # Build the collection items
     items = []
     for follower in followers_qs:
         if follower.follower_actor:
-            # Local actor - return full Actor object
+            # Local actor - return full Actor object with dynamic URLs
             from .json_ld_builders import build_actor_json_ld
-            items.append(build_actor_json_ld(follower.follower_actor))
+            items.append(build_actor_json_ld(follower.follower_actor, auth_context))
         else:
             # Remote actor - return cached actor data with URL
             actor_data = follower.follower_actor_data.copy() if follower.follower_actor_data else {}
