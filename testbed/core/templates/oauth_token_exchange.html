@@ -76,6 +76,14 @@
       <div class="token-success">
         <h3>Access Token Received</h3>
         
+        {% if session_auth_enabled %}
+        <div class="authentication-status success">
+          <h4>🔐 Session Authentication Active</h4>
+          <p><strong>Great news!</strong> You are now automatically authenticated for LOLA collection testing!</p>
+          <p>Click any collection links below - no manual token handling required. This demonstrates the seamless demo experience.</p>
+        </div>
+        {% endif %}
+        
         <div class="token-details">
           <h4>Access Token:</h4>
           <pre class="token">{{ token_response.access_token }}</pre>
