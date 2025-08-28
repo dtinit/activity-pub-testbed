@@ -1,9 +1,12 @@
 import logging
+import base64
 from django.db import models
 from django.contrib.auth.models import User
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.conf import settings
 from datetime import timezone
+from cryptography.fernet import Fernet
 
 logger = logging.getLogger(__name__)
 
@@ -358,6 +361,103 @@ class Followers(models.Model):
             return f'{self.follower_actor.username} follows {self.actor.username} (local)'
         username = self.follower_actor_data.get('preferredUsername', 'unknown') if self.follower_actor_data else 'unknown'
         return f'{username} follows {self.actor.username} (remote)'
+
+
+class OAuthClientCredentials(models.Model):
+    """
+    Encrypted storage for OAuth client secrets to solve "Token Exchange Failed" issues.
+    
+    This replaces fragile session-based client secret storage with secure database storage.
+    Client secrets are encrypted using Django's SECRET_KEY and stored permanently,
+    eliminating dependency on session lifecycle for OAuth token exchange.
+    
+    Benefits:
+    - Solves "Raw client secret not found in session" errors
+    - Production-ready encrypted storage
+    - Works with existing OAuth applications
+    - No session dependency for token exchange
+    """
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="oauth_credentials")
+    encrypted_client_secret = models.TextField(
+        help_text="Client secret encrypted with Fernet using Django SECRET_KEY"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def _get_encryption_key(self):
+        """
+        Generate encryption key from Django SECRET_KEY.
+        
+        Uses first 32 bytes of SECRET_KEY (padded if necessary) to create
+        a valid Fernet key for symmetric encryption.
+        """
+        # Use Django's SECRET_KEY as the basis for encryption
+        key_material = settings.SECRET_KEY.encode('utf-8')
+        
+        # Fernet requires exactly 32 bytes, URL-safe base64 encoded
+        if len(key_material) < 32:
+            # Pad with zeros if SECRET_KEY is shorter than 32 bytes
+            key_material = key_material.ljust(32, b'0')
+        else:
+            # Use first 32 bytes if longer
+            key_material = key_material[:32]
+        
+        # Encode as URL-safe base64 (required by Fernet)
+        return base64.urlsafe_b64encode(key_material)
+    
+    def set_client_secret(self, raw_secret):
+        """
+        Encrypt and store client secret.
+        
+        Args:
+            raw_secret (str): The plain text client secret to encrypt and store
+        """
+        if not raw_secret:
+            raise ValueError("Client secret cannot be empty")
+            
+        # Create Fernet cipher with our encryption key
+        f = Fernet(self._get_encryption_key())
+        
+        # Encrypt the secret and store as base64 string
+        encrypted_bytes = f.encrypt(raw_secret.encode('utf-8'))
+        self.encrypted_client_secret = encrypted_bytes.decode('utf-8')
+        
+        logger.info(f"Encrypted client secret stored for user: {self.user.username}")
+    
+    def get_client_secret(self):
+        """
+        Decrypt and return client secret.
+        
+        Returns:
+            str: The decrypted plain text client secret
+        
+        Raises:
+            ValueError: If decryption fails or secret is invalid
+        """
+        if not self.encrypted_client_secret:
+            raise ValueError("No encrypted client secret stored")
+        
+        try:
+            # Create Fernet cipher with our encryption key
+            f = Fernet(self._get_encryption_key())
+            
+            # Decrypt the secret
+            encrypted_bytes = self.encrypted_client_secret.encode('utf-8')
+            decrypted_bytes = f.decrypt(encrypted_bytes)
+            
+            logger.debug(f"Client secret decrypted for user: {self.user.username}")
+            return decrypted_bytes.decode('utf-8')
+            
+        except Exception as e:
+            logger.error(f"Failed to decrypt client secret for user {self.user.username}: {str(e)}")
+            raise ValueError(f"Failed to decrypt client secret: {str(e)}")
+    
+    def __str__(self):
+        return f"OAuth credentials for {self.user.username}"
+    
+    class Meta:
+        verbose_name = "OAuth Client Credentials"
+        verbose_name_plural = "OAuth Client Credentials"
 
 
 class PortabilityOutbox(models.Model):

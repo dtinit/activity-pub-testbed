@@ -25,20 +25,21 @@ TOKEN_SCOPE_SESSION_KEY = 'lola_token_scope'
 # represents an ActivityPub service in the LOLA portability flow.
 def get_user_application(user, request=None):
     """
-    Get or create an OAuth application for a user.
+    Get or create an OAuth application for a user with encrypted client secret storage.
     
-    If request is provided, stores the raw client secret in the session
-    for later use in token exchange requests. For security reasons, the raw client secret
-    is never stored in the database, only the hashed version. We keep the raw version
-    in the session temporarily to enable token exchange in the OAuth flow.
+    This function now uses encrypted database storage for client secrets, solving the
+    "Token Exchange Failed" issue caused by fragile session-based storage. Client secrets
+    are always available for token exchange regardless of session state.
     
     Args:
         user: The user to get/create an application for
-        request: Optional request object with session for storing client secret
+        request: Optional request object (maintained for compatibility)
         
     Returns:
-        Application instance with raw_client_secret attribute if available
+        Application instance with raw_client_secret attribute always available
     """
+    from testbed.core.models import OAuthClientCredentials
+    
     # Check if user already has an application
     applications = Application.objects.filter(user=user)
     
@@ -50,31 +51,46 @@ def get_user_application(user, request=None):
             logger.warning(f"User {user.username} has multiple OAuth applications. Using the first one.")
         logger.info(f"Retrieved existing OAuth application for user {user.username}")
         
-        # Initialize the raw client secret attribute to None
-        application.raw_client_secret = None
+        # Try to get client secret from encrypted storage
+        try:
+            credentials = OAuthClientCredentials.objects.get(user=user)
+            application.raw_client_secret = credentials.get_client_secret()
+            logger.info(f"Retrieved encrypted client secret for user {user.username}")
+            
+        except OAuthClientCredentials.DoesNotExist:
+            logger.warning(f"No encrypted client credentials found for user {user.username}")
+            
+            # MIGRATION: Try session storage as fallback for existing users
+            if request and CLIENT_SECRET_SESSION_KEY in request.session:
+                client_secret = request.session[CLIENT_SECRET_SESSION_KEY]
+                logger.info(f"Migrating client secret from session to encrypted storage for user {user.username}")
+                
+                # Create encrypted credentials record
+                credentials = OAuthClientCredentials.objects.create(user=user)
+                credentials.set_client_secret(client_secret)
+                credentials.save()
+                
+                application.raw_client_secret = client_secret
+                logger.info(f"Successfully migrated client secret to encrypted storage")
+                
+                # Clean up session storage
+                request.session.pop(CLIENT_SECRET_SESSION_KEY, None)
+            else:
+                logger.error(f"No client secret available for user {user.username} - neither encrypted storage nor session")
+                application.raw_client_secret = None
         
-        # If we have the raw client secret in session, use it (needed for token exchange)
-        if request and CLIENT_SECRET_SESSION_KEY in request.session:
-            # Attach the raw client_secret as an attribute for token exchange
-            application.raw_client_secret = request.session[CLIENT_SECRET_SESSION_KEY]
-            logger.info("Using raw client secret from session for token exchange")
-        elif request:
-            logger.warning(f"Raw client secret not found in session for user {user.username}. This will prevent token exchange.")
-            # We could potentially implement a client secret recovery mechanism here if needed
+        except Exception as e:
+            logger.error(f"Error retrieving encrypted client secret for user {user.username}: {str(e)}")
+            application.raw_client_secret = None
             
         # Add client ID to the log for troubleshooting
         logger.info(f"Application details - Client ID: {application.client_id}, Has raw secret: {hasattr(application, 'raw_client_secret') and application.raw_client_secret is not None}")
         
         return application
     
-    # Generate credentials
+    # Generate credentials for new application
     client_id = random_client_id()
     client_secret = random_client_secret()
-    
-    # Store the raw client secret in session if request is provided
-    if request:
-        request.session[CLIENT_SECRET_SESSION_KEY] = client_secret
-        logger.info("Stored raw client secret in session for token exchange")
     
     # Create a new application with random credentials and ActivityPub-specific name
     logger.info(f"Creating new ActivityPub OAuth application for user {user.username}")
@@ -87,6 +103,19 @@ def get_user_application(user, request=None):
         client_type='confidential',
         authorization_grant_type='authorization-code'
     )
+    
+    # Store client secret in encrypted storage
+    try:
+        credentials = OAuthClientCredentials.objects.create(user=user)
+        credentials.set_client_secret(client_secret)
+        credentials.save()
+        logger.info(f"Stored client secret in encrypted storage for user {user.username}")
+    except Exception as e:
+        logger.error(f"Failed to store encrypted client secret for user {user.username}: {str(e)}")
+        # Fall back to session storage for this session
+        if request:
+            request.session[CLIENT_SECRET_SESSION_KEY] = client_secret
+            logger.info("Fallback: stored client secret in session")
     
     # Attach the raw client_secret as an attribute for token exchange
     application.raw_client_secret = client_secret

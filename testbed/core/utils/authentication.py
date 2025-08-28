@@ -146,6 +146,8 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         validates session tokens against the database to ensure they haven't been
         revoked and handles automatic cleanup of expired tokens.
         
+        Supports 'public_only' parameter to disable session auth for comparison demos.
+        
         Args:
             request: The HTTP request object
             
@@ -154,6 +156,11 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         """
         from oauth2_provider.models import AccessToken
         from testbed.core.utils.oauth_utils import get_token_from_session, clear_token_from_session
+        
+        # Check if public_only parameter is set (for demo comparison)
+        if request.GET.get('public_only'):
+            logger.debug("public_only parameter detected - skipping session authentication")
+            return None
         
         # Get token from session (this handles expiration checking)
         token_string = get_token_from_session(request)

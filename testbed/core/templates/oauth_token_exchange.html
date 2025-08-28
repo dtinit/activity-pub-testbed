@@ -79,7 +79,7 @@
         {% if session_auth_enabled %}
         <div class="authentication-status success">
           <h4>🔐 Session Authentication Active</h4>
-          <p><strong>Great news!</strong> You are now automatically authenticated for LOLA collection testing!</p>
+          <p>You are now automatically authenticated for LOLA collection testing!</p>
           <p>Click any collection links below - no manual token handling required. This demonstrates the seamless demo experience.</p>
         </div>
         {% endif %}
@@ -127,8 +127,9 @@
         <p><strong>Compare with public versions (no authentication):</strong></p>
         <div class="actor">
           <div>Username: {{ source_actor.username }} (Public)</div>
-          <div><a href="/api/actors/{{ source_actor.pk }}/?format=json" target="_blank">Details (basic ActivityPub)</a></div>
-          <div><a href="/api/actors/{{ source_actor.pk }}/outbox?format=json" target="_blank">Outbox (public only)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/?format=json&public_only=true" target="_blank">Details (basic ActivityPub)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/outbox?format=json&public_only=true" target="_blank">Outbox (public only)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/following/?format=json&public_only=true" target="_blank">Following Collection (public)</a></div>
         </div>
         
         <div class="expected-results">
