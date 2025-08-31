@@ -5,6 +5,7 @@ This document provides comprehensive documentation for the LOLA authentication s
 ## Table of Contents
 
 - [Overview](#overview)
+- [OAuth Client Credentials Encryption System](#oauth-client-credentials-encryption-system)
 - [OptionalOAuth2Authentication Class](#optionaloauth2authentication-class)
 - [Enhanced API Endpoints](#enhanced-api-endpoints)
 - [JSON-LD Builder System](#json-ld-builder-system)
@@ -25,6 +26,86 @@ The LOLA authentication system enables ActivityPub servers to support account po
 - **Privacy protection**: Private content only accessible with proper authentication
 - **Developer-friendly testing**: Interactive tools for testing authentication flows
 
+## OAuth Client Credentials Encryption System
+
+A production-grade encrypted storage system that solves persistent "Token Exchange Failed" errors by replacing fragile session-based client secret storage with secure database storage.
+
+### Purpose
+
+The `OAuthClientCredentials` model provides encrypted database storage for OAuth application credentials, eliminating dependency on session lifecycle for critical authentication infrastructure.
+
+### Problem Solved
+
+**"Token Exchange Failed" Errors**: Previously, client secrets were stored in Django sessions, causing failures when sessions expired, browsers were closed, or servers restarted. This architectural misalignment stored permanent application credentials in temporary session storage.
+
+### Implementation Details
+
+**Location**: `testbed/core/models.py` - `OAuthClientCredentials` class
+
+```python
+class OAuthClientCredentials(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="oauth_credentials")
+    encrypted_client_secret = models.TextField(
+        help_text="Client secret encrypted with Fernet using Django SECRET_KEY"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+```
+
+### Encryption Methods
+
+**Fernet Symmetric Encryption**: Uses industry-standard Fernet encryption from the cryptography library with Django SECRET_KEY derivation:
+
+```python
+def _get_encryption_key(self):
+    # Transform Django SECRET_KEY into valid Fernet key
+    key_material = settings.SECRET_KEY.encode('utf-8')
+    
+    # Ensure exactly 32 bytes (Fernet requirement)
+    if len(key_material) < 32:
+        key_material = key_material.ljust(32, b'0')  # Pad with zeros
+    else:
+        key_material = key_material[:32]  # Use first 32 bytes
+    
+    return base64.urlsafe_b64encode(key_material)
+
+def set_client_secret(self, raw_secret):
+    f = Fernet(self._get_encryption_key())
+    encrypted_bytes = f.encrypt(raw_secret.encode('utf-8'))
+    self.encrypted_client_secret = encrypted_bytes.decode('utf-8')
+
+def get_client_secret(self):
+    f = Fernet(self._get_encryption_key())
+    encrypted_bytes = self.encrypted_client_secret.encode('utf-8')
+    return f.decrypt(encrypted_bytes).decode('utf-8')
+```
+
+### Security Features
+
+- **Environment-Specific Encryption**: Each environment (development, CI, production) uses different SECRET_KEY, creating cryptographic isolation
+- **Database-Level Security**: Client secrets remain encrypted even with database access
+- **Automatic Migration**: Seamlessly transitions existing users from session to encrypted storage
+- **OneToOne Relationship**: Each user gets exactly one secure credential storage
+
+### Integration with OAuth Flow
+
+The encrypted storage integrates seamlessly with existing OAuth utilities in `testbed/core/utils/oauth_utils.py`:
+
+```python
+def get_user_application(user, request=None):
+    # Try to get client secret from encrypted storage
+    try:
+        credentials = OAuthClientCredentials.objects.get(user=user)
+        application.raw_client_secret = credentials.get_client_secret()
+    except OAuthClientCredentials.DoesNotExist:
+        # Migration: Move from session to encrypted storage
+        if request and CLIENT_SECRET_SESSION_KEY in request.session:
+            client_secret = request.session[CLIENT_SECRET_SESSION_KEY]
+            credentials = OAuthClientCredentials.objects.create(user=user)
+            credentials.set_client_secret(client_secret)
+            application.raw_client_secret = client_secret
+```
+
 ## OptionalOAuth2Authentication Class
 
 The core of the LOLA authentication system is the `OptionalOAuth2Authentication` class located in `testbed/core/utils/authentication.py`.
@@ -35,11 +116,67 @@ This authentication class enables endpoints to function in two distinct modes:
 1. **Unauthenticated Mode**: Standard ActivityPub federation (public data only)
 2. **Authenticated Mode**: LOLA account portability with enhanced data access
 
+### Three-Tier Authentication Chain
+
+The authentication system implements intelligent prioritization across three authentication methods:
+
+**Tier 1: Authorization Header (Production)**
+- Standard OAuth 2.0 RFC 6750 Bearer token authentication
+- Used by external ActivityPub servers and production API clients
+- Most explicit authentication method (highest priority)
+
+**Tier 2: URL Parameter (Testing)**
+- `?auth_token=TOKEN` parameter for development and testing convenience
+- Enables simple HTML link-based testing without JavaScript
+- Visible authentication method for debugging
+
+**Tier 3: Session Storage (Demo Enhancement)**
+- Automatic authentication using tokens stored in Django sessions
+- Seamless demo experience after successful OAuth completion
+- Implicit authentication method (lowest priority)
+
+### Authentication Method Implementation
+
+```python
+def authenticate(self, request):
+    # Initialize authentication flags
+    request.is_oauth_authenticated = False
+    request.has_portability_scope = False
+    
+    try:
+        # Tier 1: Authorization header (production)
+        result = super().authenticate(request)
+        
+        # Tier 2: URL parameter (testing)
+        if result is None:
+            result = self._authenticate_with_url_token(request)
+        
+        # Tier 3: Session storage (demo)
+        if result is None:
+            result = self._try_session_auth(request)
+        
+        # Process successful authentication
+        if result is not None:
+            user, token = result
+            request.is_oauth_authenticated = True
+            
+            if self._has_portability_scope(token):
+                request.has_portability_scope = True
+            
+            return user, token
+            
+    except exceptions.AuthenticationFailed:
+        # Graceful degradation: continue as unauthenticated
+        pass
+    
+    return None
+```
+
 ### Key Features
 
 - **Optional Authentication**: Unlike standard OAuth2Authentication, this doesn't fail requests without tokens
 - **Scope Validation**: Checks for `activitypub_account_portability` scope
-- **Multiple Auth Methods**: Supports both Authorization headers and URL parameters
+- **Multiple Auth Methods**: Supports header, URL parameter, and session authentication
 - **Request Flag Setting**: Adds authentication status flags to request objects
 - **Graceful Error Handling**: Invalid/expired tokens fall back to unauthenticated behavior
 
@@ -68,28 +205,166 @@ After authentication, the following flags are available on request objects:
 
 ### Authentication Methods
 
-#### 1. Authorization Header (Standard)
+#### 1. Authorization Header (Production)
 ```http
 GET /api/actors/1/ HTTP/1.1
 Authorization: Bearer your-oauth-token-here
 ```
 
-#### 2. URL Parameter (Testing Convenience)
+**Implementation**: Standard OAuth 2.0 RFC 6750 Bearer token authentication
+**Use Cases**: External ActivityPub servers, production API clients, federation
+**Priority**: Highest (Tier 1)
+
+#### 2. URL Parameter (Testing)
 ```http
 GET /api/actors/1/?auth_token=your-oauth-token-here HTTP/1.1
 ```
 
+**Implementation**: `_authenticate_with_url_token()` method validates URL parameter against OAuth database
+**Use Cases**: Development testing, debugging, educational demonstrations
+**Priority**: Medium (Tier 2)
+
 The URL parameter method enables simple `<a>` link testing in HTML templates without JavaScript.
+
+#### 3. Session Storage (Demo Enhancement)
+```http
+GET /api/actors/1/ HTTP/1.1
+Cookie: sessionid=abc123...
+```
+
+**Implementation**: `_try_session_auth()` method validates session-stored OAuth tokens
+**Use Cases**: Seamless demo experience, community education, conference presentations
+**Priority**: Lowest (Tier 3)
+
+**Session Authentication Flow**:
+1. User completes OAuth authorization and token exchange
+2. Access token automatically stored in Django session via `store_token_in_session()`
+3. Subsequent requests automatically authenticated via session without manual token handling
+4. Template shows "🔐 Session Authentication Active" status
+
+### Session Token Management
+
+**Location**: `testbed/core/utils/oauth_utils.py`
+
+#### Storage Functions
+
+```python
+def store_token_in_session(request, token_data):
+    # Store OAuth token in session after successful exchange
+    access_token = token_data.get('access_token')
+    expires_in = token_data.get('expires_in', 3600)
+    scope = token_data.get('scope', '')
+    
+    request.session[ACCESS_TOKEN_SESSION_KEY] = access_token
+    request.session[TOKEN_EXPIRY_SESSION_KEY] = (datetime.now() + timedelta(seconds=expires_in)).timestamp()
+    request.session[TOKEN_SCOPE_SESSION_KEY] = scope
+
+def get_token_from_session(request):
+    # Get valid OAuth token from session, None if expired or missing
+    token = request.session.get(ACCESS_TOKEN_SESSION_KEY)
+    if not token:
+        return None
+        
+    # Check expiration
+    expiry_timestamp = request.session.get(TOKEN_EXPIRY_SESSION_KEY)
+    if expiry_timestamp and datetime.now().timestamp() > expiry_timestamp:
+        clear_token_from_session(request)
+        return None
+    
+    return token
+
+def clear_token_from_session(request):
+    # Clear OAuth token data from session 
+    for key in [ACCESS_TOKEN_SESSION_KEY, TOKEN_EXPIRY_SESSION_KEY, TOKEN_SCOPE_SESSION_KEY]:
+        request.session.pop(key, None)
+```
+
+#### Session Authentication Implementation
+
+```python
+def _try_session_auth(self, request):
+    """
+    Try to authenticate using token stored in session (demo enhancement).
+    Supports 'public_only' parameter to disable session auth for comparison demos.
+    """
+    # Check if public_only parameter is set (for demo comparison)
+    if request.GET.get('public_only'):
+        return None
+    
+    # Get token from session (handles expiration checking)
+    token_string = get_token_from_session(request)
+    if not token_string:
+        return None
+        
+    # Validate against OAuth database
+    try:
+        access_token = AccessToken.objects.select_related('user', 'application').get(
+            token=token_string
+        )
+        
+        if access_token.is_valid():
+            return access_token.user, access_token
+        else:
+            clear_token_from_session(request)
+            return None
+            
+    except AccessToken.DoesNotExist:
+        clear_token_from_session(request)
+        return None
+```
+
+### Public/Authenticated Comparison System
+
+**public_only Parameter**: Enables demonstration comparisons between public and LOLA-authenticated responses:
+
+```python
+# Public response (bypasses session auth)
+GET /api/actors/1/?public_only=true
+
+# Authenticated response (uses session auth if available)  
+GET /api/actors/1/
+```
+
+**Template Integration**:
+```html
+<!-- Authenticated links -->
+<a href="/api/actors/{{ actor.pk }}/?format=json&auth_token={{ token }}" target="_blank">
+  Details (with LOLA fields)
+</a>
+
+<!-- Public comparison links -->
+<a href="/api/actors/{{ actor.pk }}/?format=json&public_only=true" target="_blank">
+  Details (basic ActivityPub)
+</a>
+```
+
+**Demonstration Value**: Users can see exactly what data is publicly available versus what requires LOLA scope authorization, demonstrating the privacy model effectively.
 
 ### Error Handling
 
-The class handles various authentication scenarios:
+The class handles various authentication scenarios across all three tiers:
 
+**Authorization Header (Tier 1):**
 - **Invalid tokens**: Continue as unauthenticated
 - **Expired tokens**: Continue as unauthenticated  
 - **Malformed headers**: Continue as unauthenticated
+
+**URL Parameter (Tier 2):**
+- **Invalid auth_token parameter**: Continue as unauthenticated
+- **Missing token in database**: Continue as unauthenticated
+
+**Session Storage (Tier 3):**
+- **Expired session tokens**: Automatically cleared and continue as unauthenticated
+- **Missing session data**: Continue as unauthenticated
+- **public_only parameter**: Bypass session auth for comparison demos
+
+**Scope Validation (All Tiers):**
 - **Missing scope**: Authenticated but without portability access
-- **Network errors**: Continue as unauthenticated
+- **Malformed scope**: Continue as unauthenticated
+
+**Network and System Errors:**
+- **Database connection errors**: Continue as unauthenticated
+- **Network timeouts**: Continue as unauthenticated
 
 ## Enhanced API Endpoints
 
@@ -710,9 +985,16 @@ except exceptions.AuthenticationFailed:
 
 ### 4. Session Management
 
-**Considerations:**
-- Client secrets temporarily stored in session for demo purposes
-- Production systems should use secure credential storage
+**Production-Grade Credential Storage:**
+- Client secrets stored in encrypted database using `OAuthClientCredentials` model
+- Session storage used only for access tokens in demo workflows
+- Environment-specific encryption with Django SECRET_KEY derivation
+- Automatic migration from legacy session-based credential storage
+
+**Session Token Security:**
+- Access tokens stored temporarily in sessions for demo convenience
+- Automatic expiration validation and cleanup
+- Session isolation prevents cross-user token access
 - Token refresh and cleanup handled by OAuth2 provider
 
 ### 5. CORS and Federation
