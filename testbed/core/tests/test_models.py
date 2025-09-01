@@ -1,7 +1,7 @@
 import pytest
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from testbed.core.models import Actor, Note, CreateActivity, LikeActivity, FollowActivity, PortabilityOutbox
+from testbed.core.models import Actor, Note, CreateActivity, LikeActivity, FollowActivity, PortabilityOutbox, Following, Followers
 from testbed.core.factories import (
     UserOnlyFactory,
     ActorFactory,
@@ -9,6 +9,8 @@ from testbed.core.factories import (
     CreateActivityFactory,
     LikeActivityFactory,
     FollowActivityFactory,
+    FollowingFactory,
+    FollowersFactory,
 )
 from testbed.core.tests.conftest import (
     create_isolated_actor,
@@ -208,3 +210,277 @@ def test_outbox_activity_addition():
     assert activities[0] in outbox.activities_create.all()
     assert activities[1] in outbox.activities_like.all()
     assert activities[2] in outbox.activities_follow.all()
+
+
+# LOLA Following Model Tests
+
+# Test basic Following relationship creation (local)
+def test_following_creation_local():
+    # Create isolated actors using helper functions
+    actor = create_isolated_actor("following_test")
+    target_actor = create_isolated_actor("target_test")
+    
+    # Create local following relationship using factory
+    following = FollowingFactory(actor=actor, target_actor=target_actor)
+    
+    assert following.actor == actor
+    assert following.target_actor == target_actor
+    assert following.status == Following.STATUS_ACTIVE
+    assert following.target_actor_url is None
+    assert following.target_actor_data is None
+
+# Test Following relationship creation (remote)
+def test_following_creation_remote():
+    # Create isolated actor using helper function
+    actor = create_isolated_actor("following_remote_test")
+    
+    # Create remote following relationship using factory trait
+    following = FollowingFactory.build(actor=actor, remote=True)
+    following.save()
+    
+    assert following.actor == actor
+    assert following.target_actor is None
+    assert following.target_actor_url.startswith("https://remote.example/users/")
+    assert following.target_actor_data["type"] == "Person"
+    assert "preferredUsername" in following.target_actor_data
+
+# Test Following model validation - requires exactly one target
+def test_following_validation_no_target():
+    # Create isolated actor using helper function
+    actor = create_isolated_actor("following_validation_test")
+    
+    # Create invalid following (no target_actor and no remote data)
+    following = Following(
+        actor=actor,
+        target_actor=None,
+        target_actor_url=None,
+        target_actor_data=None,
+        status=Following.STATUS_ACTIVE
+    )
+    
+    with pytest.raises(ValidationError):
+        following.clean()
+
+# Test Following model validation - cannot have both local and remote targets
+def test_following_validation_both_targets():
+    # Create isolated actors using helper functions
+    actor = create_isolated_actor("following_both_test")
+    target_actor = create_isolated_actor("target_both_test")
+    
+    # Create invalid following (both local and remote targets)
+    following = Following(
+        actor=actor,
+        target_actor=target_actor,
+        target_actor_url="https://remote.example/users/someone",
+        target_actor_data={"type": "Person", "preferredUsername": "someone"},
+        status=Following.STATUS_ACTIVE
+    )
+    
+    with pytest.raises(ValidationError):
+        following.clean()
+
+# Test Following string representation (local)
+def test_following_str_representation_local():
+    # Create isolated actors using helper functions
+    actor = create_isolated_actor("following_str_test")
+    target_actor = create_isolated_actor("target_str_test")
+    
+    following = FollowingFactory(actor=actor, target_actor=target_actor)
+    expected = f'{actor.username} follows {target_actor.username} (local)'
+    assert str(following) == expected
+
+# Test Following string representation (remote)
+def test_following_str_representation_remote():
+    # Create isolated actor using helper function
+    actor = create_isolated_actor("following_str_remote_test")
+    
+    following = FollowingFactory.build(actor=actor, remote=True)
+    following.save()
+    username = following.target_actor_data.get('preferredUsername', 'unknown')
+    expected = f'{actor.username} follows {username} (remote)'
+    assert str(following) == expected
+
+# Test Following unique constraint for local relationships
+def test_following_unique_constraint_local():
+    # Create isolated actors using helper functions
+    actor = create_isolated_actor("following_unique_test")
+    target_actor = create_isolated_actor("target_unique_test")
+    
+    # Create first following relationship
+    first_following = FollowingFactory(actor=actor, target_actor=target_actor)
+    
+    # Try to create duplicate - should raise IntegrityError on save
+    from django.db import IntegrityError
+    with pytest.raises(IntegrityError):
+        FollowingFactory(actor=actor, target_actor=target_actor)
+
+# Test Following unique constraint for remote relationships  
+def test_following_unique_constraint_remote():
+    # Create isolated actor using helper function
+    actor = create_isolated_actor("following_unique_remote_test")
+    remote_url = "https://remote.example/users/unique_test"
+    
+    # Create first remote following relationship
+    first_following = FollowingFactory.build(actor=actor, remote=True)
+    first_following.target_actor_url = remote_url
+    first_following.save()
+    
+    # Try to create duplicate - should raise IntegrityError on save
+    from django.db import IntegrityError
+    with pytest.raises(IntegrityError):
+        second_following = FollowingFactory.build(actor=actor, remote=True)
+        second_following.target_actor_url = remote_url
+        second_following.save()
+
+
+# LOLA Followers Model Tests
+
+# Test basic Followers relationship creation (local)
+def test_followers_creation_local():
+    # Create isolated actors using helper functions
+    actor = create_isolated_actor("followers_test")
+    follower_actor = create_isolated_actor("follower_test")
+    
+    # Create local followers relationship using factory
+    followers = FollowersFactory(actor=actor, follower_actor=follower_actor)
+    
+    assert followers.actor == actor
+    assert followers.follower_actor == follower_actor
+    assert followers.status == Followers.STATUS_ACTIVE
+    assert followers.follower_actor_url is None
+    assert followers.follower_actor_data is None
+
+# Test Followers relationship creation (remote)
+def test_followers_creation_remote():
+    # Create isolated actor using helper function
+    actor = create_isolated_actor("followers_remote_test")
+    
+    # Create remote followers relationship using factory trait
+    followers = FollowersFactory.build(actor=actor, remote=True)
+    followers.save()
+    
+    assert followers.actor == actor
+    assert followers.follower_actor is None
+    assert followers.follower_actor_url.startswith("https://remote.example/users/")
+    assert followers.follower_actor_data["type"] == "Person"
+    assert "preferredUsername" in followers.follower_actor_data
+
+# Test Followers model validation - requires exactly one follower
+def test_followers_validation_no_follower():
+    # Create isolated actor using helper function
+    actor = create_isolated_actor("followers_validation_test")
+    
+    # Create invalid followers (no follower_actor and no remote data)
+    followers = Followers(
+        actor=actor,
+        follower_actor=None,
+        follower_actor_url=None,
+        follower_actor_data=None,
+        status=Followers.STATUS_ACTIVE
+    )
+    
+    with pytest.raises(ValidationError):
+        followers.clean()
+
+# Test Followers model validation - cannot have both local and remote followers
+def test_followers_validation_both_followers():
+    # Create isolated actors using helper functions
+    actor = create_isolated_actor("followers_both_test")
+    follower_actor = create_isolated_actor("follower_both_test")
+    
+    # Create invalid followers (both local and remote followers)
+    followers = Followers(
+        actor=actor,
+        follower_actor=follower_actor,
+        follower_actor_url="https://remote.example/users/someone",
+        follower_actor_data={"type": "Person", "preferredUsername": "someone"},
+        status=Followers.STATUS_ACTIVE
+    )
+    
+    with pytest.raises(ValidationError):
+        followers.clean()
+
+# Test Followers string representation (local)
+def test_followers_str_representation_local():
+    # Create isolated actors using helper functions
+    actor = create_isolated_actor("followers_str_test")
+    follower_actor = create_isolated_actor("follower_str_test")
+    
+    followers = FollowersFactory(actor=actor, follower_actor=follower_actor)
+    expected = f'{follower_actor.username} follows {actor.username} (local)'
+    assert str(followers) == expected
+
+# Test Followers string representation (remote)
+def test_followers_str_representation_remote():
+    # Create isolated actor using helper function
+    actor = create_isolated_actor("followers_str_remote_test")
+    
+    followers = FollowersFactory.build(actor=actor, remote=True)
+    followers.save()
+    username = followers.follower_actor_data.get('preferredUsername', 'unknown')
+    expected = f'{username} follows {actor.username} (remote)'
+    assert str(followers) == expected
+
+# Test Followers unique constraint for local relationships
+def test_followers_unique_constraint_local():
+    # Create isolated actors using helper functions
+    actor = create_isolated_actor("followers_unique_test")
+    follower_actor = create_isolated_actor("follower_unique_test")
+    
+    # Create first followers relationship
+    first_followers = FollowersFactory(actor=actor, follower_actor=follower_actor)
+    
+    # Try to create duplicate - should raise IntegrityError on save
+    from django.db import IntegrityError
+    with pytest.raises(IntegrityError):
+        FollowersFactory(actor=actor, follower_actor=follower_actor)
+
+# Test Followers unique constraint for remote relationships  
+def test_followers_unique_constraint_remote():
+    # Create isolated actor using helper function
+    actor = create_isolated_actor("followers_unique_remote_test")
+    remote_url = "https://remote.example/users/unique_follower_test"
+    
+    # Create first remote followers relationship
+    first_followers = FollowersFactory.build(actor=actor, remote=True)
+    first_followers.follower_actor_url = remote_url
+    first_followers.save()
+    
+    # Try to create duplicate - should raise IntegrityError on save
+    from django.db import IntegrityError
+    with pytest.raises(IntegrityError):
+        second_followers = FollowersFactory.build(actor=actor, remote=True)
+        second_followers.follower_actor_url = remote_url
+        second_followers.save()
+
+# Test Following status field functionality
+def test_following_status_field():
+    # Create isolated actors using helper functions
+    actor = create_isolated_actor("following_status_test")
+    target_actor = create_isolated_actor("target_status_test")
+    
+    # Test with inactive trait
+    following = FollowingFactory(actor=actor, target_actor=target_actor, inactive=True)
+    assert following.status == Following.STATUS_INACTIVE
+    
+    # Update status back to active
+    following.status = Following.STATUS_ACTIVE
+    following.save()
+    following.refresh_from_db()
+    assert following.status == Following.STATUS_ACTIVE
+
+# Test Followers status field functionality
+def test_followers_status_field():
+    # Create isolated actors using helper functions
+    actor = create_isolated_actor("followers_status_test")
+    follower_actor = create_isolated_actor("follower_status_test")
+    
+    # Test with inactive trait
+    followers = FollowersFactory(actor=actor, follower_actor=follower_actor, inactive=True)
+    assert followers.status == Followers.STATUS_INACTIVE
+    
+    # Update status back to active
+    followers.status = Followers.STATUS_ACTIVE
+    followers.save()
+    followers.refresh_from_db()
+    assert followers.status == Followers.STATUS_ACTIVE
