@@ -347,6 +347,10 @@ def build_oauth_endpoint_url(request):
     Returns:
         String containing the fully qualified OAuth authorization endpoint URL
     """
-    scheme = request.scheme
-    host = request.get_host()
-    return f"{scheme}://{host}/oauth/authorize/"
+    if request:
+        scheme = request.scheme
+        host = request.get_host()
+        return f"{scheme}://{host}/oauth/authorize/"
+    else:
+        # Fallback for cases where request is not available (testing, etc.)
+        return "https://example.com/oauth/authorize/"

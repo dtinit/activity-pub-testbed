@@ -13,7 +13,7 @@ def build_actor_context():
         JsonLDContext.LOLA
     ]
 
-def build_id_url(request, type_name, obj_id):
+def build_id_url(type_name, obj_id, request=None):
     """
     Build dynamic URLs based on the current request.
     This ensures URLs work in development, production, and any deployment environment.
@@ -23,16 +23,28 @@ def build_id_url(request, type_name, obj_id):
         return f"{base_url}/api/{type_name}/{obj_id}"
     else:
         # Fallback for cases where request is not available (testing, etc.)
-        return f"https://example.com/api/{type_name}/{obj_id}"
+        return f"https://example.com/{type_name}/{obj_id}"
 
 def build_actor_id(actor_id, request=None):
-    return build_id_url(request, "actors", actor_id)
+    if request:
+        base_url = f"{request.scheme}://{request.get_host()}"
+        return f"{base_url}/api/actors/{actor_id}"
+    else:
+        return f"https://example.com/actors/{actor_id}"
 
 def build_activity_id(activity_id, request=None):
-    return build_id_url(request, "activities", activity_id)
+    if request:
+        base_url = f"{request.scheme}://{request.get_host()}"
+        return f"{base_url}/api/activities/{activity_id}"
+    else:
+        return f"https://example.com/activities/{activity_id}"
 
 def build_note_id(note_id, request=None):
-    return build_id_url(request, "notes", note_id)
+    if request:
+        base_url = f"{request.scheme}://{request.get_host()}"
+        return f"{base_url}/api/notes/{note_id}"
+    else:
+        return f"https://example.com/notes/{note_id}"
 
 # Build outbox URL with dynamic base URL
 def build_outbox_id(actor_id, request=None):
@@ -41,4 +53,4 @@ def build_outbox_id(actor_id, request=None):
         return f"{base_url}/api/actors/{actor_id}/outbox"
     else:
         # Fallback for cases where request is not available
-        return f"https://example.com/api/actors/{actor_id}/outbox"
+        return f"https://example.com/actors/{actor_id}/outbox"
