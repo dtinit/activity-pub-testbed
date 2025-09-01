@@ -2,6 +2,7 @@ import pytest
 from rest_framework.test import APIClient
 from rest_framework import status
 from django.urls import reverse
+from django.test import RequestFactory
 from django.contrib.auth import get_user_model
 from oauth2_provider.models import Application, AccessToken
 from testbed.core.models import Actor, Following, Followers
@@ -27,7 +28,13 @@ def test_actor_detail_api(actor):
     json_ld = response.data
     assert json_ld["@context"] == build_actor_context()
     assert json_ld["type"] == "Person"
-    assert json_ld["id"] == build_actor_id(actor.id)
+    
+    # Create mock request to match API context
+    factory = RequestFactory()
+    mock_request = factory.get('/api/actors/')
+    mock_request.META['HTTP_HOST'] = 'testserver'
+    
+    assert json_ld["id"] == build_actor_id(actor.id, mock_request)
     assert json_ld["preferredUsername"] == actor.username
     assert json_ld["name"] == actor.username
     assert isinstance(json_ld["previously"], list)
@@ -45,7 +52,13 @@ def test_outbox_api_for_source_actor():
     json_ld = response.data
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "OrderedCollection"
-    assert json_ld["id"] == build_outbox_id(actor.id)
+    
+    # Create mock request to match API context
+    factory = RequestFactory()
+    mock_request = factory.get('/api/actors/')
+    mock_request.META['HTTP_HOST'] = 'testserver'
+    
+    assert json_ld["id"] == build_outbox_id(actor.id, mock_request)
     assert isinstance(json_ld["totalItems"], int)
     assert isinstance(json_ld["items"], list)
 
@@ -89,7 +102,13 @@ class TestLOLAAuthenticationAPI:
     def assert_basic_activitypub_structure(self, data, actor):
         assert data["@context"] == build_actor_context()
         assert data["type"] == "Person"
-        assert data["id"] == build_actor_id(actor.id)
+        
+        # Create mock request for URL comparison
+        factory = RequestFactory()
+        mock_request = factory.get('/api/actors/')
+        mock_request.META['HTTP_HOST'] = 'testserver'
+        
+        assert data["id"] == build_actor_id(actor.id, mock_request)
         assert data["preferredUsername"] == actor.username
         
     # Helper to verify LOLA fields are absent
@@ -215,8 +234,11 @@ class TestLOLAAuthenticationAPI:
         # LOLA version should show >= public count (includes private activities)
         assert lola_count >= public_count
         
-        # Both should have proper outbox ID
-        expected_outbox_id = build_outbox_id(actor.id)
+        # Both should have proper outbox ID  
+        factory = RequestFactory()
+        mock_request = factory.get('/api/actors/')
+        mock_request.META['HTTP_HOST'] = 'testserver'
+        expected_outbox_id = build_outbox_id(actor.id, mock_request)
         assert public_data["id"] == expected_outbox_id
         assert lola_data["id"] == expected_outbox_id
     

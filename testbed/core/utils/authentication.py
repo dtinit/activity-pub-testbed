@@ -30,7 +30,12 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
     
     def authenticate(self, request):
         """
-        Attempt to authenticate the request using OAuth2.
+        Attempt to authenticate the request using OAuth2 with multiple methods.
+        
+        Authentication priority:
+        1. Authorization header (production federation)
+        2. URL parameter (testing convenience) 
+        3. Session storage (demo enhancement)
         
         If authentication succeeds, check if the token has the portability scope.
         If authentication fails, allow the request to continue as unauthenticated.
@@ -50,12 +55,16 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         request.has_portability_scope = False
         
         try:
-            # First try standard Authorization header authentication
+            # 1. First try standard Authorization header authentication (PRODUCTION)
             result = super().authenticate(request)
             
-            # If header auth failed, try URL parameter auth (for testing convenience)
+            # 2. If header auth failed, try URL parameter auth (TESTING)
             if result is None:
                 result = self._authenticate_with_url_token(request)
+            
+            # 3. NEW: If URL auth failed, try session auth (DEMO ENHANCEMENT)
+            if result is None:
+                result = self._try_session_auth(request)
             
             if result is not None:
                 user, token = result
@@ -126,6 +135,62 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
             return None
         except Exception as e:
             logger.debug(f"Error during URL parameter authentication: {str(e)}")
+            return None
+
+    def _try_session_auth(self, request):
+        """
+        Try to authenticate using token stored in session (demo enhancement).
+        
+        This provides seamless authentication after successful OAuth token exchange,
+        eliminating the need for manual token handling in demo workflows. The method
+        validates session tokens against the database to ensure they haven't been
+        revoked and handles automatic cleanup of expired tokens.
+        
+        Supports 'public_only' parameter to disable session auth for comparison demos.
+        
+        Args:
+            request: The HTTP request object
+            
+        Returns:
+            A tuple of (user, token) if authentication succeeds, None otherwise
+        """
+        from oauth2_provider.models import AccessToken
+        from testbed.core.utils.oauth_utils import get_token_from_session, clear_token_from_session
+        
+        # Check if public_only parameter is set (for demo comparison)
+        if request.GET.get('public_only'):
+            logger.debug("public_only parameter detected - skipping session authentication")
+            return None
+        
+        # Get token from session (this handles expiration checking)
+        token_string = get_token_from_session(request)
+        if not token_string:
+            return None
+            
+        try:
+            # Look up the token in the database to ensure it's still valid
+            # (handles cases where token was revoked but still in session)
+            access_token = AccessToken.objects.select_related('user', 'application').get(
+                token=token_string
+            )
+            
+            # Verify token is still valid (handles revocation, etc.)
+            if access_token.is_valid():
+                logger.debug(f"Session authentication successful for user: {access_token.user.username}")
+                return access_token.user, access_token
+            else:
+                # Token invalid - clear from session to prevent future attempts
+                clear_token_from_session(request)
+                logger.debug("Session token invalid, cleared from session")
+                return None
+                
+        except AccessToken.DoesNotExist:
+            # Token not found in database - clear from session
+            logger.debug("Session token not found in database, clearing from session")
+            clear_token_from_session(request)
+            return None
+        except Exception as e:
+            logger.debug(f"Error during session authentication: {str(e)}")
             return None
     
     def _has_portability_scope(self, token):

@@ -76,6 +76,14 @@
       <div class="token-success">
         <h3>Access Token Received</h3>
         
+        {% if session_auth_enabled %}
+        <div class="authentication-status success">
+          <h4>🔐 Session Authentication Active</h4>
+          <p>You are now automatically authenticated for LOLA collection testing!</p>
+          <p>Click any collection links below - no manual token handling required. This demonstrates the seamless demo experience.</p>
+        </div>
+        {% endif %}
+        
         <div class="token-details">
           <h4>Access Token:</h4>
           <pre class="token">{{ token_response.access_token }}</pre>
@@ -112,13 +120,16 @@
           <div>Username: {{ source_actor.username }}</div>
           <div><a href="/api/actors/{{ source_actor.pk }}/?format=json&auth_token={{ token_response.access_token }}" target="_blank">Details (with LOLA fields)</a></div>
           <div><a href="/api/actors/{{ source_actor.pk }}/outbox?format=json&auth_token={{ token_response.access_token }}" target="_blank">Outbox (all activities)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/following/?format=json&auth_token={{ token_response.access_token }}" target="_blank">Following Collection (public)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/followers/?format=json&auth_token={{ token_response.access_token }}" target="_blank">Followers Collection (LOLA-gated)</a></div>
         </div>
         
         <p><strong>Compare with public versions (no authentication):</strong></p>
         <div class="actor">
           <div>Username: {{ source_actor.username }} (Public)</div>
-          <div><a href="/api/actors/{{ source_actor.pk }}/?format=json" target="_blank">Details (basic ActivityPub)</a></div>
-          <div><a href="/api/actors/{{ source_actor.pk }}/outbox?format=json" target="_blank">Outbox (public only)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/?format=json&public_only=true" target="_blank">Details (basic ActivityPub)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/outbox?format=json&public_only=true" target="_blank">Outbox (public only)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/following/?format=json&public_only=true" target="_blank">Following Collection (public)</a></div>
         </div>
         
         <div class="expected-results">

@@ -1,6 +1,7 @@
 import pytest
 from rest_framework.test import APIClient
 from django.urls import reverse
+from django.test import RequestFactory
 from testbed.core.json_ld_builders import (
     build_actor_json_ld,
     build_note_json_ld,
@@ -17,8 +18,18 @@ from testbed.core.factories import (
 # Test complete flow from API to JSON-LD for Actor
 @pytest.mark.django_db
 def test_actor_json_ld_flow(actor):
-    # Test JSON-LD generation
-    builder_json_ld = build_actor_json_ld(actor)
+    # Create mock request to match API context
+    factory = RequestFactory()
+    mock_request = factory.get('/api/actors/')
+    mock_request.META['HTTP_HOST'] = 'testserver'
+    
+    # Test JSON-LD generation with proper auth_context
+    auth_context = {
+        'is_authenticated': False,
+        'has_portability_scope': False,
+        'request': mock_request
+    }
+    builder_json_ld = build_actor_json_ld(actor, auth_context)
     
     # Test API response
     client = APIClient()
@@ -33,8 +44,18 @@ def test_actor_json_ld_flow(actor):
 # Test complete flow from API to JSON-LD for Outbox
 @pytest.mark.django_db
 def test_complete_outbox_json_ld_flow(outbox):
-    # Test JSON-LD generation for outboxes
-    builder_json_ld = build_outbox_json_ld(outbox)
+    # Create mock request to match API context
+    factory = RequestFactory()
+    mock_request = factory.get('/api/actors/')
+    mock_request.META['HTTP_HOST'] = 'testserver'
+    
+    # Test JSON-LD generation for outboxes with proper auth_context
+    auth_context = {
+        'is_authenticated': False,
+        'has_portability_scope': False,
+        'request': mock_request
+    }
+    builder_json_ld = build_outbox_json_ld(outbox, auth_context)
     
     # Test API response
     client = APIClient()

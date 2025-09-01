@@ -14,25 +14,32 @@ OAUTH_STATE_SESSION_KEY = 'oauth_state'
 # Session key for storing raw client secret
 CLIENT_SECRET_SESSION_KEY = 'oauth_client_secret'
 
+# Session keys for OAuth token storage (demo enhancement)
+# These enable seamless authentication after successful token exchange
+ACCESS_TOKEN_SESSION_KEY = 'lola_access_token'
+TOKEN_EXPIRY_SESSION_KEY = 'lola_token_expiry'
+TOKEN_SCOPE_SESSION_KEY = 'lola_token_scope'
+
 # Get or create the single OAuth Application for a user.
 # This enforces the one-application-per-user approach where each user
 # represents an ActivityPub service in the LOLA portability flow.
 def get_user_application(user, request=None):
     """
-    Get or create an OAuth application for a user.
+    Get or create an OAuth application for a user with encrypted client secret storage.
     
-    If request is provided, stores the raw client secret in the session
-    for later use in token exchange requests. For security reasons, the raw client secret
-    is never stored in the database, only the hashed version. We keep the raw version
-    in the session temporarily to enable token exchange in the OAuth flow.
+    This function now uses encrypted database storage for client secrets, solving the
+    "Token Exchange Failed" issue caused by fragile session-based storage. Client secrets
+    are always available for token exchange regardless of session state.
     
     Args:
         user: The user to get/create an application for
-        request: Optional request object with session for storing client secret
+        request: Optional request object (maintained for compatibility)
         
     Returns:
-        Application instance with raw_client_secret attribute if available
+        Application instance with raw_client_secret attribute always available
     """
+    from testbed.core.models import OAuthClientCredentials
+    
     # Check if user already has an application
     applications = Application.objects.filter(user=user)
     
@@ -44,31 +51,46 @@ def get_user_application(user, request=None):
             logger.warning(f"User {user.username} has multiple OAuth applications. Using the first one.")
         logger.info(f"Retrieved existing OAuth application for user {user.username}")
         
-        # Initialize the raw client secret attribute to None
-        application.raw_client_secret = None
+        # Try to get client secret from encrypted storage
+        try:
+            credentials = OAuthClientCredentials.objects.get(user=user)
+            application.raw_client_secret = credentials.get_client_secret()
+            logger.info(f"Retrieved encrypted client secret for user {user.username}")
+            
+        except OAuthClientCredentials.DoesNotExist:
+            logger.warning(f"No encrypted client credentials found for user {user.username}")
+            
+            # MIGRATION: Try session storage as fallback for existing users
+            if request and CLIENT_SECRET_SESSION_KEY in request.session:
+                client_secret = request.session[CLIENT_SECRET_SESSION_KEY]
+                logger.info(f"Migrating client secret from session to encrypted storage for user {user.username}")
+                
+                # Create encrypted credentials record
+                credentials = OAuthClientCredentials.objects.create(user=user)
+                credentials.set_client_secret(client_secret)
+                credentials.save()
+                
+                application.raw_client_secret = client_secret
+                logger.info(f"Successfully migrated client secret to encrypted storage")
+                
+                # Clean up session storage
+                request.session.pop(CLIENT_SECRET_SESSION_KEY, None)
+            else:
+                logger.error(f"No client secret available for user {user.username} - neither encrypted storage nor session")
+                application.raw_client_secret = None
         
-        # If we have the raw client secret in session, use it (needed for token exchange)
-        if request and CLIENT_SECRET_SESSION_KEY in request.session:
-            # Attach the raw client_secret as an attribute for token exchange
-            application.raw_client_secret = request.session[CLIENT_SECRET_SESSION_KEY]
-            logger.info("Using raw client secret from session for token exchange")
-        elif request:
-            logger.warning(f"Raw client secret not found in session for user {user.username}. This will prevent token exchange.")
-            # We could potentially implement a client secret recovery mechanism here if needed
+        except Exception as e:
+            logger.error(f"Error retrieving encrypted client secret for user {user.username}: {str(e)}")
+            application.raw_client_secret = None
             
         # Add client ID to the log for troubleshooting
         logger.info(f"Application details - Client ID: {application.client_id}, Has raw secret: {hasattr(application, 'raw_client_secret') and application.raw_client_secret is not None}")
         
         return application
     
-    # Generate credentials
+    # Generate credentials for new application
     client_id = random_client_id()
     client_secret = random_client_secret()
-    
-    # Store the raw client secret in session if request is provided
-    if request:
-        request.session[CLIENT_SECRET_SESSION_KEY] = client_secret
-        logger.info("Stored raw client secret in session for token exchange")
     
     # Create a new application with random credentials and ActivityPub-specific name
     logger.info(f"Creating new ActivityPub OAuth application for user {user.username}")
@@ -81,6 +103,19 @@ def get_user_application(user, request=None):
         client_type='confidential',
         authorization_grant_type='authorization-code'
     )
+    
+    # Store client secret in encrypted storage
+    try:
+        credentials = OAuthClientCredentials.objects.create(user=user)
+        credentials.set_client_secret(client_secret)
+        credentials.save()
+        logger.info(f"Stored client secret in encrypted storage for user {user.username}")
+    except Exception as e:
+        logger.error(f"Failed to store encrypted client secret for user {user.username}: {str(e)}")
+        # Fall back to session storage for this session
+        if request:
+            request.session[CLIENT_SECRET_SESSION_KEY] = client_secret
+            logger.info("Fallback: stored client secret in session")
     
     # Attach the raw client_secret as an attribute for token exchange
     application.raw_client_secret = client_secret
@@ -177,6 +212,125 @@ def validate_state_from_session(request, state):
         
     return is_valid
 
+# ============================================================================
+# Session Token Management for Demo Enhancement
+# ============================================================================
+# These functions enable seamless authentication after OAuth token exchange
+# by storing tokens in session storage. This solves the "Token Exchange Failed"
+# issue and provides a smooth demo experience.
+
+def store_token_in_session(request, token_data):
+    """
+    Store OAuth token in session after successful exchange.
+    
+    This enables seamless authentication for demo workflows by maintaining
+    authentication state after token exchange. Users can now click collection
+    test links without manual token handling.
+    
+    Args:
+        request: The HTTP request object with session
+        token_data: Dictionary containing token response data
+                   Expected keys: access_token, expires_in, scope
+    """
+    from datetime import datetime, timedelta
+    
+    # Store the access token
+    access_token = token_data.get('access_token')
+    if not access_token:
+        logger.warning("No access_token in token_data, cannot store in session")
+        return
+    
+    request.session[ACCESS_TOKEN_SESSION_KEY] = access_token
+    
+    # Calculate and store expiry time
+    expires_in = token_data.get('expires_in', 3600)  # Default 1 hour if not specified
+    expiry_time = datetime.now() + timedelta(seconds=expires_in)
+    request.session[TOKEN_EXPIRY_SESSION_KEY] = expiry_time.timestamp()
+    
+    # Store scope for validation
+    scope = token_data.get('scope', '')
+    request.session[TOKEN_SCOPE_SESSION_KEY] = scope
+    
+    logger.info(f"OAuth token stored in session for demo authentication (expires in {expires_in} seconds)")
+
+def get_token_from_session(request):
+    """
+    Get valid OAuth token from session, None if expired or missing.
+    
+    This function handles token expiration automatically by checking timestamps
+    and cleaning up expired tokens. This prevents authentication with invalid tokens.
+    
+    Args:
+        request: The HTTP request object with session
+        
+    Returns:
+        String containing access token if valid, None if expired/missing
+    """
+    from datetime import datetime
+    
+    token = request.session.get(ACCESS_TOKEN_SESSION_KEY)
+    if not token:
+        logger.debug("No OAuth token found in session")
+        return None
+        
+    # Check if token has expired
+    expiry_timestamp = request.session.get(TOKEN_EXPIRY_SESSION_KEY)
+    if expiry_timestamp:
+        if datetime.now().timestamp() > expiry_timestamp:
+            clear_token_from_session(request)
+            logger.debug("Session OAuth token expired, cleared from session")
+            return None
+    
+    logger.debug("Valid OAuth token retrieved from session")
+    return token
+
+def get_token_scope_from_session(request):
+    """
+    Get OAuth token scope from session.
+    
+    This enables scope validation for session-based authentication,
+    ensuring LOLA portability scope requirements are met.
+    
+    Args:
+        request: The HTTP request object with session
+        
+    Returns:
+        String containing token scope, empty string if not found
+    """
+    scope = request.session.get(TOKEN_SCOPE_SESSION_KEY, '')
+    logger.debug(f"Retrieved token scope from session: '{scope}'")
+    return scope
+
+def clear_token_from_session(request):
+    """
+    Clear OAuth token data from session.
+    
+    This function provides secure cleanup of token data, used when tokens
+    expire, become invalid, or when users explicitly log out of demo sessions.
+    
+    Args:
+        request: The HTTP request object with session
+    """
+    # Remove all token-related session data
+    keys_removed = []
+    
+    if ACCESS_TOKEN_SESSION_KEY in request.session:
+        request.session.pop(ACCESS_TOKEN_SESSION_KEY, None)
+        keys_removed.append('access_token')
+        
+    if TOKEN_EXPIRY_SESSION_KEY in request.session:
+        request.session.pop(TOKEN_EXPIRY_SESSION_KEY, None)
+        keys_removed.append('expiry')
+        
+    if TOKEN_SCOPE_SESSION_KEY in request.session:
+        request.session.pop(TOKEN_SCOPE_SESSION_KEY, None)
+        keys_removed.append('scope')
+    
+    if keys_removed:
+        logger.info(f"OAuth token data cleared from session: {', '.join(keys_removed)}")
+    else:
+        logger.debug("No OAuth token data found in session to clear")
+
 # OAuth Endpoint URL Construction
 def build_oauth_endpoint_url(request):
     """
@@ -193,6 +347,10 @@ def build_oauth_endpoint_url(request):
     Returns:
         String containing the fully qualified OAuth authorization endpoint URL
     """
-    scheme = request.scheme
-    host = request.get_host()
-    return f"{scheme}://{host}/oauth/authorize/"
+    if request:
+        scheme = request.scheme
+        host = request.get_host()
+        return f"{scheme}://{host}/oauth/authorize/"
+    else:
+        # Fallback for cases where request is not available (testing, etc.)
+        return "https://example.com/oauth/authorize/"

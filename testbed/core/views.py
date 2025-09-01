@@ -263,13 +263,20 @@ def following_collection(request, pk):
         status=Following.STATUS_ACTIVE
     ).order_by('-created_at')
     
+    # Create authentication context for nested Actor objects
+    auth_context = {
+        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
+        'has_portability_scope': getattr(request, 'has_portability_scope', False),
+        'request': request
+    }
+    
     # Build the collection items
     items = []
     for following in following_qs:
         if following.target_actor:
-            # Local actor - return full Actor object
+            # Local actor - return full Actor object with dynamic URLs
             from .json_ld_builders import build_actor_json_ld
-            items.append(build_actor_json_ld(following.target_actor))
+            items.append(build_actor_json_ld(following.target_actor, auth_context))
         else:
             # Remote actor - return cached actor data with URL
             actor_data = following.target_actor_data.copy() if following.target_actor_data else {}
@@ -323,13 +330,20 @@ def followers_collection(request, pk):
         status=Followers.STATUS_ACTIVE
     ).order_by('-created_at')
     
+    # Create authentication context for nested Actor objects
+    auth_context = {
+        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
+        'has_portability_scope': getattr(request, 'has_portability_scope', False),
+        'request': request
+    }
+    
     # Build the collection items
     items = []
     for follower in followers_qs:
         if follower.follower_actor:
-            # Local actor - return full Actor object
+            # Local actor - return full Actor object with dynamic URLs
             from .json_ld_builders import build_actor_json_ld
-            items.append(build_actor_json_ld(follower.follower_actor))
+            items.append(build_actor_json_ld(follower.follower_actor, auth_context))
         else:
             # Remote actor - return cached actor data with URL
             actor_data = follower.follower_actor_data.copy() if follower.follower_actor_data else {}
@@ -509,6 +523,12 @@ def test_token_exchange_view(request):
             token_json = token_response.json()
             logger.info("Successfully exchanged authorization code for token")
             context['token_response'] = token_json
+            
+            # NEW: Store token in session for seamless demo authentication
+            from testbed.core.utils.oauth_utils import store_token_in_session
+            store_token_in_session(request, token_json)
+            context['session_auth_enabled'] = True
+            logger.info("Token stored in session - demo authentication now active")
         else:
             # Handle error response with detailed logging
             logger.warning(f"Token exchange failed with status {token_response.status_code}")
