@@ -164,3 +164,87 @@ def populated_source_actor():
     )
     
     return source_actor
+
+
+# Provide consistent request objects and authentication contexts for JSON-LD builder testing
+
+@pytest.fixture
+def mock_request():
+    """
+    Create a mock request object for testing JSON-LD URL generation.
+    
+    This fixture provides a consistent request object that can be used across
+    all test files for building URLs in JSON-LD responses.
+    
+    Returns:
+        Mock request object with proper META data for URL building
+    """
+    from django.test import RequestFactory
+    
+    factory = RequestFactory()
+    request = factory.get('/api/actors/')
+    request.META['HTTP_HOST'] = 'testserver'
+    
+    return request
+
+@pytest.fixture
+def basic_auth_context(mock_request):
+    """
+    Auth context for unauthenticated requests (basic ActivityPub).
+    
+    This fixture provides the authentication context used for public/unauthenticated
+    requests that should receive basic ActivityPub data without LOLA enhancements.
+    
+    Args:
+        mock_request: Automatically injected mock request fixture
+        
+    Returns:
+        Dict with authentication context for basic ActivityPub responses
+    """
+    return {
+        'is_authenticated': False,
+        'has_portability_scope': False,
+        'request': mock_request
+    }
+
+@pytest.fixture
+def lola_auth_context(mock_request):
+    """
+    Auth context for LOLA authenticated requests (enhanced data).
+    
+    This fixture provides the authentication context used for requests with
+    proper LOLA portability scope that should receive enhanced data including
+    discovery fields and private content.
+    
+    Args:
+        mock_request: Automatically injected mock request fixture
+        
+    Returns:
+        Dict with authentication context for LOLA enhanced responses
+    """
+    return {
+        'is_authenticated': True,
+        'has_portability_scope': True,
+        'request': mock_request
+    }
+
+@pytest.fixture
+def oauth_auth_context(mock_request):
+    """
+    Auth context for OAuth authenticated requests without portability scope.
+    
+    This fixture provides the authentication context for requests that have
+    OAuth authentication but lack the LOLA portability scope, so they receive
+    basic ActivityPub data like unauthenticated requests.
+    
+    Args:
+        mock_request: Automatically injected mock request fixture
+        
+    Returns:
+        Dict with authentication context for OAuth-only responses
+    """
+    return {
+        'is_authenticated': True,
+        'has_portability_scope': False,
+        'request': mock_request
+    }

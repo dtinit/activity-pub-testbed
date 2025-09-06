@@ -6,7 +6,7 @@ from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse, JsonResponse
 from .models import Actor, PortabilityOutbox, Following, Followers
-from .json_ld_builders import build_actor_json_ld, build_outbox_json_ld
+from .json_ld_builders import build_actor_json_ld, build_outbox_json_ld, build_collection_json_ld, build_relationship_items
 from django.contrib.auth.decorators import login_required
 from testbed.core.utils.oauth_utils import (
     get_user_application,
@@ -21,11 +21,31 @@ from django.urls import reverse
 import logging
 import requests
 from django.urls import reverse
+from functools import wraps
 
 logger = logging.getLogger(__name__)
 
+
+def activitypub_content(view_func):
+    """
+    This decorator dds the required ActivityPub content-type
+    and CORS headers to views that return ActivityPub JSON-LD content
+    """
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        response = view_func(request, *args, **kwargs)
+        
+        # Add ActivityPub headers for JSON responses (preserves DRF browsable API)
+        if hasattr(request, 'accepted_renderer') and request.accepted_renderer.format == 'json':
+            response['Content-Type'] = 'application/activity+json'
+            response['Access-Control-Allow-Origin'] = '*'  # Enable federation
+            
+        return response
+    return wrapper
+
 @api_view(['GET'])
 @authentication_classes([OptionalOAuth2Authentication])
+@activitypub_content
 def actor_detail(request, pk):
     """
     ActivityPub Actor endpoint with LOLA portability support.
@@ -44,17 +64,11 @@ def actor_detail(request, pk):
     
     # Build response with authentication context
     data = build_actor_json_ld(actor, auth_context)
-    response = Response(data)
-    
-    # Set ActivityPub content-type only for JSON responses (preserves DRF browsable API)
-    if request.accepted_renderer.format == 'json':
-        response['Content-Type'] = 'application/activity+json'
-        response['Access-Control-Allow-Origin'] = '*'  # Enable federation
-    
-    return response
+    return Response(data)
 
 @api_view(['GET'])
 @authentication_classes([OptionalOAuth2Authentication])
+@activitypub_content
 def portability_outbox_detail(request, pk):
     """
     ActivityPub Outbox endpoint with LOLA content filtering.
@@ -73,14 +87,7 @@ def portability_outbox_detail(request, pk):
     
     # Build response with authentication-based content filtering
     data = build_outbox_json_ld(outbox, auth_context)
-    response = Response(data)
-    
-    # Set ActivityPub content-type only for JSON responses (preserves DRF browsable API)
-    if request.accepted_renderer.format == 'json':
-        response['Content-Type'] = 'application/activity+json'
-        response['Access-Control-Allow-Origin'] = '*'  # Enable federation
-    
-    return response
+    return Response(data)
 
 # Restrict the view to staff users using the @user_passes_test decorator
 @user_passes_test(lambda u: u.is_staff)  # Restrict to staff
@@ -244,6 +251,7 @@ def test_error_view(request):
 
 @api_view(['GET'])
 @authentication_classes([OptionalOAuth2Authentication])
+@activitypub_content
 def following_collection(request, pk):
     """
     LOLA Following collection endpoint.
@@ -271,39 +279,24 @@ def following_collection(request, pk):
     }
     
     # Build the collection items
-    items = []
-    for following in following_qs:
-        if following.target_actor:
-            # Local actor - return full Actor object with dynamic URLs
-            from .json_ld_builders import build_actor_json_ld
-            items.append(build_actor_json_ld(following.target_actor, auth_context))
-        else:
-            # Remote actor - return cached actor data with URL
-            actor_data = following.target_actor_data.copy() if following.target_actor_data else {}
-            actor_data['id'] = following.target_actor_url
-            items.append(actor_data)
+    items = build_relationship_items(
+        relationships=following_qs,
+        local_actor_field='target_actor',
+        remote_url_field='target_actor_url',
+        remote_data_field='target_actor_data',
+        auth_context=auth_context
+    )
     
     # Build ActivityPub OrderedCollection
-    collection_data = {
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "type": "OrderedCollection", 
-        "id": f"{request.scheme}://{request.get_host()}/api/actors/{pk}/following",
-        "totalItems": len(items),
-        "orderedItems": items
-    }
+    collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/following"
+    collection_data = build_collection_json_ld(collection_id, items)
     
-    response = Response(collection_data)
-    
-    # Set ActivityPub content-type for federation
-    if request.accepted_renderer.format == 'json':
-        response['Content-Type'] = 'application/activity+json'
-        response['Access-Control-Allow-Origin'] = '*'
-    
-    return response
+    return Response(collection_data)
 
 
 @api_view(['GET'])
 @authentication_classes([OptionalOAuth2Authentication])
+@activitypub_content
 def followers_collection(request, pk):
     """
     LOLA Followers collection endpoint.
@@ -338,35 +331,19 @@ def followers_collection(request, pk):
     }
     
     # Build the collection items
-    items = []
-    for follower in followers_qs:
-        if follower.follower_actor:
-            # Local actor - return full Actor object with dynamic URLs
-            from .json_ld_builders import build_actor_json_ld
-            items.append(build_actor_json_ld(follower.follower_actor, auth_context))
-        else:
-            # Remote actor - return cached actor data with URL
-            actor_data = follower.follower_actor_data.copy() if follower.follower_actor_data else {}
-            actor_data['id'] = follower.follower_actor_url
-            items.append(actor_data)
+    items = build_relationship_items(
+        relationships=followers_qs,
+        local_actor_field='follower_actor',
+        remote_url_field='follower_actor_url',
+        remote_data_field='follower_actor_data',
+        auth_context=auth_context
+    )
     
     # Build ActivityPub OrderedCollection
-    collection_data = {
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "type": "OrderedCollection",
-        "id": f"{request.scheme}://{request.get_host()}/api/actors/{pk}/followers", 
-        "totalItems": len(items),
-        "orderedItems": items
-    }
+    collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/followers"
+    collection_data = build_collection_json_ld(collection_id, items)
     
-    response = Response(collection_data)
-    
-    # Set ActivityPub content-type for federation
-    if request.accepted_renderer.format == 'json':
-        response['Content-Type'] = 'application/activity+json'
-        response['Access-Control-Allow-Origin'] = '*'
-    
-    return response
+    return Response(collection_data)
 
 
 @api_view(['GET'])

@@ -60,10 +60,10 @@ def get_user_application(user, request=None):
         except OAuthClientCredentials.DoesNotExist:
             logger.warning(f"No encrypted client credentials found for user {user.username}")
             
-            # MIGRATION: Try session storage as fallback for existing users
+            # UPGRADE: Try session storage as fallback for existing users
             if request and CLIENT_SECRET_SESSION_KEY in request.session:
                 client_secret = request.session[CLIENT_SECRET_SESSION_KEY]
-                logger.info(f"Migrating client secret from session to encrypted storage for user {user.username}")
+                logger.info(f"Upgrading client secret from session to encrypted storage for user {user.username}")
                 
                 # Create encrypted credentials record
                 credentials = OAuthClientCredentials.objects.create(user=user)
@@ -71,7 +71,7 @@ def get_user_application(user, request=None):
                 credentials.save()
                 
                 application.raw_client_secret = client_secret
-                logger.info(f"Successfully migrated client secret to encrypted storage")
+                logger.info(f"Successfully upgraded client secret to encrypted storage")
                 
                 # Clean up session storage
                 request.session.pop(CLIENT_SECRET_SESSION_KEY, None)
@@ -227,13 +227,14 @@ def store_token_in_session(request, token_data):
     authentication state after token exchange. Users can now click collection
     test links without manual token handling.
     
+    Token expiry is validated server-side against the OAuth database rather 
+    than using session timestamps to prevent client manipulation.
+    
     Args:
         request: The HTTP request object with session
         token_data: Dictionary containing token response data
-                   Expected keys: access_token, expires_in, scope
+                   Expected keys: access_token, scope
     """
-    from datetime import datetime, timedelta
-    
     # Store the access token
     access_token = token_data.get('access_token')
     if not access_token:
@@ -242,23 +243,21 @@ def store_token_in_session(request, token_data):
     
     request.session[ACCESS_TOKEN_SESSION_KEY] = access_token
     
-    # Calculate and store expiry time
-    expires_in = token_data.get('expires_in', 3600)  # Default 1 hour if not specified
-    expiry_time = datetime.now() + timedelta(seconds=expires_in)
-    request.session[TOKEN_EXPIRY_SESSION_KEY] = expiry_time.timestamp()
-    
     # Store scope for validation
     scope = token_data.get('scope', '')
     request.session[TOKEN_SCOPE_SESSION_KEY] = scope
     
-    logger.info(f"OAuth token stored in session for demo authentication (expires in {expires_in} seconds)")
+    # Get expires_in for logging purposes only (not stored for validation)
+    expires_in = token_data.get('expires_in', 3600)
+    logger.info(f"OAuth token stored in session for demo authentication (server will validate expiry)")
 
 def get_token_from_session(request):
     """
     Get valid OAuth token from session, None if expired or missing.
     
-    This function handles token expiration automatically by checking timestamps
-    and cleaning up expired tokens. This prevents authentication with invalid tokens.
+    This function handles token expiration automatically by validating against
+    the OAuth database rather than trusting session timestamps. This prevents
+    clients from manipulating session data to extend token lifetimes.
     
     Args:
         request: The HTTP request object with session
@@ -266,23 +265,30 @@ def get_token_from_session(request):
     Returns:
         String containing access token if valid, None if expired/missing
     """
-    from datetime import datetime
+    from oauth2_provider.models import AccessToken
     
-    token = request.session.get(ACCESS_TOKEN_SESSION_KEY)
-    if not token:
+    token_string = request.session.get(ACCESS_TOKEN_SESSION_KEY)
+    if not token_string:
         logger.debug("No OAuth token found in session")
         return None
         
-    # Check if token has expired
-    expiry_timestamp = request.session.get(TOKEN_EXPIRY_SESSION_KEY)
-    if expiry_timestamp:
-        if datetime.now().timestamp() > expiry_timestamp:
+    # Validate token against OAuth database (server-side validation)
+    # This prevents clients from manipulating session expiry timestamps
+    try:
+        access_token = AccessToken.objects.get(token=token_string)
+        if access_token.is_valid():
+            logger.debug("Valid OAuth token retrieved from session")
+            return token_string
+        else:
+            # Token is expired or invalid, clean up session
             clear_token_from_session(request)
-            logger.debug("Session OAuth token expired, cleared from session")
+            logger.debug("Session OAuth token expired (server-validated), cleared from session")
             return None
-    
-    logger.debug("Valid OAuth token retrieved from session")
-    return token
+    except AccessToken.DoesNotExist:
+        # Token doesn't exist in database, clean up session
+        clear_token_from_session(request)
+        logger.debug("Session OAuth token not found in database, cleared from session")
+        return None
 
 def get_token_scope_from_session(request):
     """
