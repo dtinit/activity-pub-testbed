@@ -188,3 +188,60 @@ def build_outbox_json_ld(outbox, auth_context=None):
         "totalItems": len(all_activities),
         "items": [build_activity_json_ld(activity) for activity in all_activities],
     }
+
+
+def build_collection_json_ld(collection_id, items, total_items=None):
+    """
+    Build ActivityPub OrderedCollection JSON-LD.
+    
+    Args:
+        collection_id: The full URL/ID for the collection
+        items: List of collection items (actors, activities, etc.)
+        total_items: Optional total count override (defaults to len(items))
+    
+    Returns:
+        Dict containing ActivityPub OrderedCollection
+    """
+    return {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OrderedCollection",
+        "id": collection_id,
+        "totalItems": total_items if total_items is not None else len(items),
+        "orderedItems": items
+    }
+
+
+def build_relationship_items(relationships, local_actor_field, remote_url_field, remote_data_field, auth_context):
+    """
+    Build collection items from Following or Followers relationship querysets.
+    
+    Handles both local and remote actors consistently across relationship types.
+    
+    Args:
+        relationships: QuerySet of Following or Followers objects
+        local_actor_field: Field name for local actor (e.g., 'target_actor', 'follower_actor')
+        remote_url_field: Field name for remote URL (e.g., 'target_actor_url', 'follower_actor_url')  
+        remote_data_field: Field name for remote data (e.g., 'target_actor_data', 'follower_actor_data')
+        auth_context: Authentication context for JSON-LD building
+    
+    Returns:
+        List of actor JSON-LD objects ready for collection
+    """
+    items = []
+    for relationship in relationships:
+        # Try to get local actor using dynamic field access
+        local_actor = getattr(relationship, local_actor_field, None)
+        
+        if local_actor:
+            # Local actor: use full JSON-LD builder with authentication context
+            items.append(build_actor_json_ld(local_actor, auth_context))
+        else:
+            # Remote actor: use cached data with URL injection
+            remote_url = getattr(relationship, remote_url_field, None)
+            remote_data = getattr(relationship, remote_data_field, None)
+            
+            actor_data = remote_data.copy() if remote_data else {}
+            actor_data['id'] = remote_url
+            items.append(actor_data)
+    
+    return items

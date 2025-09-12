@@ -1,3 +1,4 @@
+import pytest
 from testbed.core.json_ld_utils import (
     JsonLDContext,
     build_basic_context,
@@ -29,22 +30,22 @@ def test_build_actor_context():
     assert JsonLDContext.LOLA in context
 
 # Test base URL builder function
-def test_build_id_url():
-    url = build_id_url("test", 123)
-    assert url == "https://example.com/test/123"
+def test_build_id_url(mock_request):
+    url = build_id_url("test", 123, mock_request)
+    assert url == "http://testserver/api/test/123"
 
-def test_build_actor_id():
-    actor_id = build_actor_id(123)
-    assert actor_id == "https://example.com/actors/123"
+def test_build_actor_id(mock_request):
+    actor_id = build_actor_id(123, mock_request)
+    assert actor_id == "http://testserver/api/actors/123"
 
-def test_build_activity_id():
-    activity_id = build_activity_id(123)
-    assert activity_id == "https://example.com/activities/123"
+def test_build_activity_id(mock_request):
+    activity_id = build_activity_id(123, mock_request)
+    assert activity_id == "http://testserver/api/activities/123"
 
-def test_build_note_id():
-    note_id = build_note_id(123)
-    assert note_id == "https://example.com/notes/123"
+def test_build_note_id(mock_request):
+    note_id = build_note_id(123, mock_request)
+    assert note_id == "http://testserver/api/notes/123"
 
-def test_build_outbox_id():
-    outbox_id = build_outbox_id(123)
-    assert outbox_id == "https://example.com/actors/123/outbox"
+def test_build_outbox_id(mock_request):
+    outbox_id = build_outbox_id(123, mock_request)
+    assert outbox_id == "http://testserver/api/actors/123/outbox"

@@ -19,7 +19,7 @@ User = get_user_model()
 
 # Test actor detail API endpoint
 @pytest.mark.django_db
-def test_actor_detail_api(actor):
+def test_actor_detail_api(actor, mock_request):
     response = APIClient().get(reverse("actor-detail", kwargs={"pk": actor.id}))
     
     assert response.status_code == status.HTTP_200_OK
@@ -29,11 +29,6 @@ def test_actor_detail_api(actor):
     assert json_ld["@context"] == build_actor_context()
     assert json_ld["type"] == "Person"
     
-    # Create mock request to match API context
-    factory = RequestFactory()
-    mock_request = factory.get('/api/actors/')
-    mock_request.META['HTTP_HOST'] = 'testserver'
-    
     assert json_ld["id"] == build_actor_id(actor.id, mock_request)
     assert json_ld["preferredUsername"] == actor.username
     assert json_ld["name"] == actor.username
@@ -41,7 +36,7 @@ def test_actor_detail_api(actor):
 
 # Test outbox detail API endpoint
 @pytest.mark.django_db
-def test_outbox_api_for_source_actor():
+def test_outbox_api_for_source_actor(mock_request):
     # Create an actor with the helper function that ensures unique usernames
     actor = create_isolated_actor("api_test")
     response = APIClient().get(reverse("actor-outbox", kwargs={"pk": actor.id}))
@@ -52,11 +47,6 @@ def test_outbox_api_for_source_actor():
     json_ld = response.data
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "OrderedCollection"
-    
-    # Create mock request to match API context
-    factory = RequestFactory()
-    mock_request = factory.get('/api/actors/')
-    mock_request.META['HTTP_HOST'] = 'testserver'
     
     assert json_ld["id"] == build_outbox_id(actor.id, mock_request)
     assert isinstance(json_ld["totalItems"], int)
@@ -99,14 +89,9 @@ class TestLOLAAuthenticationAPI:
     # Helper methods for repeated assertions
 
     # Helper to verify standard ActivityPub fields
-    def assert_basic_activitypub_structure(self, data, actor):
+    def assert_basic_activitypub_structure(self, data, actor, mock_request):
         assert data["@context"] == build_actor_context()
         assert data["type"] == "Person"
-        
-        # Create mock request for URL comparison
-        factory = RequestFactory()
-        mock_request = factory.get('/api/actors/')
-        mock_request.META['HTTP_HOST'] = 'testserver'
         
         assert data["id"] == build_actor_id(actor.id, mock_request)
         assert data["preferredUsername"] == actor.username
@@ -138,7 +123,7 @@ class TestLOLAAuthenticationAPI:
     
     # Test that unauthenticated requests return basic ActivityPub data only
     @pytest.mark.django_db
-    def test_actor_detail_unauthenticated_returns_basic_activitypub(self):
+    def test_actor_detail_unauthenticated_returns_basic_activitypub(self, mock_request):
         actor = create_isolated_actor("unauthenticated_test")
         client = APIClient()
         
@@ -149,12 +134,12 @@ class TestLOLAAuthenticationAPI:
         
         data = response.data
         # Use helper methods for assertions
-        self.assert_basic_activitypub_structure(data, actor)
+        self.assert_basic_activitypub_structure(data, actor, mock_request)
         self.assert_no_lola_fields(data)
     
     # Test that LOLA-authenticated requests return enhanced data with collection URLs
     @pytest.mark.django_db
-    def test_actor_detail_with_lola_scope_returns_enhanced_data(self):
+    def test_actor_detail_with_lola_scope_returns_enhanced_data(self, mock_request):
         actor = create_isolated_actor("lola_enhanced_test")
         lola_token = AccessTokenFactory(lola_scope=True)
         client = self.get_authenticated_client(lola_token)
@@ -166,12 +151,12 @@ class TestLOLAAuthenticationAPI:
         
         data = response.data
         # Use helper methods for assertions
-        self.assert_basic_activitypub_structure(data, actor)
+        self.assert_basic_activitypub_structure(data, actor, mock_request)
         self.assert_has_lola_fields(data, actor)
     
     # Test that authenticated requests without LOLA scope return basic data
     @pytest.mark.django_db
-    def test_actor_detail_with_basic_token_returns_basic_data(self):
+    def test_actor_detail_with_basic_token_returns_basic_data(self, mock_request):
         actor = create_isolated_actor("basic_token_test")
         basic_token = AccessTokenFactory(scope=self.BASIC_SCOPE)
         client = self.get_authenticated_client(basic_token)
@@ -183,7 +168,7 @@ class TestLOLAAuthenticationAPI:
         
         data = response.data
         # Use helper methods for assertions
-        self.assert_basic_activitypub_structure(data, actor)
+        self.assert_basic_activitypub_structure(data, actor, mock_request)
         self.assert_no_lola_fields(data)
     
     # Test that URL parameter authentication works for LOLA testing
@@ -205,7 +190,7 @@ class TestLOLAAuthenticationAPI:
     
     # Test that outbox shows different content based on authentication
     @pytest.mark.django_db
-    def test_outbox_content_filtering_by_authentication(self):
+    def test_outbox_content_filtering_by_authentication(self, mock_request):
         actor = create_isolated_actor("outbox_filtering_test")
         lola_token = AccessTokenFactory(lola_scope=True)
         client = APIClient()
@@ -235,9 +220,6 @@ class TestLOLAAuthenticationAPI:
         assert lola_count >= public_count
         
         # Both should have proper outbox ID  
-        factory = RequestFactory()
-        mock_request = factory.get('/api/actors/')
-        mock_request.META['HTTP_HOST'] = 'testserver'
         expected_outbox_id = build_outbox_id(actor.id, mock_request)
         assert public_data["id"] == expected_outbox_id
         assert lola_data["id"] == expected_outbox_id
@@ -302,7 +284,7 @@ class TestLOLAAuthenticationAPI:
         "InvalidFormat token",  # Malformed header
     ])
     @pytest.mark.django_db
-    def test_malformed_authorization_header_handling(self, malformed_header):
+    def test_malformed_authorization_header_handling(self, malformed_header, mock_request):
         actor = create_isolated_actor("malformed_header_test")
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION=malformed_header)
@@ -312,7 +294,7 @@ class TestLOLAAuthenticationAPI:
         # Should succeed with public data for all malformed cases
         assert response.status_code == status.HTTP_200_OK
         data = response.data
-        self.assert_basic_activitypub_structure(data, actor)
+        self.assert_basic_activitypub_structure(data, actor, mock_request)
         self.assert_no_lola_fields(data)
     
     # Test that content-type headers are set correctly for API responses
