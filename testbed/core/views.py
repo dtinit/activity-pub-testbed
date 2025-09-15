@@ -5,8 +5,8 @@ from django.shortcuts import redirect
 from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse, JsonResponse
-from .models import Actor, PortabilityOutbox, Following, Followers
-from .json_ld_builders import build_actor_json_ld, build_outbox_json_ld, build_collection_json_ld, build_relationship_items
+from .models import Actor, PortabilityOutbox, Following, Followers, Note
+from .json_ld_builders import build_actor_json_ld, build_outbox_json_ld, build_collection_json_ld, build_relationship_items, build_note_json_ld
 from django.contrib.auth.decorators import login_required
 from testbed.core.utils.oauth_utils import (
     get_user_application,
@@ -341,6 +341,56 @@ def followers_collection(request, pk):
     
     # Build ActivityPub OrderedCollection
     collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/followers"
+    collection_data = build_collection_json_ld(collection_id, items)
+    
+    return Response(collection_data)
+
+
+@api_view(['GET'])
+@authentication_classes([OptionalOAuth2Authentication])
+@activitypub_content
+def content_collection(request, pk):
+    """
+    LOLA Content collection endpoint.
+    
+    Returns raw authored objects (Notes) without Activity wrappers per LOLA specification.
+    Per LOLA spec: "MUST provide raw authored objects (no wrapper Activities) for fidelity."
+    
+    This endpoint requires LOLA scope authentication and applies privacy/scope gating
+    before returning non-public objects.
+    """
+    actor = get_object_or_404(Actor, pk=pk)
+    
+    # Check authentication - this collection requires LOLA scope
+    if not getattr(request, 'has_portability_scope', False):
+        return Response(
+            {
+                "error": "unauthorized",
+                "description": "This collection requires activitypub_account_portability scope"
+            },
+            status=401
+        )
+    
+    # Apply content filtering based on authentication and scope
+    notes_qs = Note.objects.filter(actor=actor).order_by('-published')
+    
+    # Filter content based on authentication - public only for non-LOLA requests
+    if not getattr(request, 'has_portability_scope', False):
+        notes_qs = notes_qs.filter(visibility='public')
+    # LOLA authenticated requests with portability scope get ALL content (public + private)
+    
+    # Create authentication context for JSON-LD building
+    auth_context = {
+        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
+        'has_portability_scope': getattr(request, 'has_portability_scope', False),
+        'request': request
+    }
+    
+    # Build raw Note objects (no Activity wrappers)
+    items = [build_note_json_ld(note, auth_context) for note in notes_qs]
+    
+    # Build ActivityPub OrderedCollection
+    collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/content"
     collection_data = build_collection_json_ld(collection_id, items)
     
     return Response(collection_data)
