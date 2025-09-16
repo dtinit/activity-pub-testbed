@@ -83,6 +83,29 @@ def validate_lola_access(request, required_scope=True):
     return {'valid': True}
 
 
+def build_auth_context(request):
+    """
+    Build standardized authentication context for LOLA JSON-LD builders.
+    
+    Centralizes authentication context creation to eliminate code duplication
+    and ensure consistent context structure across all LOLA endpoints.
+    
+    Args:
+        request: HTTP request object with OAuth authentication attributes
+        
+    Returns:
+        dict: Authentication context with keys:
+            - is_authenticated: boolean OAuth authentication status
+            - has_portability_scope: boolean LOLA scope presence
+            - request: HTTP request object for dynamic URL building
+    """
+    return {
+        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
+        'has_portability_scope': getattr(request, 'has_portability_scope', False),
+        'request': request
+    }
+
+
 def activitypub_content(view_func):
     """
     This decorator dds the required ActivityPub content-type
@@ -112,12 +135,8 @@ def actor_detail(request, pk):
     """
     actor = get_object_or_404(Actor, pk=pk)
     
-    # Create authentication context for JSON-LD builder
-    auth_context = {
-        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
-        'has_portability_scope': getattr(request, 'has_portability_scope', False),
-        'request': request
-    }
+    # Build standardized authentication context
+    auth_context = build_auth_context(request)
     
     # Build response with authentication context
     data = build_actor_json_ld(actor, auth_context)
@@ -135,12 +154,8 @@ def portability_outbox_detail(request, pk):
     """
     outbox = get_object_or_404(PortabilityOutbox, actor_id=pk)
     
-    # Create authentication context for JSON-LD builder
-    auth_context = {
-        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
-        'has_portability_scope': getattr(request, 'has_portability_scope', False),
-        'request': request
-    }
+    # Build standardized authentication context
+    auth_context = build_auth_context(request)
     
     # Build response with authentication-based content filtering
     data = build_outbox_json_ld(outbox, auth_context)
@@ -328,12 +343,8 @@ def following_collection(request, pk):
         status=Following.STATUS_ACTIVE
     ).order_by('-created_at')
     
-    # Create authentication context for nested Actor objects
-    auth_context = {
-        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
-        'has_portability_scope': getattr(request, 'has_portability_scope', False),
-        'request': request
-    }
+    # Build standardized authentication context for nested Actor objects
+    auth_context = build_auth_context(request)
     
     # Build the collection items
     items = build_relationship_items(
@@ -375,12 +386,8 @@ def followers_collection(request, pk):
         status=Followers.STATUS_ACTIVE
     ).order_by('-created_at')
     
-    # Create authentication context for nested Actor objects
-    auth_context = {
-        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
-        'has_portability_scope': getattr(request, 'has_portability_scope', False),
-        'request': request
-    }
+    # Build standardized authentication context for nested Actor objects
+    auth_context = build_auth_context(request)
     
     # Build the collection items
     items = build_relationship_items(
@@ -426,12 +433,8 @@ def content_collection(request, pk):
         notes_qs = notes_qs.filter(visibility='public')
     # LOLA authenticated requests with portability scope get ALL content (public + private)
     
-    # Create authentication context for JSON-LD building
-    auth_context = {
-        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
-        'has_portability_scope': getattr(request, 'has_portability_scope', False),
-        'request': request
-    }
+    # Build standardized authentication context for JSON-LD building
+    auth_context = build_auth_context(request)
     
     # Build raw Note objects (no Activity wrappers)
     items = [build_note_json_ld(note, auth_context) for note in notes_qs]
@@ -471,12 +474,8 @@ def liked_collection(request, pk):
     # TODO: This could be enhanced with trust controls
     likes_qs = likes_qs.filter(visibility='public')
     
-    # Create authentication context for JSON-LD building
-    auth_context = {
-        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
-        'has_portability_scope': getattr(request, 'has_portability_scope', False),
-        'request': request
-    }
+    # Build standardized authentication context for JSON-LD building
+    auth_context = build_auth_context(request)
     
     # Build liked objects with required metadata fields
     items = []
