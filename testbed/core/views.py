@@ -27,6 +27,62 @@ from functools import wraps
 logger = logging.getLogger(__name__)
 
 
+def validate_lola_access(request, required_scope=True):
+    """
+    Enhanced privacy and scope gating for LOLA endpoints (testbed-optimized).
+    
+    Centralized validation function that replaces scattered inline auth checks
+    across LOLA collection endpoints with consistent, comprehensive validation.
+    
+    Args:
+        request: HTTP request object with authentication context
+        required_scope: Whether LOLA scope is required (default: True)
+    
+    Returns:
+        dict: Validation result with 'valid' boolean and optional 'error_response'
+        
+    What each validation layer does:
+        Layer 1: OAuth Scope Validation - Ensures proper LOLA scope
+        Layer 2: Trust Settings Framework - Ready for TR1 trust controls  
+        Layer 3: Security Event Logging - Audit trail for monitoring
+        Layer 4: Structured Error Responses - Consistent JSON error format
+    """
+    # Layer 1: OAuth Scope Validation
+    # This checks if the request has the 'activitypub_account_portability' scope
+    # which is required by the LOLA specification for accessing migration data
+    if required_scope and not getattr(request, 'has_portability_scope', False):
+        # Log the unauthorized access attempt for security monitoring
+        logger.warning(f"LOLA access denied: insufficient_scope for {request.path}")
+        
+        # Return structured error response with specific error code and helpful details
+        return {
+            'valid': False,
+            'error_response': Response(
+                {
+                    "error": "insufficient_scope",
+                    "description": "This endpoint requires activitypub_account_portability scope",
+                    "required_scope": "activitypub_account_portability", 
+                    "endpoint": request.path
+                },
+                status=403  # 403 Forbidden - client is authenticated but lacks permission
+            )
+        }
+    
+    # Layer 2: Trust Settings Framework (placeholder for TR1) (Still in consideration)
+    # - Server allowlist checking (only allow trusted destination servers)
+    # - Public-only mode toggle (restrict to public content only)
+    # - Trust policy validation (custom trust rules)
+    # For now, this is a placeholder that always passes validation
+    
+    # Layer 3: Security Event Logging  
+    # Log successful LOLA authentications for audit trails and monitoring
+    if required_scope and getattr(request, 'has_portability_scope', False):
+        logger.info(f"LOLA access granted: scope=activitypub_account_portability endpoint={request.path}")
+    
+    # All validation layers passed successfully
+    return {'valid': True}
+
+
 def activitypub_content(view_func):
     """
     This decorator dds the required ActivityPub content-type
@@ -308,15 +364,10 @@ def followers_collection(request, pk):
     """
     actor = get_object_or_404(Actor, pk=pk)
     
-    # Check authentication - this collection requires LOLA scope
-    if not getattr(request, 'has_portability_scope', False):
-        return Response(
-            {
-                "error": "unauthorized",
-                "description": "This collection requires activitypub_account_portability scope"
-            },
-            status=401
-        )
+    # Apply centralized LOLA validation
+    validation_result = validate_lola_access(request, required_scope=True)
+    if not validation_result['valid']:
+        return validation_result['error_response']
     
     # Get all active follower relationships for this actor
     followers_qs = Followers.objects.filter(
@@ -362,15 +413,10 @@ def content_collection(request, pk):
     """
     actor = get_object_or_404(Actor, pk=pk)
     
-    # Check authentication - this collection requires LOLA scope
-    if not getattr(request, 'has_portability_scope', False):
-        return Response(
-            {
-                "error": "unauthorized",
-                "description": "This collection requires activitypub_account_portability scope"
-            },
-            status=401
-        )
+    # Apply centralized LOLA validation
+    validation_result = validate_lola_access(request, required_scope=True)
+    if not validation_result['valid']:
+        return validation_result['error_response']
     
     # Apply content filtering based on authentication and scope
     notes_qs = Note.objects.filter(actor=actor).order_by('-published')
@@ -413,15 +459,10 @@ def liked_collection(request, pk):
     """
     actor = get_object_or_404(Actor, pk=pk)
     
-    # Check authentication - this collection requires LOLA scope
-    if not getattr(request, 'has_portability_scope', False):
-        return Response(
-            {
-                "error": "unauthorized", 
-                "description": "This collection requires activitypub_account_portability scope"
-            },
-            status=401
-        )
+    # Apply centralized LOLA validation
+    validation_result = validate_lola_access(request, required_scope=True)
+    if not validation_result['valid']:
+        return validation_result['error_response']
     
     # Get all LikeActivity objects for this actor in reverse chronological order
     likes_qs = LikeActivity.objects.filter(actor=actor).order_by('-timestamp')
