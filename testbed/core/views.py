@@ -8,6 +8,7 @@ from django.http import HttpResponse, JsonResponse
 from .models import Actor, PortabilityOutbox, Following, Followers, Note, LikeActivity
 from .json_ld_builders import build_actor_json_ld, build_outbox_json_ld, build_collection_json_ld, build_relationship_items, build_note_json_ld, build_like_activity_json_ld
 from .json_ld_utils import build_note_id, build_actor_id
+from .utils.errors import build_insufficient_scope_error, build_actor_not_found_error, ErrorCodes
 from django.contrib.auth.decorators import login_required
 from testbed.core.utils.oauth_utils import (
     get_user_application,
@@ -54,17 +55,13 @@ def validate_lola_access(request, required_scope=True):
         # Log the unauthorized access attempt for security monitoring
         logger.warning(f"LOLA access denied: insufficient_scope for {request.path}")
         
-        # Return structured error response with specific error code and helpful details
+        # Return enhanced structured error response with comprehensive details
         return {
             'valid': False,
-            'error_response': Response(
-                {
-                    "error": "insufficient_scope",
-                    "description": "This endpoint requires activitypub_account_portability scope",
-                    "required_scope": "activitypub_account_portability", 
-                    "endpoint": request.path
-                },
-                status=403  # 403 Forbidden - client is authenticated but lacks permission
+            'error_response': build_insufficient_scope_error(
+                required_scope="activitypub_account_portability",
+                endpoint_path=request.path,
+                request=request
             )
         }
     
@@ -133,7 +130,10 @@ def actor_detail(request, pk):
     Returns basic ActivityPub data for unauthenticated requests,
     and enhanced LOLA data for authenticated requests with portability scope.
     """
-    actor = get_object_or_404(Actor, pk=pk)
+    try:
+        actor = Actor.objects.get(pk=pk)
+    except Actor.DoesNotExist:
+        return build_actor_not_found_error(pk, request)
     
     # Build standardized authentication context
     auth_context = build_auth_context(request)
@@ -152,7 +152,10 @@ def portability_outbox_detail(request, pk):
     Returns public activities for unauthenticated requests,
     and all activities for authenticated requests with portability scope.
     """
-    outbox = get_object_or_404(PortabilityOutbox, actor_id=pk)
+    try:
+        outbox = PortabilityOutbox.objects.get(actor_id=pk)
+    except PortabilityOutbox.DoesNotExist:
+        return build_actor_not_found_error(pk, request)
     
     # Build standardized authentication context
     auth_context = build_auth_context(request)
@@ -335,7 +338,10 @@ def following_collection(request, pk):
     Note: While the collection URL only appears in LOLA-authenticated Actor objects,
     the collection itself follows standard ActivityPub public access patterns.
     """
-    actor = get_object_or_404(Actor, pk=pk)
+    try:
+        actor = Actor.objects.get(pk=pk)
+    except Actor.DoesNotExist:
+        return build_actor_not_found_error(pk, request)
     
     # Get all active following relationships for this actor
     following_qs = Following.objects.filter(
@@ -373,7 +379,10 @@ def followers_collection(request, pk):
     This is privacy-sensitive data that requires LOLA scope authentication.
     Per LOLA implementation: Followers collection requires account migration authorization token.
     """
-    actor = get_object_or_404(Actor, pk=pk)
+    try:
+        actor = Actor.objects.get(pk=pk)
+    except Actor.DoesNotExist:
+        return build_actor_not_found_error(pk, request)
     
     # Apply centralized LOLA validation
     validation_result = validate_lola_access(request, required_scope=True)
@@ -418,7 +427,10 @@ def content_collection(request, pk):
     This endpoint requires LOLA scope authentication and applies privacy/scope gating
     before returning non-public objects.
     """
-    actor = get_object_or_404(Actor, pk=pk)
+    try:
+        actor = Actor.objects.get(pk=pk)
+    except Actor.DoesNotExist:
+        return build_actor_not_found_error(pk, request)
     
     # Apply centralized LOLA validation
     validation_result = validate_lola_access(request, required_scope=True)
@@ -460,7 +472,10 @@ def liked_collection(request, pk):
     This endpoint requires LOLA scope authentication and applies field projection
     to minimize payload size while providing sufficient metadata for migration.
     """
-    actor = get_object_or_404(Actor, pk=pk)
+    try:
+        actor = Actor.objects.get(pk=pk)
+    except Actor.DoesNotExist:
+        return build_actor_not_found_error(pk, request)
     
     # Apply centralized LOLA validation
     validation_result = validate_lola_access(request, required_scope=True)
