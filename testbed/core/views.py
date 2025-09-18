@@ -5,7 +5,7 @@ from django.shortcuts import redirect
 from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse, JsonResponse
-from .models import Actor, PortabilityOutbox, Following, Followers, Note, LikeActivity
+from .models import Actor, PortabilityOutbox, Following, Followers, Note, LikeActivity, Blocked
 from .json_ld_builders import build_actor_json_ld, build_outbox_json_ld, build_collection_json_ld, build_relationship_items, build_note_json_ld, build_like_activity_json_ld
 from .json_ld_utils import build_note_id, build_actor_id
 from .utils.errors import build_insufficient_scope_error, build_actor_not_found_error, ErrorCodes
@@ -534,6 +534,61 @@ def liked_collection(request, pk):
     # Build ActivityPub OrderedCollection
     collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/liked"
     collection_data = build_collection_json_ld(collection_id, items)
+    
+    return Response(collection_data)
+
+
+@api_view(['GET'])
+@authentication_classes([OptionalOAuth2Authentication])
+@activitypub_content
+def blocked_collection(request, pk):
+    """
+    LOLA Blocked collection endpoint.
+    
+    Returns actors that have been blocked by an actor in ActivityPub OrderedCollection format.
+    Per LOLA spec: "If the source server does blocking, the personal block list SHOULD be fetchable at the 
+    URL advertised on the Actor object, as per https://codeberg.org/fediverse/fep/src/branch/main/fep/c648/fep-c648.md"
+    
+    This is highly privacy-sensitive data that requires LOLA scope authentication.
+    Block lists are critical user safety data that must never be exposed without proper authorization.
+    
+    Security Note: This endpoint implements the strongest privacy protection in the entire LOLA specification,
+    as block lists reveal who users consider threats, harassers, or sources of harm. 
+    Unauthorized access could compromise user safety.
+    """
+    try:
+        actor = Actor.objects.get(pk=pk)
+    except Actor.DoesNotExist:
+        return build_actor_not_found_error(pk, request)
+    
+    # Apply centralized LOLA validation - MANDATORY for blocked collection
+    validation_result = validate_lola_access(request, required_scope=True)
+    if not validation_result['valid']:
+        return validation_result['error_response']
+    
+    # Get all active blocking relationships for this actor
+    blocked_qs = Blocked.objects.filter(
+        actor=actor,
+        status=Blocked.STATUS_ACTIVE
+    ).order_by('-created_at')
+    
+    # Build standardized authentication context for nested Actor objects
+    auth_context = build_auth_context(request)
+    
+    # Build the collection items using the same pattern as followers/following
+    items = build_relationship_items(
+        relationships=blocked_qs,
+        local_actor_field='blocked_actor',
+        remote_url_field='blocked_actor_url',
+        remote_data_field='blocked_actor_data',
+        auth_context=auth_context
+    )
+    
+    # Build ActivityPub OrderedCollection in FEP-c648 format
+    collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/blocked"
+    collection_data = build_collection_json_ld(collection_id, items)
+    
+    logger.info(f"Blocked collection accessed: actor_id={pk}, items_count={len(items)}")
     
     return Response(collection_data)
 

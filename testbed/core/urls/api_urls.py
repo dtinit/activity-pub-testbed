@@ -7,6 +7,7 @@ from testbed.core.views import (
     followers_collection,
     content_collection,
     liked_collection,
+    blocked_collection,
 )
 
 urlpatterns = [
@@ -41,6 +42,12 @@ urlpatterns = [
         "actors/<int:pk>/liked/",
         liked_collection,
         name="liked-collection",
+    ),
+    # LOLA Blocked Collection: User safety data (block list), LOLA authentication required, FEP-c648 compliant
+    path(
+        "actors/<int:pk>/blocked/",
+        blocked_collection,
+        name="blocked-collection",
     ),
     # Deactivate Account: API endpoint for account deactivation
     path(

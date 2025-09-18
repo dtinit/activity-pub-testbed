@@ -363,6 +363,92 @@ class Followers(models.Model):
         return f'{username} follows {self.actor.username} (remote)'
 
 
+class Blocked(models.Model):
+    """
+    LOLA Blocked collection model representing current blocking state.
+    
+    Per LOLA spec: "If the source server does blocking, the personal block list SHOULD be fetchable at the 
+    URL advertised on the Actor object, as per https://codeberg.org/fediverse/fep/src/branch/main/fep/c648/fep-c648.md"
+    
+    This model tracks actors that have been blocked, supporting both local and remote actors.
+    This is privacy-sensitive data that requires LOLA scope authentication and follows FEP-c648 format.
+    
+    Privacy Note: Block lists are highly sensitive user safety data that must be protected 
+    with proper authentication and scope validation.
+    """
+    STATUS_ACTIVE = "active"
+    STATUS_INACTIVE = "inactive"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_INACTIVE, "Inactive"),
+    ]
+    
+    # The actor doing the blocking
+    actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="blocking_relationships")
+    
+    # Local actor being blocked (for same-server relationships)
+    blocked_actor = models.ForeignKey(
+        Actor,
+        on_delete=models.CASCADE,
+        related_name="blocked_by_relationships",
+        null=True,
+        blank=True
+    )
+    
+    # Remote actor being blocked (for federation)
+    blocked_actor_url = models.URLField(
+        max_length=500,
+        help_text="ActivityPub Actor URL for remote blocks",
+        null=True,
+        blank=True
+    )
+    blocked_actor_data = models.JSONField(
+        help_text="Cached metadata of the blocked remote actor",
+        null=True,
+        blank=True,
+    )
+    
+    # Block-specific fields per session requirements
+    reason = models.TextField(
+        help_text="Optional reason for blocking (for user reference, not shared)",
+        blank=True,
+        default=""
+    )
+    
+    # Relationship state and metadata  
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['actor', 'blocked_actor'],
+                name='unique_local_blocked',
+                condition=models.Q(blocked_actor__isnull=False)
+            ),
+            models.UniqueConstraint(
+                fields=['actor', 'blocked_actor_url'],
+                name='unique_remote_blocked',
+                condition=models.Q(blocked_actor_url__isnull=False)
+            )
+        ]
+    
+    def clean(self):
+        super().clean()
+        # Ensure exactly one target is specified (either local actor or remote URL+data)
+        if not self.blocked_actor and not (self.blocked_actor_url and self.blocked_actor_data):
+            raise ValidationError("Either local blocked_actor or remote actor data (URL and metadata) must be provided")
+        if self.blocked_actor and self.blocked_actor_url:
+            raise ValidationError("Cannot specify both local blocked_actor and remote blocked_actor_url")
+    
+    def __str__(self):
+        if self.blocked_actor:
+            return f'{self.actor.username} blocks {self.blocked_actor.username} (local)'
+        username = self.blocked_actor_data.get('preferredUsername', 'unknown') if self.blocked_actor_data else 'unknown'
+        return f'{self.actor.username} blocks {username} (remote)'
+
+
 class OAuthClientCredentials(models.Model):
     """
     Encrypted storage for OAuth client secrets to solve "Token Exchange Failed" issues.
