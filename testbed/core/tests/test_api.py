@@ -527,9 +527,9 @@ class TestFollowersCollectionEndpoint:
         # Unauthenticated request should be denied
         response = client.get(reverse("followers-collection", kwargs={"pk": target_actor.id}))
         
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        assert "unauthorized" in response.data["error"]
-        assert "activitypub_account_portability" in response.data["description"]
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert "insufficient_scope" in response.data["error_code"]
+        assert "activitypub_account_portability" in response.data["detail"]
 
     # Test Followers collection access with proper LOLA authentication
     @pytest.mark.django_db
@@ -567,7 +567,7 @@ class TestFollowersCollectionEndpoint:
         response = client.get(reverse("followers-collection", kwargs={"pk": target_actor.id}))
         
         # Should be denied even with valid OAuth token (wrong scope)
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
     # Validate Followers collection includes full Actor objects for local followers
     @pytest.mark.django_db
