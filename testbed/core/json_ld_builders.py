@@ -49,6 +49,7 @@ def build_actor_json_ld(actor, auth_context=None):
         
         # Additional LOLA discovery fields
         actor_data["content"] = f"{actor_id}/content"
+        actor_data["liked"] = f"{actor_id}/liked"
         actor_data["blocked"] = f"{actor_id}/blocked"
         actor_data["migration"] = f"{actor_id}/outbox"
     

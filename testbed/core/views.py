@@ -5,8 +5,10 @@ from django.shortcuts import redirect
 from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse, JsonResponse
-from .models import Actor, PortabilityOutbox, Following, Followers
-from .json_ld_builders import build_actor_json_ld, build_outbox_json_ld, build_collection_json_ld, build_relationship_items
+from .models import Actor, PortabilityOutbox, Following, Followers, Note, LikeActivity, Blocked
+from .json_ld_builders import build_actor_json_ld, build_outbox_json_ld, build_collection_json_ld, build_relationship_items, build_note_json_ld, build_like_activity_json_ld
+from .json_ld_utils import build_note_id, build_actor_id
+from .utils.errors import build_insufficient_scope_error, build_actor_not_found_error, ErrorCodes
 from django.contrib.auth.decorators import login_required
 from testbed.core.utils.oauth_utils import (
     get_user_application,
@@ -24,6 +26,81 @@ from django.urls import reverse
 from functools import wraps
 
 logger = logging.getLogger(__name__)
+
+
+def validate_lola_access(request, required_scope=True):
+    """
+    Enhanced privacy and scope gating for LOLA endpoints (testbed-optimized).
+    
+    Centralized validation function that replaces scattered inline auth checks
+    across LOLA collection endpoints with consistent, comprehensive validation.
+    
+    Args:
+        request: HTTP request object with authentication context
+        required_scope: Whether LOLA scope is required (default: True)
+    
+    Returns:
+        dict: Validation result with 'valid' boolean and optional 'error_response'
+        
+    What each validation layer does:
+        Layer 1: OAuth Scope Validation - Ensures proper LOLA scope
+        Layer 2: Trust Settings Framework - Ready for TR1 trust controls  
+        Layer 3: Security Event Logging - Audit trail for monitoring
+        Layer 4: Structured Error Responses - Consistent JSON error format
+    """
+    # Layer 1: OAuth Scope Validation
+    # This checks if the request has the 'activitypub_account_portability' scope
+    # which is required by the LOLA specification for accessing migration data
+    if required_scope and not getattr(request, 'has_portability_scope', False):
+        # Log the unauthorized access attempt for security monitoring
+        logger.warning(f"LOLA access denied: insufficient_scope for {request.path}")
+        
+        # Return enhanced structured error response with comprehensive details
+        return {
+            'valid': False,
+            'error_response': build_insufficient_scope_error(
+                required_scope="activitypub_account_portability",
+                endpoint_path=request.path,
+                request=request
+            )
+        }
+    
+    # Layer 2: Trust Settings Framework (placeholder for TR1) (Still in consideration)
+    # - Server allowlist checking (only allow trusted destination servers)
+    # - Public-only mode toggle (restrict to public content only)
+    # - Trust policy validation (custom trust rules)
+    # For now, this is a placeholder that always passes validation
+    
+    # Layer 3: Security Event Logging  
+    # Log successful LOLA authentications for audit trails and monitoring
+    if required_scope and getattr(request, 'has_portability_scope', False):
+        logger.info(f"LOLA access granted: scope=activitypub_account_portability endpoint={request.path}")
+    
+    # All validation layers passed successfully
+    return {'valid': True}
+
+
+def build_auth_context(request):
+    """
+    Build standardized authentication context for LOLA JSON-LD builders.
+    
+    Centralizes authentication context creation to eliminate code duplication
+    and ensure consistent context structure across all LOLA endpoints.
+    
+    Args:
+        request: HTTP request object with OAuth authentication attributes
+        
+    Returns:
+        dict: Authentication context with keys:
+            - is_authenticated: boolean OAuth authentication status
+            - has_portability_scope: boolean LOLA scope presence
+            - request: HTTP request object for dynamic URL building
+    """
+    return {
+        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
+        'has_portability_scope': getattr(request, 'has_portability_scope', False),
+        'request': request
+    }
 
 
 def activitypub_content(view_func):
@@ -53,14 +130,13 @@ def actor_detail(request, pk):
     Returns basic ActivityPub data for unauthenticated requests,
     and enhanced LOLA data for authenticated requests with portability scope.
     """
-    actor = get_object_or_404(Actor, pk=pk)
+    try:
+        actor = Actor.objects.get(pk=pk)
+    except Actor.DoesNotExist:
+        return build_actor_not_found_error(pk, request)
     
-    # Create authentication context for JSON-LD builder
-    auth_context = {
-        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
-        'has_portability_scope': getattr(request, 'has_portability_scope', False),
-        'request': request
-    }
+    # Build standardized authentication context
+    auth_context = build_auth_context(request)
     
     # Build response with authentication context
     data = build_actor_json_ld(actor, auth_context)
@@ -76,14 +152,13 @@ def portability_outbox_detail(request, pk):
     Returns public activities for unauthenticated requests,
     and all activities for authenticated requests with portability scope.
     """
-    outbox = get_object_or_404(PortabilityOutbox, actor_id=pk)
+    try:
+        outbox = PortabilityOutbox.objects.get(actor_id=pk)
+    except PortabilityOutbox.DoesNotExist:
+        return build_actor_not_found_error(pk, request)
     
-    # Create authentication context for JSON-LD builder
-    auth_context = {
-        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
-        'has_portability_scope': getattr(request, 'has_portability_scope', False),
-        'request': request
-    }
+    # Build standardized authentication context
+    auth_context = build_auth_context(request)
     
     # Build response with authentication-based content filtering
     data = build_outbox_json_ld(outbox, auth_context)
@@ -263,7 +338,10 @@ def following_collection(request, pk):
     Note: While the collection URL only appears in LOLA-authenticated Actor objects,
     the collection itself follows standard ActivityPub public access patterns.
     """
-    actor = get_object_or_404(Actor, pk=pk)
+    try:
+        actor = Actor.objects.get(pk=pk)
+    except Actor.DoesNotExist:
+        return build_actor_not_found_error(pk, request)
     
     # Get all active following relationships for this actor
     following_qs = Following.objects.filter(
@@ -271,12 +349,8 @@ def following_collection(request, pk):
         status=Following.STATUS_ACTIVE
     ).order_by('-created_at')
     
-    # Create authentication context for nested Actor objects
-    auth_context = {
-        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
-        'has_portability_scope': getattr(request, 'has_portability_scope', False),
-        'request': request
-    }
+    # Build standardized authentication context for nested Actor objects
+    auth_context = build_auth_context(request)
     
     # Build the collection items
     items = build_relationship_items(
@@ -305,17 +379,15 @@ def followers_collection(request, pk):
     This is privacy-sensitive data that requires LOLA scope authentication.
     Per LOLA implementation: Followers collection requires account migration authorization token.
     """
-    actor = get_object_or_404(Actor, pk=pk)
+    try:
+        actor = Actor.objects.get(pk=pk)
+    except Actor.DoesNotExist:
+        return build_actor_not_found_error(pk, request)
     
-    # Check authentication - this collection requires LOLA scope
-    if not getattr(request, 'has_portability_scope', False):
-        return Response(
-            {
-                "error": "unauthorized",
-                "description": "This collection requires activitypub_account_portability scope"
-            },
-            status=401
-        )
+    # Apply centralized LOLA validation
+    validation_result = validate_lola_access(request, required_scope=True)
+    if not validation_result['valid']:
+        return validation_result['error_response']
     
     # Get all active follower relationships for this actor
     followers_qs = Followers.objects.filter(
@@ -323,12 +395,8 @@ def followers_collection(request, pk):
         status=Followers.STATUS_ACTIVE
     ).order_by('-created_at')
     
-    # Create authentication context for nested Actor objects
-    auth_context = {
-        'is_authenticated': getattr(request, 'is_oauth_authenticated', False),
-        'has_portability_scope': getattr(request, 'has_portability_scope', False),
-        'request': request
-    }
+    # Build standardized authentication context for nested Actor objects
+    auth_context = build_auth_context(request)
     
     # Build the collection items
     items = build_relationship_items(
@@ -342,6 +410,185 @@ def followers_collection(request, pk):
     # Build ActivityPub OrderedCollection
     collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/followers"
     collection_data = build_collection_json_ld(collection_id, items)
+    
+    return Response(collection_data)
+
+
+@api_view(['GET'])
+@authentication_classes([OptionalOAuth2Authentication])
+@activitypub_content
+def content_collection(request, pk):
+    """
+    LOLA Content collection endpoint.
+    
+    Returns raw authored objects (Notes) without Activity wrappers per LOLA specification.
+    Per LOLA spec: "MUST provide raw authored objects (no wrapper Activities) for fidelity."
+    
+    This endpoint requires LOLA scope authentication and applies privacy/scope gating
+    before returning non-public objects.
+    """
+    try:
+        actor = Actor.objects.get(pk=pk)
+    except Actor.DoesNotExist:
+        return build_actor_not_found_error(pk, request)
+    
+    # Apply centralized LOLA validation
+    validation_result = validate_lola_access(request, required_scope=True)
+    if not validation_result['valid']:
+        return validation_result['error_response']
+    
+    # Apply content filtering based on authentication and scope
+    notes_qs = Note.objects.filter(actor=actor).order_by('-published')
+    
+    # Filter content based on authentication - public only for non-LOLA requests
+    if not getattr(request, 'has_portability_scope', False):
+        notes_qs = notes_qs.filter(visibility='public')
+    # LOLA authenticated requests with portability scope get ALL content (public + private)
+    
+    # Build standardized authentication context for JSON-LD building
+    auth_context = build_auth_context(request)
+    
+    # Build raw Note objects (no Activity wrappers)
+    items = [build_note_json_ld(note, auth_context) for note in notes_qs]
+    
+    # Build ActivityPub OrderedCollection
+    collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/content"
+    collection_data = build_collection_json_ld(collection_id, items)
+    
+    return Response(collection_data)
+
+
+@api_view(['GET'])
+@authentication_classes([OptionalOAuth2Authentication])
+@activitypub_content
+def liked_collection(request, pk):
+    """
+    LOLA Liked collection endpoint.
+    
+    Returns objects that an actor has liked with migration-ready metadata per LOLA specification.
+    Include migration-ready fields: id, type, attributedTo, published, 
+    summary/content, inReplyTo, audience (public), attachments meta, optional canonical URL.
+    
+    This endpoint requires LOLA scope authentication and applies field projection
+    to minimize payload size while providing sufficient metadata for migration.
+    """
+    try:
+        actor = Actor.objects.get(pk=pk)
+    except Actor.DoesNotExist:
+        return build_actor_not_found_error(pk, request)
+    
+    # Apply centralized LOLA validation
+    validation_result = validate_lola_access(request, required_scope=True)
+    if not validation_result['valid']:
+        return validation_result['error_response']
+    
+    # Get all LikeActivity objects for this actor in reverse chronological order
+    likes_qs = LikeActivity.objects.filter(actor=actor).order_by('-timestamp')
+    
+    # Apply visibility filtering - only include likes of public objects for privacy
+    # TODO: This could be enhanced with trust controls
+    likes_qs = likes_qs.filter(visibility='public')
+    
+    # Build standardized authentication context for JSON-LD building
+    auth_context = build_auth_context(request)
+    
+    # Build liked objects with required metadata fields
+    items = []
+    for like in likes_qs:
+        # Build the liked object with field projection for performance
+        if like.note:
+            # Local Note object - extract required metadata
+            liked_object = {
+                "id": build_note_id(like.note.id, auth_context.get('request')),
+                "type": "Note",
+                "attributedTo": build_actor_id(like.note.actor.id, auth_context.get('request')),
+                "published": like.note.published.isoformat(),
+                "summary": getattr(like.note, 'summary', ''),
+                "content": like.note.content[:280] if len(like.note.content) > 280 else like.note.content,  # Small content only
+                "inReplyTo": None,  # TODO: Add reply chain support when implemented
+                "audience": {"public": like.note.visibility == 'public'},
+                "attachment": [],  # TODO: Add when attachment support is implemented
+                "canonicalUrl": build_note_id(like.note.id, auth_context.get('request')),
+                # Optional objectHash for integrity verification
+                "objectHash": None  # TODO: Implement content hashing if needed
+            }
+        else:
+            # Remote object - use cached object_data with field projection
+            remote_data = like.object_data or {}
+            liked_object = {
+                "id": like.object_url,
+                "type": remote_data.get('type', 'Object'),
+                "attributedTo": remote_data.get('attributedTo', ''),
+                "published": remote_data.get('published', like.timestamp.isoformat()),
+                "summary": remote_data.get('summary', ''),
+                "content": remote_data.get('content', '')[:280] if remote_data.get('content') else '',  # Small content only
+                "inReplyTo": remote_data.get('inReplyTo'),
+                "audience": {"public": True},  # Assume remote objects in likes are public
+                "attachment": remote_data.get('attachment', [])[:3] if remote_data.get('attachment') else [],  # Limit attachments
+                "canonicalUrl": like.object_url,
+                "objectHash": remote_data.get('objectHash')
+            }
+        
+        items.append(liked_object)
+    
+    # Build ActivityPub OrderedCollection
+    collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/liked"
+    collection_data = build_collection_json_ld(collection_id, items)
+    
+    return Response(collection_data)
+
+
+@api_view(['GET'])
+@authentication_classes([OptionalOAuth2Authentication])
+@activitypub_content
+def blocked_collection(request, pk):
+    """
+    LOLA Blocked collection endpoint.
+    
+    Returns actors that have been blocked by an actor in ActivityPub OrderedCollection format.
+    Per LOLA spec: "If the source server does blocking, the personal block list SHOULD be fetchable at the 
+    URL advertised on the Actor object, as per https://codeberg.org/fediverse/fep/src/branch/main/fep/c648/fep-c648.md"
+    
+    This is highly privacy-sensitive data that requires LOLA scope authentication.
+    Block lists are critical user safety data that must never be exposed without proper authorization.
+    
+    Security Note: This endpoint implements the strongest privacy protection in the entire LOLA specification,
+    as block lists reveal who users consider threats, harassers, or sources of harm. 
+    Unauthorized access could compromise user safety.
+    """
+    try:
+        actor = Actor.objects.get(pk=pk)
+    except Actor.DoesNotExist:
+        return build_actor_not_found_error(pk, request)
+    
+    # Apply centralized LOLA validation - MANDATORY for blocked collection
+    validation_result = validate_lola_access(request, required_scope=True)
+    if not validation_result['valid']:
+        return validation_result['error_response']
+    
+    # Get all active blocking relationships for this actor
+    blocked_qs = Blocked.objects.filter(
+        actor=actor,
+        status=Blocked.STATUS_ACTIVE
+    ).order_by('-created_at')
+    
+    # Build standardized authentication context for nested Actor objects
+    auth_context = build_auth_context(request)
+    
+    # Build the collection items using the same pattern as followers/following
+    items = build_relationship_items(
+        relationships=blocked_qs,
+        local_actor_field='blocked_actor',
+        remote_url_field='blocked_actor_url',
+        remote_data_field='blocked_actor_data',
+        auth_context=auth_context
+    )
+    
+    # Build ActivityPub OrderedCollection in FEP-c648 format
+    collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/blocked"
+    collection_data = build_collection_json_ld(collection_id, items)
+    
+    logger.info(f"Blocked collection accessed: actor_id={pk}, items_count={len(items)}")
     
     return Response(collection_data)
 
