@@ -14,7 +14,7 @@ libsass==0.23.0
 Markdown==3.7
 pip-tools==7.4.1
 pre_commit==4.2.0
-psycopg2==2.9.10
+psycopg2-binary==2.9.10
 pytest==8.3.3
 pytest-cov==6.0.0
 pytest-django==4.9.0
