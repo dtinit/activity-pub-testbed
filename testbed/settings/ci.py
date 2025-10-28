@@ -13,6 +13,7 @@ SEED_ADMIN_USERNAME = ("admin",)
 SEED_ADMIN_EMAIL = ("admin@testing.com",)
 SEED_ADMIN_PASSWORD = ("admin123",)
 
+# Override to use PostgreSQL for CI testing (matches production/staging environment)
 DATABASES = {"default": env.db_url("DJ_DATABASE_CONN_STRING")}
 
 LOGGING["loggers"] = {

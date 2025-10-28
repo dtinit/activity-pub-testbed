@@ -1,0 +1,63 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# GitHub Actions
+.github
+
+# Development files
+README.md
+LICENSE
+.pre-commit-config.yaml
+personal-development/
+
+# Python cache and artifacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.pytest_cache
+.coverage
+htmlcov/
+
+# Environment files (never include in Docker image)
+.env
+.env-*
+.env.local
+.env.*.local
+
+# Database files (development only)
+db.sqlite3
+*.sqlite3
+
+# Node modules (if any)
+node_modules/
+
+# IDE files
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# Documentation
+docs/
+
+# Static files (will be collected during build)
+staticfiles/
+static/
+
+# Media files (should be in GCS, not in image)
+media/
