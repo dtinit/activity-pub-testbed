@@ -22,3 +22,10 @@ requests==2.32.3
 rich==14.0.0
 ruff==0.11.2
 structlog==25.2.0
+
+# Production dependencies for Cloud Run deployment
+gunicorn==23.0.0                           # Production WSGI HTTP server
+django-storages[google]==1.14.4            # Google Cloud Storage backend for Django
+google-cloud-storage==2.18.2               # Google Cloud Storage client library
+google-cloud-logging==3.11.3               # Google Cloud Logging integration
+django-google-structured-logger==2.8.10    # Structured logging formatter for GCP

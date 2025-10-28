@@ -1,0 +1,5 @@
+# Include all patterns from .gitignore
+#!include:.gitignore
+
+# But allow service account credentials (needed for deployment)
+!service-account-credentials.json

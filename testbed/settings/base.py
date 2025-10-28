@@ -11,8 +11,8 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
-
 import os
+import sys
 import environ
 import structlog
 
@@ -22,10 +22,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 env = environ.Env()
 env.read_env(os.path.join(BASE_DIR, ".env"))
 
-PROJECT_NAME = env.str("PROJECT_NAME", default="Activity Pub Testbed")
+PROJECT_NAME = "ActivityPub-Testbed"
+SITE_URL = "[localhost]"
+
+# SECURITY WARNING: keep the secret key used in production secret
+SECRET_KEY = env.str("DJANGO_SECRET_KEY", default="django-insecure-dev-key-change-in-production")
+
+# SECURITY WARNING: don't run with debug turned on in production
+DEBUG = True
+
+ALLOWED_HOSTS = []
+
+# Allow seeding in development by default (will be overridden in production/staging)
+ALLOWED_SEED_COMMAND = True
 
 # Application definition
-
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -75,9 +86,17 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "testbed.wsgi.application"
 
+# https://docs.djangoproject.com/en/5.1/ref/settings/#databases
+# Force SQLite for base/development (will be overridden in production/staging)
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+    }
+}
+
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
@@ -93,22 +112,15 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
-
 LANGUAGE_CODE = "en-us"
-
 TIME_ZONE = "UTC"
-
 USE_I18N = True
-
 USE_TZ = True
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
-
 STATIC_URL = "static/"
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "static")
@@ -116,21 +128,18 @@ STATICFILES_DIRS = [
 STATIC_ROOT = env.str("DJANGO_STATIC_ROOT", str(BASE_DIR.joinpath("staticfiles")))
 
 # SASS
-
 STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
     'sass_processor.finders.CssFinder'
 ]
-SASS_PROCESSOR_AUTO_INCLUDE = False # Don't bother looking through apps
+SASS_PROCESSOR_AUTO_INCLUDE = False
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
-
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Structlog setup
-
 structlog.configure(
     processors=[
         structlog.contextvars.merge_contextvars,
@@ -148,8 +157,6 @@ structlog.configure(
     logger_factory=structlog.stdlib.LoggerFactory(),
     cache_logger_on_first_use=True,
 ),
-
-# Logging configuration
 
 LOGGING = {
     "version": 1,
@@ -207,8 +214,6 @@ ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*']
 ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_SESSION_REMEMBER = True
-ACCOUNT_EMAIL_VERIFICATION='mandatory'
-ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION=True
 LOGIN_REDIRECT_URL = '/'
 
 ACCOUNT_ADAPTER = 'testbed.core.adapters.TestbedAccountAdapter'
@@ -218,8 +223,9 @@ LOGIN_URL = '/account/login/'
 LOGIN_REDIRECT_URL = '/'
 ACCOUNT_LOGOUT_REDIRECT_URL = '/'
 
-# Email configuration
-DEFAULT_FROM_EMAIL='noreply@dt-reg.org'
+# Email configuration - default to console backend for development
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = 'noreply@dt-reg.org'
 
 # OAuth2 provider configuration
 OAUTH2_PROVIDER = {
