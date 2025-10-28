@@ -6,7 +6,7 @@ ENVIRONMENT = "ci"
 DEBUG = True
 ALLOWED_SEED_COMMAND = True
 SECRET_KEY = env.str("DJANGO_SECRET_KEY")
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS") + ["testserver"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 
 # Seeding settings
 SEED_ADMIN_USERNAME = ("admin",)
