@@ -55,9 +55,8 @@ logs/
 # Documentation
 docs/
 
-# Static files (will be collected during build)
+# Static files (collected files only, keep source files for SCSS compilation)
 staticfiles/
-static/
 
 # Media files (should be in GCS, not in image)
 media/
