@@ -34,13 +34,6 @@ STORAGES = {
             "location": "static",
         }
     },
-    "sass_processor": {
-        "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
-        "OPTIONS": {
-            "bucket_name": GS_BUCKET_NAME,
-            "location": "site-assets",
-        }
-    }
 }
 
 LOGGING = {
