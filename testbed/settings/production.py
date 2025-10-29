@@ -34,6 +34,13 @@ STORAGES = {
             "location": "static",
         }
     },
+    "sass_processor": {
+        "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
+        "OPTIONS": {
+            "bucket_name": GS_BUCKET_NAME,
+            "location": "static",  # Same as staticfiles!
+        }
+    }
 }
 
 STATIC_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/static/'
