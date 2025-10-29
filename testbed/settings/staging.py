@@ -13,7 +13,3 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # Update the STORAGES configuration with the staging bucket
 for key in STORAGES:
     STORAGES[key]["OPTIONS"]["bucket_name"] = GS_BUCKET_NAME
-
-# Bucket URLs for static and media files
-STATIC_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/site-assets/'
-MEDIA_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/schemas/'
