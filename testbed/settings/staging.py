@@ -2,8 +2,8 @@
 from .production import *
 
 ENVIRONMENT = "staging"
-ALLOWED_HOSTS = [".run.app"] # Temporary in order to get Cloud Run default
-SITE_URL = ""
+ALLOWED_HOSTS = ["activitypub-testbed-stg-run-737003321709.us-central1.run.app"]
+SITE_URL = "https://activitypub-testbed-stg-run-737003321709.us-central1.run.app"
 CSRF_TRUSTED_ORIGINS = ['https://' + url for url in ALLOWED_HOSTS]
 GS_BUCKET_NAME = "activitypub-testbed-stg-storage"
 
