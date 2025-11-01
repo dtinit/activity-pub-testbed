@@ -1,11 +1,17 @@
 # ActivityPub Testbed CI/CD Pipeline
 #
 # This workflow provides continuous integration testing and automated deployment to Google Cloud Run.
+
+# - Continuous integration (tests) and deployment to Google Cloud Run.
+# - Production deployments automatically tag the repo and create a GitHub Release
+#   named production-YYYY-MM-DD-HH-MM-SSZ (UTC). If a tag already exists, a -rN suffix is added.
+# - The release uses auto-generated notes and can include the deployment URL.
 #
 # ## Workflow Jobs
 #
-# 1. test-python: Runs Django tests with PostgreSQL database
-# 2. deploy: Deploys to Google Cloud Run (staging or production)
+# 1) test-python       — Run Django tests against a Postgres service.
+# 2) deploy            — Deploy to Cloud Run (Staging on push to main, or manually to chosen env).
+# 3) create-release    — Production-only: creates UTC tag + GitHub Release after a successful deploy.
 #
 # ## Deployment Flow
 #
@@ -34,14 +40,14 @@
 #
 # - EMAIL_HOST_PASSWORD: SMTP password for sending emails (e.g., Gmail app password)
 #
-# ## Deployment Steps
+# ## Deployment Steps (deploy job)
 #
 # The deploy job performs these operations:
 # 1. Authenticates to Google Cloud Platform
 # 2. Runs database migrations via Cloud SQL Auth Proxy
 # 3. Compiles SCSS to CSS
 # 4. Collects static files and uploads to Google Cloud Storage
-# 5. Configures CORS for the storage bucket
+# 5. Configures CORS for the Google Cloud Storage bucket
 # 6. Deploys application to Cloud Run using --source flag (builds from Dockerfile)
 
 name: CI-CD
@@ -56,6 +62,8 @@ on:
       environment:
         type: environment
         description: Select the target environment
+        default: 'Staging'
+        required: true
 
 jobs:
   # Test Python/Django code with PostgreSQL database
@@ -110,6 +118,9 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.environment || 'Staging' }}
+      url: ${{ steps.extract_deployment_url.outputs.url }}
+    outputs:
+      url: ${{ steps.extract_deployment_url.outputs.url }}
     env:
       DJANGO_SETTINGS_MODULE: ${{ vars.DJANGO_SETTINGS_MODULE }}
       # Temporary placeholder - real value passed during Cloud Run deployment
@@ -133,6 +144,14 @@ jobs:
         with:
           name: service-account-credentials.json
           json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Extract deployment URL
+        id: extract_deployment_url
+        continue-on-error: true
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+        run: |
+          python -c "from django.conf import settings; print(f'url=https://{settings.ALLOWED_HOSTS[0]}')" >> $GITHUB_OUTPUT
 
       - uses: 'google-github-actions/auth@v2'
         with:
@@ -220,3 +239,52 @@ jobs:
           --set-env-vars DJ_DATABASE_CONN_STRING="postgres://${{ env.ENCODED_DB_CREDENTIALS }}@//cloudsql/${{ secrets.CLOUD_SQL_ICN }}/${{ vars.DATABASE_NAME }}"
           --set-env-vars EMAIL_HOST_PASSWORD="${{ secrets.EMAIL_HOST_PASSWORD }}"
           --allow-unauthenticated
+
+  create-release:
+    if: inputs.environment == 'Production'
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.create-tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 'Configure git user'
+        run: |
+          git config user.name "Github Actions"
+          git config user.email "github-actions@users.noreply.github.com"
+
+      - name: 'Create git tag'
+        id: create-tag
+        run: |
+          timestamp=$(date -u +'%Y-%m-%d-%H-%M-%S')Z
+          base_tag="production-$timestamp"
+          tag="$base_tag"
+          retry=0
+          
+          # Check if tag exists and add retry suffix if needed
+          while git ls-remote --tags origin | grep -q "refs/tags/$tag"; do
+            retry=$((retry + 1))
+            tag="$base_tag-r$retry"
+          done
+          
+          git tag "$tag"
+          git push origin "$tag"
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+      
+      - name: 'Create GitHub release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_body=""
+          if [ -n "${{ needs.deploy.outputs.url }}" ]; then
+            release_body="**Deployment URL:** ${{ needs.deploy.outputs.url }}"
+          fi
+          
+          gh release create ${{ steps.create-tag.outputs.tag }} \
+            --repo="$GITHUB_REPOSITORY" \
+            --title="${{ steps.create-tag.outputs.tag }}" \
+            --notes="$release_body" \
+            --generate-notes
