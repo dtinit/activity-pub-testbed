@@ -28,6 +28,7 @@
 # - SERVICE_ACCOUNT_NAME: Email address of the service account used for Cloud Run
 # - DATABASE_NAME: PostgreSQL database name in Cloud SQL
 # - ARTIFACT_REGISTRY: Name of the container image
+# - DEPLOYMENT_URL: The deployment URL for the environment (without https://)
 #
 # ### GitHub Environment Secrets (per environment: Staging, Production)
 #
@@ -118,9 +119,8 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.environment || 'Staging' }}
-      url: ${{ steps.extract_deployment_url.outputs.url }}
     outputs:
-      url: ${{ steps.extract_deployment_url.outputs.url }}
+      url: ${{ steps.get_service_url.outputs.url }}
     env:
       DJANGO_SETTINGS_MODULE: ${{ vars.DJANGO_SETTINGS_MODULE }}
       # Temporary placeholder - real value passed during Cloud Run deployment
@@ -144,14 +144,6 @@ jobs:
         with:
           name: service-account-credentials.json
           json: ${{ secrets.GCP_CREDENTIALS }}
-
-      - name: Extract deployment URL
-        id: extract_deployment_url
-        continue-on-error: true
-        env:
-          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-        run: |
-          python -c "from django.conf import settings; print(f'url=https://{settings.ALLOWED_HOSTS[0]}')" >> $GITHUB_OUTPUT
 
       - uses: 'google-github-actions/auth@v2'
         with:
@@ -239,6 +231,12 @@ jobs:
           --set-env-vars DJ_DATABASE_CONN_STRING="postgres://${{ env.ENCODED_DB_CREDENTIALS }}@//cloudsql/${{ secrets.CLOUD_SQL_ICN }}/${{ vars.DATABASE_NAME }}"
           --set-env-vars EMAIL_HOST_PASSWORD="${{ secrets.EMAIL_HOST_PASSWORD }}"
           --allow-unauthenticated
+
+      - name: Set deployment URL
+        id: get_service_url
+        run: |
+          echo "url=https://${{ vars.DEPLOYMENT_URL }}" >> $GITHUB_OUTPUT
+          echo "Deployment URL: https://${{ vars.DEPLOYMENT_URL }}"
 
   create-release:
     if: inputs.environment == 'Production'
