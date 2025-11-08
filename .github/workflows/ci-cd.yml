@@ -28,7 +28,6 @@
 # - SERVICE_ACCOUNT_NAME: Email address of the service account used for Cloud Run
 # - DATABASE_NAME: PostgreSQL database name in Cloud SQL
 # - ARTIFACT_REGISTRY: Name of the container image
-# - DEPLOYMENT_URL: The deployment URL for the environment (without https://)
 #
 # ### GitHub Environment Secrets (per environment: Staging, Production)
 #
@@ -119,8 +118,9 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.environment || 'Staging' }}
+      url: ${{ steps.extract_deployment_url.outputs.url }}
     outputs:
-      url: ${{ steps.get_service_url.outputs.url }}
+      url: ${{ steps.extract_deployment_url.outputs.url }}
     env:
       DJANGO_SETTINGS_MODULE: ${{ vars.DJANGO_SETTINGS_MODULE }}
       # Temporary placeholder - real value passed during Cloud Run deployment
@@ -195,6 +195,16 @@ jobs:
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
         run: python3 manage.py migrate
 
+      - name: Extract deployment URL
+        id: extract_deployment_url
+        env:
+          DJ_DATABASE_CONN_STRING: postgres://${{ env.ENCODED_DB_CREDENTIALS }}@localhost:1234/${{ vars.DATABASE_NAME }}
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+        run: |
+          SITE_URL=$(python3 -c "from django.conf import settings; print(settings.SITE_URL)")
+          echo "url=$SITE_URL" >> $GITHUB_OUTPUT
+          echo "Deployment URL: $SITE_URL"
+
       - name: Stop Cloud SQL Auth Proxy
         run: pkill cloud-sql-proxy
 
@@ -232,11 +242,6 @@ jobs:
           --set-env-vars EMAIL_HOST_PASSWORD="${{ secrets.EMAIL_HOST_PASSWORD }}"
           --allow-unauthenticated
 
-      - name: Set deployment URL
-        id: get_service_url
-        run: |
-          echo "url=https://${{ vars.DEPLOYMENT_URL }}" >> $GITHUB_OUTPUT
-          echo "Deployment URL: https://${{ vars.DEPLOYMENT_URL }}"
 
   create-release:
     if: inputs.environment == 'Production'
