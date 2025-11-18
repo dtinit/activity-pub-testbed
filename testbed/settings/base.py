@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 import os
 import sys
+import logging
 import environ
 import structlog
 from google.cloud.logging import Client as CloudLoggingClient
@@ -37,6 +38,8 @@ ALLOWED_HOSTS = []
 
 # Allow seeding in development by default (will be overridden in production/staging)
 ALLOWED_SEED_COMMAND = True
+
+logger = logging.getLogger(__name__)
 
 # Application definition
 INSTALLED_APPS = [
@@ -174,7 +177,7 @@ if USE_GCLOUD_LOGGING:
         from testbed.core.utils.logging_filters import CloudRunTraceFilter
         CLOUD_LOGGING_HANDLER.addFilter(CloudRunTraceFilter())
     except Exception as e:
-        print(f"Warning: Failed to initialize Cloud Logging: {e}")
+        logger.warning(f"Warning: Failed to initialize Cloud Logging: {e}")
         USE_GCLOUD_LOGGING = False
 
 LOGGING = {
