@@ -46,44 +46,8 @@ STORAGES = {
 STATIC_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/static/'
 MEDIA_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/media/'
 
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'json': {
-            '()': 'django_google_structured_logger.formatter.GoogleFormatter',
-        },
-    },
-    
-    'handlers': {
-        'google_cloud': {
-            'class': 'google.cloud.logging_v2.handlers.StructuredLogHandler',
-            'stream': sys.stdout,
-            'formatter': 'json',
-        },
-    },
-    'root': {
-        'handlers': ['google_cloud'],
-        'level': 'INFO',
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['google_cloud'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'django.request': {
-            'handlers': ['google_cloud'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'testbed': {
-            'handlers': ['google_cloud'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-    },
-}
+# Cloud Logging configuration inherited from base.py
+# Set USE_GCLOUD_LOGGING=1 in Cloud Run environment variables to enable
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"

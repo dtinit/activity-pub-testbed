@@ -1,6 +1,9 @@
 # ruff: noqa: F405, F403
 from .production import *
 
+# Cloud Logging configuration inherited from base.py via production.py
+# Set USE_GCLOUD_LOGGING=1 in Cloud Run environment variables to enable
+
 ENVIRONMENT = "staging"
 ALLOWED_HOSTS = ["activitypub-testbed-stg-run-737003321709.us-central1.run.app"]
 SITE_URL = "https://activitypub-testbed-stg-run-737003321709.us-central1.run.app"
