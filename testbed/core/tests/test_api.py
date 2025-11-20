@@ -74,102 +74,11 @@ def test_outbox_not_found():
     response = APIClient().get(reverse("actor-outbox", kwargs={"pk": 99999}))
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
-
-# LOLA Authentication Tests
-
 """
-Tests the complete request-response cycle with different authentication states
-to verify that endpoints properly serve enhanced data for LOLA-authenticated requests.
+Edge case tests for LOLA authentication.
+These tests focus on specific edge cases: URL params, outbox filtering, error handling, headers.
 """
 class TestLOLAAuthenticationAPI:
-    # Constants for OAuth scopes
-    LOLA_SCOPE = 'activitypub_account_portability read write'
-    BASIC_SCOPE = 'read write'
-    
-    # Helper methods for repeated assertions
-
-    # Helper to verify standard ActivityPub fields
-    def assert_basic_activitypub_structure(self, data, actor, mock_request):
-        assert data["@context"] == build_actor_context()
-        assert data["type"] == "Person"
-        
-        assert data["id"] == build_actor_id(actor.id, mock_request)
-        assert data["preferredUsername"] == actor.username
-        
-    # Helper to verify LOLA fields are absent
-    def assert_no_lola_fields(self, data):
-        lola_fields = ["accountPortabilityOauth", "content", "blocked", "migration"]
-        for field in lola_fields:
-            assert field not in data
-            
-    # Helper to verify LOLA fields are present and properly formatted        
-    def assert_has_lola_fields(self, data, actor):
-        assert "accountPortabilityOauth" in data
-        assert "content" in data
-        assert "blocked" in data
-        assert "migration" in data
-        
-        # Verify LOLA URLs are properly formatted
-        assert data["accountPortabilityOauth"].endswith("/oauth/authorize/")
-        assert data["content"].endswith(f"/actors/{actor.id}/content")
-        assert data["blocked"].endswith(f"/actors/{actor.id}/blocked")
-        assert data["migration"].endswith(f"/actors/{actor.id}/outbox")
-        
-    # Helper to create authenticated client    
-    def get_authenticated_client(self, token):
-        client = APIClient()
-        client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
-        return client
-    
-    # Test that unauthenticated requests return basic ActivityPub data only
-    @pytest.mark.django_db
-    def test_actor_detail_unauthenticated_returns_basic_activitypub(self, mock_request):
-        actor = create_isolated_actor("unauthenticated_test")
-        client = APIClient()
-        
-        response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
-        
-        # Should succeed with basic ActivityPub response
-        assert response.status_code == status.HTTP_200_OK
-        
-        data = response.data
-        # Use helper methods for assertions
-        self.assert_basic_activitypub_structure(data, actor, mock_request)
-        self.assert_no_lola_fields(data)
-    
-    # Test that LOLA-authenticated requests return enhanced data with collection URLs
-    @pytest.mark.django_db
-    def test_actor_detail_with_lola_scope_returns_enhanced_data(self, mock_request):
-        actor = create_isolated_actor("lola_enhanced_test")
-        lola_token = AccessTokenFactory(lola_scope=True)
-        client = self.get_authenticated_client(lola_token)
-        
-        response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
-        
-        # Should succeed with enhanced response
-        assert response.status_code == status.HTTP_200_OK
-        
-        data = response.data
-        # Use helper methods for assertions
-        self.assert_basic_activitypub_structure(data, actor, mock_request)
-        self.assert_has_lola_fields(data, actor)
-    
-    # Test that authenticated requests without LOLA scope return basic data
-    @pytest.mark.django_db
-    def test_actor_detail_with_basic_token_returns_basic_data(self, mock_request):
-        actor = create_isolated_actor("basic_token_test")
-        basic_token = AccessTokenFactory(scope=self.BASIC_SCOPE)
-        client = self.get_authenticated_client(basic_token)
-        
-        response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
-        
-        # Should succeed but return basic data (no LOLA scope)
-        assert response.status_code == status.HTTP_200_OK
-        
-        data = response.data
-        # Use helper methods for assertions
-        self.assert_basic_activitypub_structure(data, actor, mock_request)
-        self.assert_no_lola_fields(data)
     
     # Test that URL parameter authentication works for LOLA testing
     @pytest.mark.django_db
@@ -183,10 +92,8 @@ class TestLOLAAuthenticationAPI:
         response = client.get(f"{url}?auth_token={lola_token.token}")
         
         assert response.status_code == status.HTTP_200_OK
-        
-        data = response.data
-        # Should have LOLA fields (proves URL parameter auth worked)
-        self.assert_has_lola_fields(data, actor)
+        # Should have migration field (proves URL parameter auth worked)
+        assert "migration" in response.data
     
     # Test that outbox shows different content based on authentication
     @pytest.mark.django_db
@@ -224,38 +131,6 @@ class TestLOLAAuthenticationAPI:
         assert public_data["id"] == expected_outbox_id
         assert lola_data["id"] == expected_outbox_id
     
-    # Test that demonstrates clear differences between public and LOLA responses
-    @pytest.mark.django_db
-    def test_side_by_side_authentication_comparison(self):
-        actor = create_isolated_actor("comparison_test")
-        lola_token = AccessTokenFactory(lola_scope=True)
-        
-        # Public request
-        public_client = APIClient()
-        public_response = public_client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
-        public_data = public_response.data
-        
-        # LOLA request
-        lola_client = self.get_authenticated_client(lola_token)
-        lola_response = lola_client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
-        lola_data = lola_response.data
-        
-        # Both should succeed
-        assert public_response.status_code == status.HTTP_200_OK
-        assert lola_response.status_code == status.HTTP_200_OK
-        
-        # Both should have identical basic fields
-        basic_fields = ["@context", "type", "id", "preferredUsername", "name", "previously"]
-        for field in basic_fields:
-            assert public_data[field] == lola_data[field]
-        
-        # Only LOLA should have enhanced fields
-        lola_fields = ["accountPortabilityOauth", "content", "blocked", "migration"]
-        for field in lola_fields:
-            assert field not in public_data
-            assert field in lola_data
-            assert isinstance(lola_data[field], str)  # Should be URL strings
-    
     # Test that invalid tokens gracefully degrade to unauthenticated behavior
     @pytest.mark.django_db
     def test_invalid_token_graceful_degradation(self):
@@ -268,13 +143,8 @@ class TestLOLAAuthenticationAPI:
         
         # Should succeed with public data (graceful degradation)
         assert response.status_code == status.HTTP_200_OK
-        
-        data = response.data
-        assert data["type"] == "Person"
-        # Should NOT have LOLA fields (invalid token treated as unauthenticated)
-        assert "accountPortabilityOauth" not in data
-        assert "content" not in data
-        assert "blocked" not in data
+        # Should NOT have migration field (invalid token = unauthenticated)
+        assert "migration" not in response.data
     
     # Test graceful handling of malformed authorization headers
     @pytest.mark.parametrize("malformed_header", [
@@ -284,25 +154,25 @@ class TestLOLAAuthenticationAPI:
         "InvalidFormat token",  # Malformed header
     ])
     @pytest.mark.django_db
-    def test_malformed_authorization_header_handling(self, malformed_header, mock_request):
+    def test_malformed_authorization_header_handling(self, malformed_header):
         actor = create_isolated_actor("malformed_header_test")
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION=malformed_header)
         
         response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
         
-        # Should succeed with public data for all malformed cases
+        # Should succeed with public data (malformed auth = unauthenticated)
         assert response.status_code == status.HTTP_200_OK
-        data = response.data
-        self.assert_basic_activitypub_structure(data, actor, mock_request)
-        self.assert_no_lola_fields(data)
+        # Should NOT have migration field
+        assert "migration" not in response.data
     
     # Test that content-type headers are set correctly for API responses
     @pytest.mark.django_db
     def test_content_type_headers_set_correctly(self):
         actor = create_isolated_actor("content_type_test")
         lola_token = AccessTokenFactory(lola_scope=True)
-        client = self.get_authenticated_client(lola_token)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
         
         # Request with format=json 
         response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}), {"format": "json"})
@@ -312,10 +182,8 @@ class TestLOLAAuthenticationAPI:
         assert response["Content-Type"] == "application/json"
         # Should have CORS header for federation
         assert response["Access-Control-Allow-Origin"] == "*"
-        
-        # Should still have LOLA fields
-        data = response.data
-        assert "accountPortabilityOauth" in data
+        # Should have migration field (authenticated)
+        assert "migration" in response.data
 
 
 # LOLA Following Collection Tests

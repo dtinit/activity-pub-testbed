@@ -25,6 +25,9 @@ env.read_env(os.path.join(BASE_DIR, ".env"))
 PROJECT_NAME = "ActivityPub-Testbed"
 SITE_URL = "[localhost]"
 
+# Override in environment-specific settings (staging.py, production.py)
+BASE_URL = "http://localhost:8000"
+
 # SECURITY WARNING: keep the secret key used in production secret
 SECRET_KEY = env.str("DJANGO_SECRET_KEY", default="django-insecure-dev-key-change-in-production")
 

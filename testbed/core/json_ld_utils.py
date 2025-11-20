@@ -1,16 +1,18 @@
-class JsonLDContext:
-    ACTIVITY_STREAM = "https://www.w3.org/ns/activitystreams"
-    LOLA = "https://swicg.github.io/activitypub-data-portability/lola.jsonld"
+ACTIVITY_STREAM_CONTEXT = "https://www.w3.org/ns/activitystreams"
+LOLA_CONTEXT = "https://swicg.github.io/activitypub-data-portability/lola"
+BLOCKED_CONTEXT = "https://purl.archive.org/socialweb/blocked"
 
-# Return the basic context used in most responses
+# Basic context used in most responses
 def build_basic_context():
-    return JsonLDContext.ACTIVITY_STREAM
+    return ACTIVITY_STREAM_CONTEXT
 
-# Return the extended context used specifcally for Actor responses
+# Return the extended context used specifically for Actor responses
+# Includes blocked collection support (FEP-c648)
 def build_actor_context():
     return [
-        JsonLDContext.ACTIVITY_STREAM,
-        JsonLDContext.LOLA
+        ACTIVITY_STREAM_CONTEXT,
+        BLOCKED_CONTEXT,
+        LOLA_CONTEXT
     ]
 
 def build_id_url(type_name, obj_id, request):

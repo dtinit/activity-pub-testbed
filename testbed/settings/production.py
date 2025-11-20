@@ -9,6 +9,7 @@ ALLOWED_SEED_COMMAND = False
 SECRET_KEY = env.str("DJANGO_SECRET_KEY")
 ALLOWED_HOSTS = ["ap-testbed.dtinit.org", "www.ap-testbed.dtinit.org", "activitypub-testbed-prod-run-512458093489.us-central1.run.app"]
 SITE_URL = "https://ap-testbed.dtinit.org"
+BASE_URL = "https://ap-testbed.dtinit.org"
 
 # Cloud Run uses X-Forwarded-Proto header for HTTPS detection
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

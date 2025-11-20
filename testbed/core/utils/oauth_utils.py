@@ -337,15 +337,18 @@ def clear_token_from_session(request):
     else:
         logger.debug("No OAuth token data found in session to clear")
 
-# OAuth Endpoint URL Construction
+
+# Build OAuth authorization endpoint URL for LOLA discovery
 def build_oauth_endpoint_url(request):
     """
-    Build OAuth authorization endpoint URL for LOLA discovery.
-    
     This function constructs the OAuth authorization endpoint URL that will be
     included in ActivityPub Actor responses for LOLA account portability.
     The URL allows other ActivityPub services to discover where users can
     authorize access for account migration.
+    
+    Per LOLA specification: "ActivityPub servers supporting this specification 
+    MUST provide the URL for their portability authorization endpoint in Actor 
+    objects, using the 'accountPortabilityOauth' field."
     
     Args:
         request: The HTTP request object containing scheme and host information
@@ -358,5 +361,8 @@ def build_oauth_endpoint_url(request):
         host = request.get_host()
         return f"{scheme}://{host}/oauth/authorize/"
     else:
-        # Fallback for cases where request is not available (testing, etc.)
-        return "https://example.com/oauth/authorize/"
+        # Fallback for edge cases (testing, background tasks, etc.)
+        # In production, request should always be available for Actor endpoint responses
+        logger.warning("build_oauth_endpoint_url called without request object - using BASE_URL from settings")
+        from django.conf import settings
+        return f"{settings.BASE_URL}/oauth/authorize/"
