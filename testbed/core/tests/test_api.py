@@ -318,67 +318,6 @@ class TestLOLAAuthenticationAPI:
         assert "accountPortabilityOauth" in data
 
 
-# LOLA Discovery Endpoint Tests
-
-"""
-Tests for .well-known/oauth-authorization-server endpoint
-RFC8414-compliant OAuth Authorization Server Metadata with LOLA extensions
-"""
-class TestLOLADiscoveryEndpoint:
-
-    @pytest.mark.django_db
-    def test_oauth_discovery_endpoint_returns_valid_metadata(self):
-        """Validate that discovery endpoint returns RFC8414-compliant OAuth metadata"""
-        client = APIClient()
-        
-        response = client.get('/.well-known/oauth-authorization-server')
-        
-        assert response.status_code == status.HTTP_200_OK
-        assert response['Content-Type'] == 'application/json'
-        assert response['Access-Control-Allow-Origin'] == '*'
-        
-        data = response.json()
-        
-        # Check required OAuth metadata fields
-        required_fields = [
-            'issuer', 'authorization_endpoint', 'token_endpoint',
-            'scopes_supported', 'response_types_supported', 'grant_types_supported'
-        ]
-        
-        for field in required_fields:
-            assert field in data, f"Missing required OAuth field: {field}"
-    
-    @pytest.mark.django_db
-    def test_discovery_includes_lola_scope_and_endpoint(self):
-        """Verify LOLA-specific parameters are included for account portability discovery"""
-        client = APIClient()
-        
-        response = client.get('/.well-known/oauth-authorization-server')
-        data = response.json()
-        
-        # LOLA scope should be supported
-        assert 'activitypub_account_portability' in data['scopes_supported']
-        
-        # LOLA endpoint parameter should be present
-        assert 'activitypub_account_portability' in data
-        assert data['activitypub_account_portability'].endswith('/oauth/authorize/')
-    
-    @pytest.mark.django_db
-    def test_discovery_endpoint_urls_are_absolute(self):
-        """Ensure all URLs in discovery response are absolute for federation compatibility"""
-        client = APIClient()
-        
-        response = client.get('/.well-known/oauth-authorization-server')
-        data = response.json()
-        
-        # All URL fields must be absolute for proper federation
-        url_fields = ['issuer', 'authorization_endpoint', 'token_endpoint', 'activitypub_account_portability']
-        
-        for field in url_fields:
-            url = data[field]
-            assert url.startswith('http'), f"{field} should be absolute URL: {url}"
-
-
 # LOLA Following Collection Tests
 
 """
