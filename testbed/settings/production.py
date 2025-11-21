@@ -8,7 +8,7 @@ DEBUG = False
 ALLOWED_SEED_COMMAND = False
 SECRET_KEY = env.str("DJANGO_SECRET_KEY")
 ALLOWED_HOSTS = ["ap-testbed.dtinit.org", "www.ap-testbed.dtinit.org", "activitypub-testbed-prod-run-512458093489.us-central1.run.app"]
-SITE_URL = "https://ap-testbed.dtinit.org/"
+SITE_URL = "https://ap-testbed.dtinit.org"
 
 # PostgreSQL for production
 DATABASES = {"default": env.db_url("DJ_DATABASE_CONN_STRING")}
