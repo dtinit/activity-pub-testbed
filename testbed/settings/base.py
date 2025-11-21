@@ -16,8 +16,6 @@ import sys
 import logging
 import environ
 import structlog
-from google.cloud.logging import Client as CloudLoggingClient
-from google.cloud.logging.handlers import CloudLoggingHandler
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -163,23 +161,8 @@ structlog.configure(
     cache_logger_on_first_use=True,
 ),
 
-# Feature flag for Cloud Logging (enabled in staging/production via USE_GCLOUD_LOGGING=1)
-USE_GCLOUD_LOGGING = os.environ.get('USE_GCLOUD_LOGGING', '0') == '1'
-
-CLOUD_LOGGING_HANDLER = None
-if USE_GCLOUD_LOGGING:
-    try:
-        cloud_logging_client = CloudLoggingClient()
-        CLOUD_LOGGING_HANDLER = CloudLoggingHandler(
-            cloud_logging_client,
-            name="testbed"
-        )
-        from testbed.core.utils.logging_filters import CloudRunTraceFilter
-        CLOUD_LOGGING_HANDLER.addFilter(CloudRunTraceFilter())
-    except Exception as e:
-        logger.warning(f"Warning: Failed to initialize Cloud Logging: {e}")
-        USE_GCLOUD_LOGGING = False
-
+# Logging configuration
+# Cloud Logging is configured in production.py and inherited by staging.py
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -226,40 +209,6 @@ LOGGING = {
     },
 }
 
-# Add Cloud Logging handler when enabled (staging/production)
-if USE_GCLOUD_LOGGING and CLOUD_LOGGING_HANDLER:
-    LOGGING["handlers"]["cloud_logging"] = {
-        "()": lambda: CLOUD_LOGGING_HANDLER,
-    }
-    
-    LOGGING["loggers"]["django"]["handlers"] = ["cloud_logging"]
-    LOGGING["loggers"]["testbed"]["handlers"] = ["cloud_logging"]
-    
-    LOGGING["root"] = {
-        "handlers": ["cloud_logging"],
-        "level": "INFO",
-    }
-    
-    LOGGING["loggers"]["django.request"] = {
-        "handlers": ["cloud_logging"],
-        "level": "INFO",
-        "propagate": False,
-    }
-    LOGGING["loggers"]["gunicorn"] = {
-        "handlers": ["cloud_logging"],
-        "level": "INFO",
-        "propagate": False,
-    }
-    LOGGING["loggers"]["gunicorn.error"] = {
-        "handlers": ["cloud_logging"],
-        "level": "INFO",
-        "propagate": False,
-    }
-    LOGGING["loggers"]["gunicorn.access"] = {
-        "handlers": ["cloud_logging"],
-        "level": "INFO",
-        "propagate": False,
-    }
 
 AUTHENTICATION_BACKENDS = [
     # Needed to login by username in Django admin, regardless of `allauth`
