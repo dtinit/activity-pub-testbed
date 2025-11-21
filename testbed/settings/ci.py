@@ -7,6 +7,7 @@ DEBUG = True
 ALLOWED_SEED_COMMAND = True
 SECRET_KEY = env.str("DJANGO_SECRET_KEY")
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
+BASE_URL = "http://testserver"
 
 # Seeding settings
 SEED_ADMIN_USERNAME = ("admin",)

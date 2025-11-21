@@ -7,9 +7,14 @@ from .json_ld_utils import (build_basic_context,
 from .utils.oauth_utils import build_oauth_endpoint_url
 from .models import CreateActivity, LikeActivity, FollowActivity
 
+# Build JSON-LD Actor with LOLA compliance.
 def build_actor_json_ld(actor, auth_context=None):
     """
-    Build JSON-LD Actor with optional LOLA enhancements.
+    The accountPortabilityOauth field MUST always be present
+    for OAuth endpoint discovery (public visibility).
+    
+    The migration.* properties are conditionally included only 
+    when the request includes a valid portability token (scoped access).
     
     Args:
         actor: The Actor model instance
@@ -21,37 +26,42 @@ def build_actor_json_ld(actor, auth_context=None):
     Returns:
         Dict containing ActivityPub Actor with conditional LOLA fields
     """
+
     # Extract request for dynamic URL generation
     request = auth_context.get('request') if auth_context else None
     
-    # Base ActivityPub Actor (always included) - now with dynamic URLs
+    # Build actor URL
     actor_id = build_actor_id(actor.id, request)
+    
+    # Base ActivityPub Actor (always included)
     actor_data = {
         "@context": build_actor_context(),
         "type": "Person",
         "id": actor_id,
         "preferredUsername": actor.username,
         "name": actor.username,
-        # Standard ActivityPub collections
         "inbox": f"{actor_id}/inbox",
-        "outbox": f"{actor_id}/outbox",
-        "previously": actor.previously or [], # Ensure it's always a list
+        "previously": actor.previously or [],
+        "accountPortabilityOauth": build_oauth_endpoint_url(request)
     }
     
-    # Add LOLA fields ONLY when authenticated with portability scope
+    # Privacy-sensitive fields ONLY with portability scope
     if auth_context and auth_context.get('has_portability_scope'):
-        # Required LOLA discovery field
-        actor_data["accountPortabilityOauth"] = build_oauth_endpoint_url(request)
-        
-        # LOLA social collections (privacy-sensitive relationship data)
-        actor_data["followers"] = f"{actor_id}/followers"
+        # Standard ActivityPub collections (privacy-sensitive)
+        actor_data["outbox"] = f"{actor_id}/outbox"
         actor_data["following"] = f"{actor_id}/following"
-        
-        # Additional LOLA discovery fields
-        actor_data["content"] = f"{actor_id}/content"
+        actor_data["followers"] = f"{actor_id}/followers"
         actor_data["liked"] = f"{actor_id}/liked"
         actor_data["blocked"] = f"{actor_id}/blocked"
-        actor_data["migration"] = f"{actor_id}/outbox"
+        
+        # LOLA migration endpoints (same URLs, scope-filtered responses)
+        actor_data["migration"] = {
+            "outbox": f"{actor_id}/outbox",
+            "content": f"{actor_id}/content",
+            "following": f"{actor_id}/following",
+            "blocked": f"{actor_id}/blocked",
+            "liked": f"{actor_id}/liked"
+        }
     
     return actor_data
 
