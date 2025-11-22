@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 import os
 import sys
+import logging
 import environ
 import structlog
 
@@ -38,6 +39,8 @@ ALLOWED_HOSTS = []
 
 # Allow seeding in development by default (will be overridden in production/staging)
 ALLOWED_SEED_COMMAND = True
+
+logger = logging.getLogger(__name__)
 
 # Application definition
 INSTALLED_APPS = [
@@ -161,6 +164,8 @@ structlog.configure(
     cache_logger_on_first_use=True,
 ),
 
+# Logging configuration
+# Cloud Logging is configured in production.py and inherited by staging.py
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -197,13 +202,16 @@ LOGGING = {
         "django": {
             "handlers": ["rich_console"],
             "level": "INFO",
+            "propagate": False,
         },
         "testbed": {
             "handlers": ["console"],
             "level": "INFO",
+            "propagate": False,
         },
     },
 }
+
 
 AUTHENTICATION_BACKENDS = [
     # Needed to login by username in Django admin, regardless of `allauth`

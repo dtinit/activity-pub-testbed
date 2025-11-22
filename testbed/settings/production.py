@@ -50,45 +50,6 @@ STORAGES = {
 STATIC_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/static/'
 MEDIA_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/media/'
 
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'json': {
-            '()': 'django_google_structured_logger.formatter.GoogleFormatter',
-        },
-    },
-    
-    'handlers': {
-        'google_cloud': {
-            'class': 'google.cloud.logging_v2.handlers.StructuredLogHandler',
-            'stream': sys.stdout,
-            'formatter': 'json',
-        },
-    },
-    'root': {
-        'handlers': ['google_cloud'],
-        'level': 'INFO',
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['google_cloud'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'django.request': {
-            'handlers': ['google_cloud'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'testbed': {
-            'handlers': ['google_cloud'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-    },
-}
-
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 587
@@ -96,3 +57,44 @@ EMAIL_USE_TLS = True
 EMAIL_USE_SSL = False
 EMAIL_HOST_USER = "noreply@dtinit.org"
 EMAIL_HOST_PASSWORD = env.str('EMAIL_HOST_PASSWORD')
+
+# This section configures Google Cloud Logging for Cloud Run environments.
+# Enabled via USE_GCLOUD_LOGGING=1 environment variable.
+if os.environ.get('USE_GCLOUD_LOGGING', '0') == '1':
+
+    LOGGING["handlers"]["cloud_logging"] = {
+        "()": "testbed.core.utils.logging_utils.get_cloud_logging_handler",
+    }
+    
+    LOGGING["root"] = {
+        "handlers": ["cloud_logging"],
+        "level": "INFO",
+    }
+
+    LOGGING["loggers"]["django"]["handlers"] = ["cloud_logging"]
+    LOGGING["loggers"]["django"]["propagate"] = False
+    
+    LOGGING["loggers"]["testbed"]["handlers"] = ["cloud_logging"]
+    LOGGING["loggers"]["testbed"]["propagate"] = False
+    
+    LOGGING["loggers"]["django.request"] = {
+        "handlers": ["cloud_logging"],
+        "level": "INFO",
+        "propagate": False,
+    }
+    
+    LOGGING["loggers"]["gunicorn"] = {
+        "handlers": ["cloud_logging"],
+        "level": "INFO",
+        "propagate": False,
+    }
+    LOGGING["loggers"]["gunicorn.error"] = {
+        "handlers": ["cloud_logging"],
+        "level": "INFO",
+        "propagate": False,
+    }
+    LOGGING["loggers"]["gunicorn.access"] = {
+        "handlers": ["cloud_logging"],
+        "level": "INFO",
+        "propagate": False,
+    }
