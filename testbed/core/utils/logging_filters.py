@@ -8,70 +8,84 @@ Reference: https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry
 """
 import logging
 import os
-import threading
+import contextvars
 
 
-# Thread-local storage for trace context
-_trace_local = threading.local()
+_trace_context_var = contextvars.ContextVar("trace_context", default=None)
+_request_path_var = contextvars.ContextVar("request_path", default=None)
+_request_method_var = contextvars.ContextVar("request_method", default=None)
 
 
-def set_trace_context(trace_context):
-    # Store trace context for the current thread/request
-    _trace_local.trace_context = trace_context
+def set_trace_context(trace_context, request_path=None, request_method=None):
+    _trace_context_var.set(trace_context)
+    _request_path_var.set(request_path)
+    _request_method_var.set(request_method)
 
 
 def get_trace_context():
-    # Retrieve trace context for the current thread/request
-    return getattr(_trace_local, 'trace_context', None)
+    return _trace_context_var.get()
 
 
 def clear_trace_context():
-    # Clear trace context for the current thread/request
-    _trace_local.trace_context = None
+    _trace_context_var.set(None)
+    _request_path_var.set(None)
+    _request_method_var.set(None)
 
 
 class CloudRunTraceFilter(logging.Filter):
     """
-    Enriches log records with Cloud Run trace context and environment metadata.
+    Enrich log records with Cloud Run trace context and environment metadata.
     
     Automatically adds:
     - trace: projects/PROJECT_ID/traces/TRACE_ID (for Cloud Logging correlation)
-    - span_id: Span ID from X-Cloud-Trace-Context
-    - environment: ENV_NAME (staging/production)
+    - spanId: Span ID from X-Cloud-Trace-Context
+    - environment: ENVIRONMENT (staging/production)
     - service: K_SERVICE (Cloud Run service name)
     - revision: K_REVISION (Cloud Run revision name)
+    - request_path: HTTP request path
+    - request_method: HTTP request method
     """
     
     def __init__(self, name=""):
+        
         super().__init__(name)
         self.project_id = os.environ.get('GOOGLE_CLOUD_PROJECT', 'unknown')
-        self.environment = os.environ.get('ENV_NAME', 'unknown')
+        self.environment = os.environ.get('ENVIRONMENT', 'unknown')
         self.service = os.environ.get('K_SERVICE', 'unknown')
         self.revision = os.environ.get('K_REVISION', 'unknown')
     
     def filter(self, record):
-        # Add trace and environment context to log record
-        # Add environment metadata
-        record.environment = self.environment
-        record.service = self.service
-        record.revision = self.revision
+        if self.environment:
+            record.environment = self.environment
+        if self.service:
+            record.service = self.service
+        if self.revision:
+            record.revision = self.revision
         
-        # Add trace context if available
-        trace_context = get_trace_context()
-        if trace_context:
+        # Add trace correlation if trace header present
+        trace_context = _trace_context_var.get()
+        if trace_context and self.project_id:
             try:
-                # Parse X-Cloud-Trace-Context: TRACE_ID/SPAN_ID;o=TRACE_TRUE
-                # Convert to: projects/PROJECT_ID/traces/TRACE_ID
-                parts = trace_context.split('/')
-                if len(parts) >= 1:
-                    trace_id = parts[0]
-                    record.trace = f"projects/{self.project_id}/traces/{trace_id}"
+                # Parse X-Cloud-Trace-Context: TRACE_ID/SPAN_ID;o=1
+                # https://docs.cloud.google.com/trace/docs/trace-context
+                x_cloud_trace_context_parts = trace_context.split(";")[0].split("/")
+                if len(x_cloud_trace_context_parts) >= 1:
+                    trace_id = x_cloud_trace_context_parts[0]
+                    if trace_id:
+                        record.trace = f"projects/{self.project_id}/traces/{trace_id}"
                     
-                    if len(parts) >= 2:
-                        span_parts = parts[1].split(';')
-                        if span_parts:
-                            record.span_id = span_parts[0]
-            except (IndexError, AttributeError):
+                    if len(x_cloud_trace_context_parts) >= 2:
+                        span_id = x_cloud_trace_context_parts[1]
+                        if span_id:
+                            record.spanId = span_id
+            except Exception:
                 pass
+        
+        request_path = _request_path_var.get()
+        request_method = _request_method_var.get()
+        if request_path:
+            record.request_path = request_path
+        if request_method:
+            record.request_method = request_method
         
         return True

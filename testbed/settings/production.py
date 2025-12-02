@@ -11,6 +11,15 @@ ALLOWED_HOSTS = ["ap-testbed.dtinit.org", "www.ap-testbed.dtinit.org", "activity
 SITE_URL = "https://ap-testbed.dtinit.org"
 BASE_URL = "https://ap-testbed.dtinit.org"
 
+# Add logging trace context middleware for Cloud Run trace correlation
+# Insert after SecurityMiddleware to capture trace context early in request processing
+MIDDLEWARE = MIDDLEWARE.copy()
+security_index = MIDDLEWARE.index("django.middleware.security.SecurityMiddleware")
+MIDDLEWARE.insert(
+    security_index + 1,
+    "testbed.core.middleware.logging_trace_context.LoggingTraceContextMiddleware"
+)
+
 # Cloud Run uses X-Forwarded-Proto header for HTTPS detection
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
