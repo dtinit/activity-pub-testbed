@@ -1,5 +1,4 @@
 # ruff: noqa: F405, F403
-import sys
 from google.oauth2 import service_account
 from .base import *
 
@@ -58,43 +57,7 @@ EMAIL_USE_SSL = False
 EMAIL_HOST_USER = "noreply@dtinit.org"
 EMAIL_HOST_PASSWORD = env.str('EMAIL_HOST_PASSWORD')
 
-# This section configures Google Cloud Logging for Cloud Run environments.
+# Google Cloud Logging with automatic trace correlation.
 # Enabled via USE_GCLOUD_LOGGING=1 environment variable.
-if os.environ.get('USE_GCLOUD_LOGGING', '0') == '1':
-
-    LOGGING["handlers"]["cloud_logging"] = {
-        "()": "testbed.core.utils.logging_utils.get_cloud_logging_handler",
-    }
-    
-    LOGGING["root"] = {
-        "handlers": ["cloud_logging"],
-        "level": "INFO",
-    }
-
-    LOGGING["loggers"]["django"]["handlers"] = ["cloud_logging"]
-    LOGGING["loggers"]["django"]["propagate"] = False
-    
-    LOGGING["loggers"]["testbed"]["handlers"] = ["cloud_logging"]
-    LOGGING["loggers"]["testbed"]["propagate"] = False
-    
-    LOGGING["loggers"]["django.request"] = {
-        "handlers": ["cloud_logging"],
-        "level": "INFO",
-        "propagate": False,
-    }
-    
-    LOGGING["loggers"]["gunicorn"] = {
-        "handlers": ["cloud_logging"],
-        "level": "INFO",
-        "propagate": False,
-    }
-    LOGGING["loggers"]["gunicorn.error"] = {
-        "handlers": ["cloud_logging"],
-        "level": "INFO",
-        "propagate": False,
-    }
-    LOGGING["loggers"]["gunicorn.access"] = {
-        "handlers": ["cloud_logging"],
-        "level": "INFO",
-        "propagate": False,
-    }
+from testbed.core.utils.logging_utils import setup_cloud_logging
+setup_cloud_logging()
