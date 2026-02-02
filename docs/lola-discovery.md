@@ -55,31 +55,41 @@ Per RFC8414, the following fields are included:
 **URL Routing**: `testbed/urls.py` (root level)
 
 ```python
-@api_view(['GET'])
 def oauth_authorization_server_metadata(request):
     """
     RFC8414-compliant OAuth Authorization Server Metadata endpoint for LOLA discovery.
+    
+    This endpoint enables automatic LOLA discovery by destination servers.
+    
+    Per LOLA specification: "ActivityPub servers supporting this specification SHOULD 
+    include the URL of their portability authorization endpoint in their authorization 
+    server metadata document [RFC8414] using the activitypub_account_portability parameter."
     """
-    # Build the base URL dynamically from the request
+    # Build base URL from request (HTTPS handled by SECURE_PROXY_SSL_HEADER in production)
     scheme = request.scheme
     host = request.get_host()
     base_url = f"{scheme}://{host}"
     
+    authorization_endpoint = f"{base_url}{reverse('oauth2_provider:authorize')}"
+    
     metadata = {
         "issuer": base_url,
-        "authorization_endpoint": f"{base_url}{reverse('oauth2_provider:authorize')}",
+        "authorization_endpoint": authorization_endpoint,
         "token_endpoint": f"{base_url}{reverse('oauth2_provider:token')}",
-        "scopes_supported": [
-            "activitypub_account_portability"
-        ],
+        "scopes_supported": ["activitypub_account_portability"],
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code"],
-        # LOLA-specific parameter
-        "activitypub_account_portability": f"{base_url}{reverse('oauth2_provider:authorize')}"
+        
+        # LOLA-specific parameter for account portability endpoint discovery
+        "activitypub_account_portability": {
+            "supported": True,
+            "authorization_endpoint": authorization_endpoint,
+            "scopes": ["activitypub_account_portability"]
+        }
     }
     
     response = JsonResponse(metadata)
-    response['Access-Control-Allow-Origin'] = '*'  # Enable federation
+    response['Access-Control-Allow-Origin'] = '*'  # CORS for federation
     return response
 ```
 
@@ -119,15 +129,22 @@ The `activitypub_account_portability` scope is included in `scopes_supported`:
 
 ### LOLA Endpoint Parameter
 
-A custom parameter provides direct access to the LOLA authorization endpoint:
+A custom parameter provides structured metadata about LOLA account portability support:
 
 ```json
 {
-  "activitypub_account_portability": "https://server.example/oauth/authorize/"
+  "activitypub_account_portability": {
+    "supported": true,
+    "authorization_endpoint": "https://server.example/oauth/authorize/",
+    "scopes": ["activitypub_account_portability"]
+  }
 }
 ```
 
-This enables destination servers to directly identify the LOLA portability endpoint.
+This structured format enables destination servers to:
+- Detect LOLA support via the `supported` flag
+- Discover the authorization endpoint for portability flows
+- Identify required scopes for account migration
 
 ## Discovery Flow
 
@@ -151,7 +168,11 @@ curl https://source.example/.well-known/oauth-authorization-server
   ],
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code"],
-  "activitypub_account_portability": "https://source.example/oauth/authorize/"
+  "activitypub_account_portability": {
+    "supported": true,
+    "authorization_endpoint": "https://source.example/oauth/authorize/",
+    "scopes": ["activitypub_account_portability"]
+  }
 }
 ```
 
@@ -209,10 +230,39 @@ URLs are generated dynamically based on the request, supporting:
 - Various host configurations
 - Development and production environments
 
+**Current Implementation:**
 ```python
 scheme = request.scheme  # 'http' or 'https'
 host = request.get_host()  # 'localhost:8000' or 'api.example.com'
 base_url = f"{scheme}://{host}"
+```
+
+**Production Considerations:**
+
+When using custom domains with load balancers (e.g., Cloud Run with domain mapping), SSL termination happens at the load balancer. The `X-Forwarded-Proto` header must be properly forwarded for `request.scheme` to correctly return `'https'`.
+
+**Settings Configuration:**
+```python
+# In production.py
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+BASE_URL = "https://ap-testbed.dtinit.org"
+```
+
+**Alternative Approach (More Reliable):**
+
+For production environments where load balancer configuration might not forward headers correctly:
+
+```python
+from django.conf import settings
+
+# Use BASE_URL from settings if available (production-safe)
+if hasattr(settings, 'BASE_URL') and settings.BASE_URL:
+    base_url = settings.BASE_URL
+else:
+    # Fallback to request-based detection for development
+    scheme = 'https' if request.is_secure() else 'http'
+    host = request.get_host()
+    base_url = f"{scheme}://{host}"
 ```
 
 ## Usage Examples
@@ -299,7 +349,7 @@ curl -s https://localhost:8000/.well-known/oauth-authorization-server | \
 
 While this implementation focuses on RFC8414 discovery, LOLA also supports Actor-based discovery. Both methods can coexist:
 
-**RFC8414 Discovery**: `/.well-known/oauth-authorization-server`
+**RFC8414 Discovery**: `/.well-known/oauth-authorization-server`\
 **Actor Discovery**: `accountPortabilityOauth` field in Actor objects
 
 ```json
@@ -333,27 +383,6 @@ The discovery endpoint integrates into the complete LOLA workflow:
 - **CORS enabled**: Allows cross-origin federation requests  
 - **No sensitive data**: Only public server capabilities exposed
 - **Standard compliance**: Follows RFC8414 security guidelines
-
-### Error Handling
-
-The endpoint handles various scenarios gracefully:
-
-```python
-# Dynamic URL building handles different environments
-try:
-    base_url = f"{request.scheme}://{request.get_host()}"
-    # Build metadata with base_url...
-except Exception:
-    # Fallback to configured base URL
-    pass
-```
-
-### Performance Considerations
-
-- **Lightweight response**: Small JSON payload
-- **No database queries**: Metadata built from configuration
-- **Cacheable**: Response suitable for HTTP caching
-- **Fast response**: No external dependencies
 
 ---
 
