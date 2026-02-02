@@ -627,6 +627,7 @@ def oauth_authorization_server_metadata(request):
     }
     
     response = JsonResponse(metadata)
+    response['Content-Type'] = 'application/json'
     response['Access-Control-Allow-Origin'] = '*'  # CORS for federation
     return response
 
