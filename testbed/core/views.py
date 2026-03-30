@@ -23,6 +23,7 @@ from django.urls import reverse
 import logging
 import requests
 from django.urls import reverse
+from django.conf import settings
 from functools import wraps
 
 logger = logging.getLogger(__name__)
@@ -603,10 +604,12 @@ def oauth_authorization_server_metadata(request):
     include the URL of their portability authorization endpoint in their authorization 
     server metadata document [RFC8414] using the activitypub_account_portability parameter."
     """
-    # Build base URL from request (HTTPS handled by SECURE_PROXY_SSL_HEADER in production)
-    scheme = request.scheme
-    host = request.get_host()
-    base_url = f"{scheme}://{host}"
+    if hasattr(settings, 'BASE_URL') and settings.BASE_URL:
+        base_url = settings.BASE_URL
+    else:
+        scheme = request.scheme
+        host = request.get_host()
+        base_url = f"{scheme}://{host}"
     
     authorization_endpoint = f"{base_url}{reverse('oauth2_provider:authorize')}"
     
