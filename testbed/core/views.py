@@ -22,7 +22,6 @@ from django.contrib import messages
 from django.urls import reverse
 import logging
 import requests
-from django.urls import reverse
 from django.conf import settings
 from functools import wraps
 
@@ -769,7 +768,12 @@ def test_token_exchange_view(request):
                 context['token_error'] = f"Error: {error_details.get('error', 'Unknown error')}"
                 if 'error_description' in error_details:
                     context['token_error'] += f" - {error_details['error_description']}"
-            except:
+            except (ValueError, KeyError):
+                # ValueError catches JSONDecodeError (response body is not valid JSON).
+                # KeyError is included defensively; in practice it cannot fire here
+                # because error_details['error_description'] is guarded by the 'in' check above.
+                # Note: AttributeError/TypeError (non-dict JSON) fall through to the outer
+                # except Exception handler at the call site with a less precise error message.
                 logger.warning(f"Response text: {token_response.text}")
                 context['token_error'] = f"Error: HTTP {token_response.status_code} - {token_response.text}"
     
