@@ -82,7 +82,7 @@ def get_user_application(user, request=None):
                 credentials.save()
                 
                 application.raw_client_secret = client_secret
-                logger.info(f"Successfully upgraded client secret to encrypted storage")
+                logger.info("Successfully upgraded client secret to encrypted storage")
                 
                 # Clean up session storage
                 request.session.pop(CLIENT_SECRET_SESSION_KEY, None)
@@ -258,9 +258,7 @@ def store_token_in_session(request, token_data):
     scope = token_data.get('scope', '')
     request.session[TOKEN_SCOPE_SESSION_KEY] = scope
     
-    # Get expires_in for logging purposes only (not stored for validation)
-    expires_in = token_data.get('expires_in', 3600)
-    logger.info(f"OAuth token stored in session for demo authentication (server will validate expiry)")
+    logger.info("OAuth token stored in session for demo authentication (server will validate expiry)")
 
 def get_token_from_session(request):
     """
