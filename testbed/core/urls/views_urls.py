@@ -1,5 +1,6 @@
 from django.urls import path
 from testbed.core.views import (
+    deactivate_account,
     index,
     trigger_account,
     report_activity,
@@ -7,7 +8,7 @@ from testbed.core.views import (
     test_error_view,
     oauth_callback,
     test_token_exchange_view,
-    )
+)
 
 urlpatterns = [
     path("", index, name="home"),
@@ -20,4 +21,10 @@ urlpatterns = [
     path("test/oauth/error/", test_error_view, name="test-oauth-error"),
     path("test/oauth/token/", test_token_exchange_view, name="test-oauth-token"),
     path("callback", oauth_callback, name="oauth-callback"),
+    # Staff-only admin action: deactivate a user account
+    path(
+        "actors/<int:actor_id>/deactivate/",
+        deactivate_account,
+        name="deactivate-account",
+    ),
 ]

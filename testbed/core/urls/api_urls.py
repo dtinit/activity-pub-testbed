@@ -2,7 +2,6 @@ from django.urls import path
 from testbed.core.views import (
     actor_detail,
     portability_outbox_detail,
-    deactivate_account,
     following_collection,
     followers_collection,
     content_collection,
@@ -48,11 +47,5 @@ urlpatterns = [
         "actors/<int:pk>/blocked/",
         blocked_collection,
         name="blocked-collection",
-    ),
-    # Deactivate Account: API endpoint for account deactivation
-    path(
-        "actors/<int:actor_id>/deactivate/",
-        deactivate_account,
-        name="deactivate-account",
     ),
 ]
