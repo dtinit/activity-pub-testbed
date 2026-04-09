@@ -24,7 +24,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 
 from ..models import Actor
-from ..utils.oauth_utils import (
+from ..oauth.utils import (
     generate_secure_state,
     get_user_application,
     store_state_in_session,

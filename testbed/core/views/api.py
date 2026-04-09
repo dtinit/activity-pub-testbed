@@ -40,7 +40,7 @@ from ..models import (
     Note,
     PortabilityOutbox,
 )
-from ..utils.authentication import OptionalOAuth2Authentication
+from ..oauth.authentication import OptionalOAuth2Authentication
 from ..utils.errors import build_actor_not_found_error
 from .decorators import activitypub_content, build_auth_context, validate_lola_access
 

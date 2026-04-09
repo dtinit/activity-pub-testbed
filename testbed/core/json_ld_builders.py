@@ -4,7 +4,7 @@ from .json_ld_utils import (build_basic_context,
                             build_activity_id,
                             build_note_id,
                             build_outbox_id)
-from .utils.oauth_utils import build_oauth_endpoint_url
+from .oauth.utils import build_oauth_endpoint_url
 from .models import CreateActivity, LikeActivity, FollowActivity
 
 # Build JSON-LD Actor with LOLA compliance.

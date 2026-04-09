@@ -20,8 +20,8 @@ from django.http import HttpResponse
 from django.shortcuts import redirect, render
 
 from ..models import Actor
-from ..forms.oauth_connection_form import OAuthApplicationForm
-from ..utils.oauth_utils import get_user_application
+from ..oauth.forms import OAuthApplicationForm
+from ..oauth.utils import get_user_application
 
 logger = logging.getLogger(__name__)
 

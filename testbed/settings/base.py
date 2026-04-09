@@ -12,7 +12,6 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
-import sys
 import logging
 import environ
 import structlog
@@ -246,7 +245,7 @@ OAUTH2_PROVIDER = {
     'ACCESS_TOKEN_EXPIRE_SECONDS': 3600,  # 1 hour
     'REFRESH_TOKEN_EXPIRE_SECONDS': 86400,  # 1 day
     'AUTHORIZATION_CODE_EXPIRE_SECONDS': 600,  # 10 minutes
-    'OAUTH2_VALIDATOR_CLASS': 'testbed.core.utils.oauth_validators.ActivityPubOAuth2Validator',
+    'OAUTH2_VALIDATOR_CLASS': 'testbed.core.oauth.validators.ActivityPubOAuth2Validator',
     # For testing purposes -> make PKCE optional
     'PKCE_REQUIRED': False,
 }
