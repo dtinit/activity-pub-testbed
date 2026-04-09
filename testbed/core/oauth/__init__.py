@@ -1,18 +1,3 @@
-"""
-OAuth package — all OAuth, authentication, and authorization components for LOLA.
-
-Submodules:
-    authentication  -- OptionalOAuth2Authentication (dual-mode: public + LOLA)
-    forms           -- OAuthApplicationForm (OAuth app settings UI form)
-    utils           -- State params, token sessions, client credential management
-    validators      -- ActivityPubOAuth2Validator (scope + redirect validation)
-
-Public symbols are re-exported here so that the rest of the project can import
-them via ``from testbed.core.oauth import <name>``.  When adding a new public
-symbol, add it to the appropriate submodule AND to this file's imports and
-``__all__`` list.
-"""
-
 from .authentication import OptionalOAuth2Authentication
 from .forms import OAuthApplicationForm
 from .utils import (
