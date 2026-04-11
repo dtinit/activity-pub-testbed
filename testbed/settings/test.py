@@ -6,7 +6,7 @@ ENVIRONMENT = "test"
 DEBUG = False
 ALLOWED_SEED_COMMAND = True
 SECRET_KEY = env.str("DJANGO_SECRET_KEY", default="your-dev-secret-key")
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["locahost", "127.0.0.1"])
+ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 BASE_URL = "http://testserver"
 
 SEED_ADMIN_USERNAME = "admin"

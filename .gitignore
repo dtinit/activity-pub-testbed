@@ -38,6 +38,9 @@ logs/
 # Development files that should not be checked in
 testbed/core/management/commands/cleandb.py
 
+# AI tool files
+CLAUDE.md
+
 # IDE and editor files
 .idea/
 .vscode/

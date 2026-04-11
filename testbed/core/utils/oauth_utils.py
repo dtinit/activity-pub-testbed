@@ -1,8 +1,8 @@
 import logging
+import string
 import secrets  # Python's secure random number generator module
 import base64   # For encoding binary data as text
 from oauth2_provider.models import get_application_model
-from testbed.core.utils.utils import random_client_id, random_client_secret
 
 logger = logging.getLogger(__name__)
 Application = get_application_model()
@@ -19,6 +19,17 @@ CLIENT_SECRET_SESSION_KEY = 'oauth_client_secret'
 ACCESS_TOKEN_SESSION_KEY = 'lola_access_token'
 TOKEN_EXPIRY_SESSION_KEY = 'lola_token_expiry'
 TOKEN_SCOPE_SESSION_KEY = 'lola_token_scope'
+
+
+def random_client_id(length=10):
+    """Generate a random alphanumeric OAuth client ID of the given length."""
+    return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(length))
+
+
+def random_client_secret(length=40):
+    """Generate a random alphanumeric OAuth client secret of the given length."""
+    return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(length))
+
 
 # Get or create the single OAuth Application for a user.
 # This enforces the one-application-per-user approach where each user
