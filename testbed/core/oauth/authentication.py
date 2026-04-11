@@ -155,7 +155,7 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
             A tuple of (user, token) if authentication succeeds, None otherwise
         """
         from oauth2_provider.models import AccessToken
-        from testbed.core.utils.oauth_utils import get_token_from_session, clear_token_from_session
+        from testbed.core.oauth.utils import get_token_from_session, clear_token_from_session
         
         # Check if public_only parameter is set (for demo comparison)
         if request.GET.get('public_only'):

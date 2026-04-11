@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from oauth2_provider.models import get_application_model
-from testbed.core.utils.oauth_validators import ActivityPubOAuth2Validator
+from testbed.core.oauth.validators import ActivityPubOAuth2Validator
 
 User = get_user_model()
 Application = get_application_model()

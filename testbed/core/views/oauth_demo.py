@@ -24,10 +24,11 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 
 from ..models import Actor
-from testbed.core.utils.oauth_utils import (
+from ..oauth.utils import (
     generate_secure_state,
     get_user_application,
     store_state_in_session,
+    store_token_in_session,
     validate_state_from_session,
 )
 
@@ -264,9 +265,7 @@ def test_token_exchange_view(request):
             logger.info("Successfully exchanged authorization code for token")
             context["token_response"] = token_json
 
-            # NEW: Store token in session for seamless demo authentication
-            from testbed.core.utils.oauth_utils import store_token_in_session
-
+            # Store token in session for seamless demo authentication
             store_token_in_session(request, token_json)
             context["session_auth_enabled"] = True
             logger.info("Token stored in session - demo authentication now active")
