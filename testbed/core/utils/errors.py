@@ -20,8 +20,6 @@ class ErrorCodes:
     ACTOR_NOT_FOUND = "actor_not_found"
     FORBIDDEN_ACCESS = "forbidden_access"
     UNAUTHORIZED = "unauthorized"
-    # Returned when a LOLA-scoped token is used against an actor it is not bound to,
-    # or reaches a gated endpoint with no binding row (stale or non-compliant token).
     ACTOR_MISMATCH = "actor_mismatch"
     
     # Rate Limiting Errors (429)
