@@ -256,12 +256,10 @@ class TokenActorBindingFactory(DjangoModelFactory):
 
     token = factory.SubFactory(AccessTokenFactory, lola_scope=True)
 
-    # SelfAttribute("..token.user") reaches up to this factory's parent context,
-    # pulls the already-resolved token, and uses its user. The actor SubFactory
-    # is created with that same user, so token.user == actor.user by construction —
-    # matching what the OAuth validator enforces via request.user at issuance time.
-    actor = factory.SubFactory(
-        ActorFactory,
-        role=Actor.ROLE_SOURCE,
-        user=factory.SelfAttribute("..token.user"),
+    # Reuse the source Actor the post_save signal auto-created for token.user.
+    # Creating a new Actor here would collide with the signal-created one on the
+    # unique username constraint and violate the "one source actor per user"
+    # invariant. Tests that need a different actor can override this explicitly.
+    actor = factory.LazyAttribute(
+        lambda o: o.token.user.actors.get(role=Actor.ROLE_SOURCE)
     )

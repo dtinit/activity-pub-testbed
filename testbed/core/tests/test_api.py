@@ -6,7 +6,12 @@ from django.test import RequestFactory
 from django.contrib.auth import get_user_model
 from oauth2_provider.models import Application, AccessToken
 from testbed.core.models import Actor, Following, Followers
-from testbed.core.factories import ActorFactory, ApplicationFactory, AccessTokenFactory
+from testbed.core.factories import (
+    ActorFactory,
+    ApplicationFactory,
+    AccessTokenFactory,
+    TokenActorBindingFactory,
+)
 from testbed.core.tests.conftest import create_isolated_actor
 from testbed.core.json_ld_utils import (
     build_basic_context,
@@ -342,11 +347,14 @@ class TestFollowersCollectionEndpoint:
     @pytest.mark.django_db
     def test_followers_collection_with_lola_token(self):
         target_actor, follower1, follower2 = self.setup_followers_data()
-        lola_token = AccessTokenFactory(lola_scope=True)
-        
+        # Bind the token to target_actor so the Task 9.2 token-to-actor
+        # binding check (LOLA Section 5 MUST) succeeds for this request.
+        binding = TokenActorBindingFactory(actor=target_actor)
+        lola_token = binding.token
+
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
-        
+
         response = client.get(reverse("followers-collection", kwargs={"pk": target_actor.id}))
         
         assert response.status_code == status.HTTP_200_OK
@@ -378,13 +386,14 @@ class TestFollowersCollectionEndpoint:
 
     # Validate Followers collection includes full Actor objects for local followers
     @pytest.mark.django_db
-    def test_followers_collection_includes_complete_actor_data(self): 
+    def test_followers_collection_includes_complete_actor_data(self):
         target_actor, follower1, follower2 = self.setup_followers_data()
-        lola_token = AccessTokenFactory(lola_scope=True)
-        
+        binding = TokenActorBindingFactory(actor=target_actor)
+        lola_token = binding.token
+
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
-        
+
         response = client.get(reverse("followers-collection", kwargs={"pk": target_actor.id}))
         data = response.data
         
