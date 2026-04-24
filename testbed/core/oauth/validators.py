@@ -23,7 +23,7 @@ class ActivityPubOAuth2Validator(OAuth2Validator):
             logger.warning(
                 "Client %s requested OAuth without %r scope. Scopes: %s",
                 client_id,
-                self.PORTABILITY_SCOPE,
+                self.LOLA_PORTABILITY_SCOPE,
                 scopes,
             )
             return False
@@ -49,11 +49,10 @@ class ActivityPubOAuth2Validator(OAuth2Validator):
         return True
 
     def _save_bearer_token(self, token, request, *args, **kwargs):
-        
         """
         Persist a TokenActorBinding alongside LOLA-scoped access tokens.
 
-        DOT recommends overriding `_save_bearer_token` (not `save_bearer_token`)
+        DOT (django-oauth-toolkit) recommends overriding `_save_bearer_token` (not `save_bearer_token`)
         for custom token-storage logic so the write rides the same
         `transaction.atomic()` block DOT already opens. This is important for
         security: if binding resolution or creation fails, the whole transaction
@@ -136,7 +135,7 @@ class ActivityPubOAuth2Validator(OAuth2Validator):
         Preference order:
           1. `request.activitypub_bound_actor_id` — the actor id the user
              explicitly selected at the authorization step. Populated by
-             Task 9.3's authorization view; absent today. Re-validated here
+             following PR's authorization view; absent today. Re-validated here
              against (user, role=ROLE_SOURCE) so a client-supplied id cannot
              bind to another user's actor.
           2. Fallback: the authenticated user's unique source Actor.
