@@ -12,6 +12,7 @@ from testbed.core.models import (
     PortabilityOutbox,
     Following,
     Followers,
+    TokenActorBinding,
 )
 
 # Base factory for creating Users without associated actors
@@ -222,3 +223,45 @@ class AccessTokenFactory(DjangoModelFactory):
         expired = factory.Trait(
             expires=factory.LazyFunction(lambda: datetime.now(timezone.utc) - timedelta(hours=1))
         )
+
+
+class TokenActorBindingFactory(DjangoModelFactory):
+    """
+    Creates a TokenActorBinding that associates an AccessToken with a source Actor.
+
+    Default behavior:
+      - Creates a fresh LOLA-scoped AccessToken (token.user is a fresh UserOnlyFactory).
+      - Creates a fresh source Actor whose user matches the token's user, so the
+        resulting binding is self-consistent with what the OAuth validator
+        enforces at runtime (actor resolved from request.user).
+
+    Usage:
+        # Fresh token + fresh source actor, same user (self-consistent).
+        binding = TokenActorBindingFactory()
+
+        # Binding for a specific actor and token.
+        binding = TokenActorBindingFactory(actor=my_actor, token=my_token)
+
+        # Portability token already bound to an existing source actor.
+        actor = create_isolated_actor("test")
+        token = AccessTokenFactory(lola_scope=True, user=actor.user)
+        binding = TokenActorBindingFactory(token=token, actor=actor)
+
+        # Mismatched binding for negative/security tests: pass actor and token
+        # with different users explicitly.
+    """
+
+    class Meta:
+        model = TokenActorBinding
+
+    token = factory.SubFactory(AccessTokenFactory, lola_scope=True)
+
+    # SelfAttribute("..token.user") reaches up to this factory's parent context,
+    # pulls the already-resolved token, and uses its user. The actor SubFactory
+    # is created with that same user, so token.user == actor.user by construction —
+    # matching what the OAuth validator enforces via request.user at issuance time.
+    actor = factory.SubFactory(
+        ActorFactory,
+        role=Actor.ROLE_SOURCE,
+        user=factory.SelfAttribute("..token.user"),
+    )
