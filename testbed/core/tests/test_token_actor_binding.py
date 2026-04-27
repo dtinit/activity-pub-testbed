@@ -1,13 +1,3 @@
-"""
-Tests for Task 9.2: Token-to-Actor Binding.
-
-Covers:
-  - TokenActorBinding model OneToOne constraint
-  - ActivityPubOAuth2Validator._save_bearer_token binding creation
-  - validate_lola_access binding enforcement (same actor, cross actor, unbound)
-  - Integration: Bearer header auth paths
-"""
-
 import pytest
 from unittest.mock import MagicMock, patch
 
