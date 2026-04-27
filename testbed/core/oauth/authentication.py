@@ -31,22 +31,26 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
     def authenticate(self, request):
         """
         Attempt to authenticate the request using OAuth2 with multiple methods.
-        
+
         Authentication priority:
-        1. Authorization header (production federation)
-        2. URL parameter (testing convenience) 
-        3. Session storage (demo enhancement)
-        
-        If authentication succeeds, check if the token has the portability scope.
-        If authentication fails, allow the request to continue as unauthenticated.
-        
-        This approach enables the same endpoint to serve both:
-        - Public data for unauthenticated requests (standard ActivityPub)
-        - Enhanced data for authenticated requests with portability scope (LOLA)
-        
+        1. Authorization header (production - the normative LOLA path)
+        2. URL parameter (?auth_token=) - developer testing convenience only
+        3. Session storage - demo enhancement only
+
+        Paths 2 and 3 are developer/demo conveniences that exist because this
+        testbed doubles as a destination-side demo tool. They are NOT part of the
+        normative LOLA source-server contract. See docs/lola-authentication.md.
+
+        All three paths produce the same (user, token) shape and set request.auth
+        to the AccessToken instance. The actor binding check in validate_lola_access()
+        operates on request.auth and therefore covers all three paths uniformly.
+
+        If authentication succeeds, checks if the token has the portability scope.
+        If authentication fails, allows the request to continue as unauthenticated.
+
         Args:
             request: The HTTP request object
-            
+
         Returns:
             A tuple of (user, token) if authentication succeeds, None otherwise
         """

@@ -250,6 +250,8 @@ OAUTH2_PROVIDER = {
     'PKCE_REQUIRED': False,
 }
 
+OAUTH2_PROVIDER_ACCESS_TOKEN_MODEL = "oauth2_provider.AccessToken"
+
 # Configure REST framework to use OAuth2 authentication
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [

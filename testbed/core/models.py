@@ -546,6 +546,34 @@ class OAuthClientCredentials(models.Model):
         verbose_name_plural = "OAuth Client Credentials"
 
 
+class TokenActorBinding(models.Model):
+    """
+    Binds a LOLA OAuth access token to exactly one source Actor.
+
+    LOLA Section 5 requires: "This scope MUST be limited to an account — if there is more
+    than one account on the source server, the source server MUST NOT allow access to
+    any other accounts than the one granted."
+    """
+    token = models.OneToOneField(
+        settings.OAUTH2_PROVIDER_ACCESS_TOKEN_MODEL,
+        on_delete=models.CASCADE,
+        related_name="actor_binding",
+        help_text="The OAuth access token this binding belongs to.",
+
+    )
+    actor = models.ForeignKey(
+        "Actor",
+        on_delete=models.CASCADE,
+        related_name="portability_token_bindings",
+        help_text="The source Actor this token is authorized to access.",
+
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"TokenActorBinding(token_id={self.token_id}, actor_id={self.actor_id})"
+
+
 class PortabilityOutbox(models.Model):
     actor = models.OneToOneField(
         Actor, on_delete=models.CASCADE, related_name="portability_outbox"

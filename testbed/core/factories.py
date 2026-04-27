@@ -12,6 +12,7 @@ from testbed.core.models import (
     PortabilityOutbox,
     Following,
     Followers,
+    TokenActorBinding,
 )
 
 # Base factory for creating Users without associated actors
@@ -222,3 +223,43 @@ class AccessTokenFactory(DjangoModelFactory):
         expired = factory.Trait(
             expires=factory.LazyFunction(lambda: datetime.now(timezone.utc) - timedelta(hours=1))
         )
+
+
+class TokenActorBindingFactory(DjangoModelFactory):
+    """
+    Creates a TokenActorBinding that associates an AccessToken with a source Actor.
+
+    Default behavior:
+      - Creates a fresh LOLA-scoped AccessToken (token.user is a fresh UserOnlyFactory).
+      - Creates a fresh source Actor whose user matches the token's user, so the
+        resulting binding is self-consistent with what the OAuth validator
+        enforces at runtime (actor resolved from request.user).
+
+    Usage:
+        # Fresh token + fresh source actor, same user (self-consistent).
+        binding = TokenActorBindingFactory()
+
+        # Binding for a specific actor and token.
+        binding = TokenActorBindingFactory(actor=my_actor, token=my_token)
+
+        # Portability token already bound to an existing source actor.
+        actor = create_isolated_actor("test")
+        token = AccessTokenFactory(lola_scope=True, user=actor.user)
+        binding = TokenActorBindingFactory(token=token, actor=actor)
+
+        # Mismatched binding for negative/security tests: pass actor and token
+        # with different users explicitly.
+    """
+
+    class Meta:
+        model = TokenActorBinding
+
+    token = factory.SubFactory(AccessTokenFactory, lola_scope=True)
+
+    # Reuse the source Actor the post_save signal auto-created for token.user.
+    # Creating a new Actor here would collide with the signal-created one on the
+    # unique username constraint and violate the "one source actor per user"
+    # invariant. Tests that need a different actor can override this explicitly.
+    actor = factory.LazyAttribute(
+        lambda o: o.token.user.actors.get(role=Actor.ROLE_SOURCE)
+    )
