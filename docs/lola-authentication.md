@@ -7,6 +7,7 @@ This document provides comprehensive documentation for the LOLA authentication s
 - [Overview](#overview)
 - [OAuth Client Credentials Encryption System](#oauth-client-credentials-encryption-system)
 - [OptionalOAuth2Authentication Class](#optionaloauth2authentication-class)
+- [Token-to-Actor Binding (LOLA Section 5)](#token-to-actor-binding-lola-section-5)
 - [Enhanced API Endpoints](#enhanced-api-endpoints)
 - [JSON-LD Builder System](#json-ld-builder-system)
 - [JSON-LD Utilities](#json-ld-utilities)
@@ -365,6 +366,109 @@ The class handles various authentication scenarios across all three tiers:
 **Network and System Errors:**
 - **Database connection errors**: Continue as unauthenticated
 - **Network timeouts**: Continue as unauthenticated
+
+## Token-to-Actor Binding (LOLA Section 5)
+
+LOLA portability tokens are bound to a single source Actor at issuance time and
+MUST NOT grant access to any other account on the same server.
+
+> LOLA Section 5: "This scope MUST be limited to an account - if there is more
+> than one account on the source server, the source server MUST NOT allow access
+> to any other accounts than the one granted."
+
+### TokenActorBinding Model
+
+**Location**: `testbed/core/models.py` - `TokenActorBinding`
+
+A `OneToOneField` pair between `oauth2_provider.AccessToken` and a source `Actor`:
+
+```python
+class TokenActorBinding(models.Model):
+    token = models.OneToOneField(
+        settings.OAUTH2_PROVIDER_ACCESS_TOKEN_MODEL,
+        on_delete=models.CASCADE,
+        related_name="actor_binding",
+    )
+    actor = models.ForeignKey(
+        "Actor",
+        on_delete=models.CASCADE,
+        related_name="portability_token_bindings",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+```
+
+The `OneToOneField` ensures each token has at most one binding; attempts to
+create a second row for the same token fail with `IntegrityError`.
+
+### Binding at Issuance
+
+**Location**: `testbed/core/oauth/validators.py` - `ActivityPubOAuth2Validator._save_bearer_token`
+
+The binding is persisted inside the same `transaction.atomic()` block DOT
+(django-oauth-toolkit) opens for token creation. Steps:
+
+1. `super()._save_bearer_token(...)` lets DOT write the `AccessToken` row.
+2. If the issued scope does not include `activitypub_account_portability`,
+   the validator early-returns (non-portability tokens are not actor-keyed).
+3. The validator resolves the source Actor to bind via `_resolve_bound_actor`:
+   - Preferred: `request.activitypub_bound_actor_id` (set by the authorization
+     view; re-validated against `user` and `role=ROLE_SOURCE`).
+   - Fallback: `Actor.objects.get(user=request.user, role=ROLE_SOURCE)`.
+4. If no valid source Actor is resolvable, the validator raises
+   `InvalidRequestFatalError`, which rolls back the transaction and prevents
+   an unbound portability token from being issued (fail closed).
+5. Otherwise, `TokenActorBinding.objects.get_or_create(token=..., defaults={"actor": ...})`
+   records the binding. A pre-existing binding for a different actor is
+   treated as a hard security failure and the transaction is rolled back.
+
+### Enforcement at Request Time
+
+**Location**: `testbed/core/views/decorators.py` - `validate_lola_access`
+
+Every LOLA-gated endpoint calls `validate_lola_access(request)`, which now
+runs two layers:
+
+- **Layer 1 - Scope check.** Rejects requests without
+  `activitypub_account_portability` scope with 403 `insufficient_scope`.
+- **Layer 2 - Actor binding check.** For portability-scoped requests, reads
+  the requested actor pk from `request.resolver_match.kwargs["pk"]` and
+  compares it to `request.auth.actor_binding.actor_id`. Mismatches, missing
+  binding rows, and requests without a URL pk all return 403 `actor_mismatch`
+  (fail closed).
+
+The binding check covers all three `OptionalOAuth2Authentication` paths
+(Authorization header, `?auth_token=` URL parameter, session) because all
+three set `request.auth` to the same `AccessToken` instance.
+
+### Endpoints Enforcing Binding
+
+The four currently LOLA-gated endpoints (those calling `validate_lola_access(request, required_scope=True)`):
+
+- `GET /api/actors/<pk>/followers/`
+- `GET /api/actors/<pk>/content/`
+- `GET /api/actors/<pk>/liked/`
+- `GET /api/actors/<pk>/blocked/`
+
+Actor-detail, outbox, and following are intentionally out of scope for this
+enforcement pass (see `personal-development/TRACKING-NOTES.md`).
+
+### actor_mismatch Response
+
+A mismatched/missing binding produces a standardized 403 response
+(`testbed/core/utils/errors.py` - `build_actor_mismatch_error`):
+
+```json
+{
+  "error_code": "actor_mismatch",
+  "detail": "This token is not authorized for the requested actor",
+  "hint": "LOLA portability tokens are bound to a single source actor at issuance and cannot access other actors",
+  "remediation": "Request a new OAuth token for the target actor",
+  "timestamp": "2026-04-23T...",
+  "endpoint": "/api/actors/42/followers/",
+  "method": "GET",
+  "request_id": "..."
+}
+```
 
 ## Enhanced API Endpoints
 

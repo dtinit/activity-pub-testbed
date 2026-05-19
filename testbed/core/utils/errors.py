@@ -17,9 +17,10 @@ class ErrorCodes:
     
     # Authentication & Authorization Errors (4xx)
     INSUFFICIENT_SCOPE = "insufficient_scope"
-    ACTOR_NOT_FOUND = "actor_not_found" 
+    ACTOR_NOT_FOUND = "actor_not_found"
     FORBIDDEN_ACCESS = "forbidden_access"
     UNAUTHORIZED = "unauthorized"
+    ACTOR_MISMATCH = "actor_mismatch"
     
     # Rate Limiting Errors (429)
     RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
@@ -138,6 +139,27 @@ def build_insufficient_scope_error(required_scope, endpoint_path, request=None):
         request=request,
         hint="LOLA portability endpoints require specific OAuth scope for data access",
         remediation=f"Request OAuth token with '{required_scope}' scope to access {endpoint_path}"
+    )
+
+
+def build_actor_mismatch_error(request=None):
+    """
+    Build standardized 403 error when a portability token is used to access an
+    Actor other than the one it was bound to at authorization time.
+
+    Args:
+        request (HttpRequest, optional): Django request object for context
+
+    Returns:
+        Response: 403 error response with actor_mismatch error code.
+    """
+    return build_error_response(
+        error_code=ErrorCodes.ACTOR_MISMATCH,
+        detail="This token is not authorized for the requested actor",
+        status_code=403,
+        request=request,
+        hint="LOLA portability tokens are bound to a single source actor at issuance and cannot access other actors",
+        remediation="Request a new OAuth token for the target actor",
     )
 
 
