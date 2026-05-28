@@ -27,6 +27,16 @@ def build_actor_id(actor_id, request):
     base_url = f"{request.scheme}://{request.get_host()}"
     return f"{base_url}/api/actors/{actor_id}"
 
+
+# Absolute Actor URL resolved through Django's URL conf so the value matches
+# the routed `actor-detail` pattern (`actors/<int:pk>/`) exactly
+def build_absolute_actor_url(actor_id, request):
+    from django.urls import reverse
+
+    return request.build_absolute_uri(
+        reverse("actor-detail", kwargs={"pk": actor_id})
+    )
+
 def build_activity_id(activity_id, request):
     base_url = f"{request.scheme}://{request.get_host()}"
     return f"{base_url}/api/activities/{activity_id}"
