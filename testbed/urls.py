@@ -18,6 +18,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from testbed.core.views import oauth_authorization_server_metadata
+from testbed.core.oauth import PortabilityAuthorizationView
 
 urlpatterns = [
     # Admin Panel
@@ -32,7 +33,13 @@ urlpatterns = [
     path("api/", include("testbed.core.urls.api_urls")),
     # allauth
     path("account/", include("allauth.urls")),
-    # OAuth2 provider endpoints
+    # LOLA authorization override
+    path(
+        "oauth/authorize/",
+        PortabilityAuthorizationView.as_view(),
+        name="authorize",
+    ),
+    # OAuth2 provider endpoints (token, revoke, introspect, etc.)
     path("oauth/", include("oauth2_provider.urls", namespace="oauth2_provider")),
     # Regular views (no prefix)
     path("", include("testbed.core.urls.views_urls")),
