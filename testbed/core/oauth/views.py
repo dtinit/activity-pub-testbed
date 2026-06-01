@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
 
 from oauth2_provider.views import AuthorizationView
 
-from ..json_ld_utils import build_absolute_actor_url
+from ..json_ld_utils import build_actor_id
 
 logger = logging.getLogger(__name__)
 
@@ -28,19 +28,19 @@ ACTIVITYPUB_ACTOR_PARAM = "activitypub_actor" # Query parameter name defined by 
 
 class PortabilityAuthorizationView(AuthorizationView):
     """
-    Appends `activitypub_actor` to the approval redirect for portability-scoped
-    authorizations, and binds the request to the resolved source actor so the
-    redirect actor and the token-bound actor share a single source of truth.
+    Appends `activitypub_actor` to the approval redirect for LOLA portability authorizations (LOLA §5.3).
+    The redirect value is the absolute URL of the source Actor that granted access.
     """
 
     def form_valid(self, form):
         """
         Handle the POST approval path.
 
-        Resolve the source actor and stamp `request.activitypub_bound_actor_id`
-        BEFORE delegating to DOT so the binding attribute is present when DOT
-        creates the grant/token. DOT returns an OAuth2ResponseRedirect; we then
-        append `activitypub_actor` to its Location header.
+        Resolve the source actor for the LOLA redirect, let DOT generate the approval response (DOT returns
+        an OAuth2ResponseRedirect with `code` and `state`), then append `activitypub_actor` to its Location header.
+
+        Resolution runs before super() purely so we don't append on failure paths — the redirect URL
+        itself is built from DOT's output, not from anything we attach to the request.
         """
         scopes = form.cleaned_data.get("scope") or ""
         actor = self._prepare_actor_binding(scopes)
@@ -63,8 +63,13 @@ class PortabilityAuthorizationView(AuthorizationView):
 
     def _prepare_actor_binding(self, scope_string):
         """
-        Resolve the source actor for a portability authorization and record it
-        on the request so the token validator binds to the same actor.
+        Resolve the source actor whose absolute URL will be appended to the
+        approval redirect as `activitypub_actor` (LOLA Section 5.3).
+
+        Returns the Actor for LOLA portability authorizations with a resolvable
+        source actor, otherwise None (which means: leave DOT's redirect
+        untouched). Non-LOLA authorizations always return None so regular OAuth
+        flows are unaffected.
         """
         if LOLA_PORTABILITY_SCOPE not in scope_string.split():
             return None
@@ -78,12 +83,8 @@ class PortabilityAuthorizationView(AuthorizationView):
             )
             return None
 
-        # Single source of truth: this is the same attribute
-        # ActivityPubOAuth2Validator._save_bearer_token reads when it creates
-        # the TokenActorBinding, so the redirect actor and the bound actor match.
-        self.request.activitypub_bound_actor_id = actor.pk
         logger.info(
-            "LOLA authorization: bound actor resolved actor_id=%s user_id=%s",
+            "LOLA authorization: source actor resolved for redirect actor_id=%s user_id=%s",
             actor.pk,
             getattr(getattr(self.request, "user", None), "pk", None),
         )
@@ -116,7 +117,7 @@ class PortabilityAuthorizationView(AuthorizationView):
         if "code" not in query:
             return
 
-        actor_url = build_absolute_actor_url(actor.pk, self.request)
+        actor_url = build_actor_id(actor.pk, self.request)
         response["Location"] = self._add_query_param(
             location, ACTIVITYPUB_ACTOR_PARAM, actor_url
         )

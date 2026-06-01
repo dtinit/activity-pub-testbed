@@ -8,6 +8,7 @@ from django.urls import reverse
 from oauth2_provider.models import Application, get_access_token_model
 
 from testbed.core.factories import AccessTokenFactory, UserWithActorsFactory
+from testbed.core.json_ld_utils import build_actor_id
 from testbed.core.models import Actor, TokenActorBinding
 from testbed.core.oauth.views import ACTIVITYPUB_ACTOR_PARAM
 
@@ -47,6 +48,13 @@ def _redirect_query(response):
     return parse_qs(urlparse(location).query)
 
 
+def _expected_actor_url(actor):
+    from django.test import RequestFactory
+
+    request = RequestFactory().get("/oauth/authorize/")
+    return build_actor_id(actor.pk, request)
+
+
 # 1. form_valid (POST approval) path
 
 
@@ -72,8 +80,9 @@ def test_form_valid_redirect_includes_activitypub_actor():
 
     assert ACTIVITYPUB_ACTOR_PARAM in query
     actor_url = query[ACTIVITYPUB_ACTOR_PARAM][0]
-    assert actor_url.startswith("http")
-    assert actor_url.endswith(f"/api/actors/{source_actor.pk}/")
+    # Full-URL equality: identical to the canonical Actor `id` a destination
+    # will see when it later dereferences the URL and parses the JSON-LD.
+    assert actor_url == _expected_actor_url(source_actor)
 
 
 @pytest.mark.django_db
@@ -115,9 +124,7 @@ def test_skip_authorization_redirect_includes_activitypub_actor():
     query = _redirect_query(response)
     assert "code" in query
     assert query["state"] == ["state-xyz"]
-    assert query[ACTIVITYPUB_ACTOR_PARAM][0].endswith(
-        f"/api/actors/{source_actor.pk}/"
-    )
+    assert query[ACTIVITYPUB_ACTOR_PARAM][0] == _expected_actor_url(source_actor)
 
 
 # 3. approval_prompt
@@ -144,9 +151,7 @@ def test_auto_approval_redirect_includes_activitypub_actor():
     assert response.status_code == 302
     query = _redirect_query(response)
     assert "code" in query
-    assert query[ACTIVITYPUB_ACTOR_PARAM][0].endswith(
-        f"/api/actors/{source_actor.pk}/"
-    )
+    assert query[ACTIVITYPUB_ACTOR_PARAM][0] == _expected_actor_url(source_actor)
 
 
 # Non-LOLA scope: regular OAuth untouched
@@ -200,8 +205,10 @@ def test_actor_is_resolved_from_approving_user_not_app_owner():
 
     query = _redirect_query(response)
     actor_url = query[ACTIVITYPUB_ACTOR_PARAM][0]
-    assert actor_url.endswith(f"/api/actors/{approving_source.pk}/")
-    assert not actor_url.endswith(f"/api/actors/{app_owner_source.pk}/")
+    # Compare full URLs to avoid substring matches (e.g. `/api/actors/1` vs
+    # `/api/actors/11`) and verify the redirect references the exact approving actor.
+    assert actor_url == _expected_actor_url(approving_source)
+    assert actor_url != _expected_actor_url(app_owner_source)
 
 
 # Alignment: redirect actor == token-bound actor (end-to-end)
@@ -249,6 +256,8 @@ def test_redirect_actor_matches_token_bound_actor():
     access_token = get_access_token_model().objects.get(token=access_token_str)
     binding = TokenActorBinding.objects.get(token=access_token)
 
-    # Binding actor and redirect actor are the same source actor.
+    # Binding actor and redirect actor are the same source actor. Compare the
+    # full canonical URL so this also locks the redirect-vs-JSON-LD `id`
+    # byte-identity that LOLA Section 5.3 destinations rely on.
     assert binding.actor_id == source_actor.pk
-    assert redirect_actor_url.endswith(f"/api/actors/{binding.actor_id}/")
+    assert redirect_actor_url == _expected_actor_url(source_actor)

@@ -43,17 +43,14 @@ def test_one_token_one_binding_enforced():
 def test_validator_creates_binding_for_portability_token():
     """_save_bearer_token creates a TokenActorBinding for portability-scoped tokens."""
     user = UserOnlyFactory()
-    # Use the source Actor the post_save signal auto-created for this user.
-    # _resolve_bound_actor's fallback path does Actor.objects.get(user=...,
-    # role=ROLE_SOURCE) and requires exactly one source actor per user.
+    # _resolve_bound_actor runs Actor.objects.get(user=..., role=ROLE_SOURCE),
+    # which requires exactly one source actor per user. Reuse the source actor
+    # the post_save signal auto-created.
     actor = user.actors.get(role=Actor.ROLE_SOURCE)
     access_token = AccessTokenFactory(user=user, lola_scope=True)
 
     mock_request = MagicMock()
     mock_request.user = user
-    # MagicMock auto-creates attributes, which would push _resolve_bound_actor
-    # into the preferred-id branch. Force the fallback path explicitly.
-    mock_request.activitypub_bound_actor_id = None
 
     token_dict = {"access_token": access_token.token, "scope": access_token.scope}
 
@@ -76,7 +73,6 @@ def test_validator_skips_binding_for_non_portability_token():
 
     mock_request = MagicMock()
     mock_request.user = user
-    mock_request.activitypub_bound_actor_id = None
 
     token_dict = {"access_token": access_token.token, "scope": "read write"}
 
