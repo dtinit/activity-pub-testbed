@@ -7,6 +7,8 @@ parameters:
 
     code, state, activitypub_actor
 
+https://github.com/django-oauth/django-oauth-toolkit/blob/master/oauth2_provider/views/base.py
+
 DOT already produces `code` and `state` as part of the standard OAuth 2.0
 authorization-code flow. This subclass appends `activitypub_actor` (the
 absolute URL of the source Actor that just granted portability access)
