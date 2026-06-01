@@ -256,8 +256,13 @@ def test_redirect_actor_matches_token_bound_actor():
     access_token = get_access_token_model().objects.get(token=access_token_str)
     binding = TokenActorBinding.objects.get(token=access_token)
 
-    # Binding actor and redirect actor are the same source actor. Compare the
-    # full canonical URL so this also locks the redirect-vs-JSON-LD `id`
-    # byte-identity that LOLA Section 5.3 destinations rely on.
+    # Binding actor and redirect actor are the same source actor. They agree
+    # because `PortabilityAuthorizationView._resolve_source_actor()` and
+    # `ActivityPubOAuth2Validator._resolve_bound_actor()` independently run
+    # the same `Actor.objects.get(user, role=ROLE_SOURCE)` lookup, unique by
+    # `Actor.clean()`.
+    
+    # Comparing the full canonical URL also locks the redirect-vs-
+    # JSON-LD `id` byte-identity that LOLA Section 5.3 destinations rely on.
     assert binding.actor_id == source_actor.pk
     assert redirect_actor_url == _expected_actor_url(source_actor)
