@@ -79,13 +79,8 @@ def oauth_authorization_server_metadata(request):
         "scopes_supported": ["activitypub_account_portability"],
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code"],
-        
         # LOLA-specific parameter for account portability endpoint discovery
-        "activitypub_account_portability": {
-            "supported": True,
-            "authorization_endpoint": authorization_endpoint,
-            "scopes": ["activitypub_account_portability"]
-        }
+        "activitypub_account_portability": authorization_endpoint,
     }
     
     response = JsonResponse(metadata)
@@ -129,22 +124,18 @@ The `activitypub_account_portability` scope is included in `scopes_supported`:
 
 ### LOLA Endpoint Parameter
 
-A custom parameter provides structured metadata about LOLA account portability support:
+Per LOLA spec section 4.1, the `activitypub_account_portability` parameter is the **URL string** of the portability authorization endpoint:
 
 ```json
 {
-  "activitypub_account_portability": {
-    "supported": true,
-    "authorization_endpoint": "https://server.example/oauth/authorize/",
-    "scopes": ["activitypub_account_portability"]
-  }
+  "activitypub_account_portability": "https://server.example/oauth/authorize/"
 }
 ```
 
-This structured format enables destination servers to:
-- Detect LOLA support via the `supported` flag
-- Discover the authorization endpoint for portability flows
-- Identify required scopes for account migration
+This enables destination servers to:
+- Detect LOLA support via the presence of the `activitypub_account_portability` parameter
+- Discover the authorization endpoint for portability flows by reading the parameter value directly
+- Identify the required scope via the standard `scopes_supported` array (which includes `activitypub_account_portability`)
 
 ## Discovery Flow
 
@@ -168,11 +159,7 @@ curl https://source.example/.well-known/oauth-authorization-server
   ],
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code"],
-  "activitypub_account_portability": {
-    "supported": true,
-    "authorization_endpoint": "https://source.example/oauth/authorize/",
-    "scopes": ["activitypub_account_portability"]
-  }
+  "activitypub_account_portability": "https://source.example/oauth/authorize/"
 }
 ```
 
