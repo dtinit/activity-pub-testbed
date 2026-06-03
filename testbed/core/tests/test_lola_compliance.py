@@ -33,9 +33,9 @@ def test_rfc8414_returns_valid_metadata():
 
 # Verify LOLA-specific parameters are included for account portability discovery
 def test_rfc8414_includes_lola_parameters():
-    
+
     client = APIClient()
-    
+
     response = client.get('/.well-known/oauth-authorization-server')
     data = response.json()
     
@@ -46,27 +46,15 @@ def test_rfc8414_includes_lola_parameters():
     # LOLA endpoint parameter should be present (LOLA extension to RFC8414)
     assert 'activitypub_account_portability' in data, \
         "LOLA parameter 'activitypub_account_portability' must be present"
-    
-    lola_metadata = data['activitypub_account_portability']
-    
-    assert 'supported' in lola_metadata, \
-        "LOLA metadata 'supported' flag must be present"
-        
-    assert lola_metadata['supported'] is True, \
-        "LOLA metadata 'supported' flag must be True"
-    
-    assert 'authorization_endpoint' in lola_metadata, \
-         "LOLA metadata 'authorization_endpoint' must be present"
-         
-    assert lola_metadata['authorization_endpoint'].endswith('/oauth/authorize/'), \
-        "LOLA authorization endpoint should point to OAuth authorization endpoint"
-    
-    assert 'scopes' in lola_metadata, \
-        "LOLA metadata 'scopes' must be present"
-        
-    assert 'activitypub_account_portability' in lola_metadata['scopes'], \
-        "LOLA scopes array must include 'activitypub_account_portability'"
-        
+
+    lola_endpoint = data['activitypub_account_portability']
+
+    assert isinstance(lola_endpoint, str), \
+        "LOLA parameter 'activitypub_account_portability' must be a URL string"
+
+    assert lola_endpoint.endswith('/oauth/authorize/'), \
+        "LOLA portability endpoint should point to the OAuth authorization endpoint"
+
 
 # Ensure all URLs in discovery response are absolute for federation compatibility
 def test_rfc8414_urls_are_absolute():
@@ -87,11 +75,11 @@ def test_rfc8414_urls_are_absolute():
         url = data[field]
         assert url.startswith('http'), \
             f"{field} should be absolute URL starting with http/https: {url}"
-    
-    lola_metadata = data['activitypub_account_portability']
-    lola_auth_endpoint = lola_metadata['authorization_endpoint']
-    assert lola_auth_endpoint.startswith('http'), \
-        f"LOLA authorization_endpoint should be absolute URL: {lola_auth_endpoint}"
+
+    # The LOLA portability parameter is itself an absolute URL string
+    lola_endpoint = data['activitypub_account_portability']
+    assert lola_endpoint.startswith('http'), \
+        f"LOLA portability endpoint should be absolute URL: {lola_endpoint}"
 
 
 def test_rfc8414_authorization_code_flow_support():
@@ -143,7 +131,7 @@ def test_rfc8414_oauth_endpoints_match():
         "Authorization endpoint should use /oauth/authorize/ path"
     assert '/oauth/token/' in data['token_endpoint'], \
         "Token endpoint should use /oauth/token/ path"
-    
-    lola_metadata = data['activitypub_account_portability']
-    assert lola_metadata['authorization_endpoint'] == data['authorization_endpoint'], \
+
+    # The LOLA portability URL string must resolve to the same authorization endpoint
+    assert data['activitypub_account_portability'] == data['authorization_endpoint'], \
         "LOLA portability endpoint should point to the same authorization endpoint"

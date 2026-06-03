@@ -389,11 +389,6 @@ def oauth_authorization_server_metadata(request):
         # LOLA-specific parameter for account portability endpoint discovery
         "activitypub_account_portability": authorization_endpoint,
     }
-    
-    logger.debug(
-        "RFC8414 discovery served: activitypub_account_portability=%s",
-        authorization_endpoint,
-    )
 
     response = JsonResponse(metadata)
     response["Content-Type"] = "application/json"
