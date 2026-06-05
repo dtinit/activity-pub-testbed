@@ -332,12 +332,12 @@ curl -s https://localhost:8000/.well-known/oauth-authorization-server | \
 
 ## Integration with LOLA
 
-### Actor-based Discovery (Alternative)
+### Actor-based Discovery (Required — LOLA §4.2)
 
-While this implementation focuses on RFC8414 discovery, LOLA also supports Actor-based discovery. Both methods can coexist:
+This implementation supports both discovery paths and they coexist, but they are not equally optional. RFC8414 `.well-known` discovery is a SHOULD (LOLA §4.1); advertising the endpoint on the Actor is a MUST (LOLA §4.2). After authorization, the Actor fetched with the portability token additionally advertises the scope-gated `migration` object (see [LOLA Authentication](lola-authentication.md)).
 
-**RFC8414 Discovery**: `/.well-known/oauth-authorization-server`\
-**Actor Discovery**: `endpoints.oauthMigrationEndpoint` field in Actor objects
+**RFC8414 Discovery** (SHOULD): `/.well-known/oauth-authorization-server`\
+**Actor Discovery** (MUST): `endpoints.oauthMigrationEndpoint` field in Actor objects
 
 Supporting servers MUST advertise their portability authorization endpoint in Actor objects under
 `endpoints.oauthMigrationEndpoint`, in parallel with `endpoints.oauthAuthorizationEndpoint`:
@@ -357,8 +357,8 @@ Supporting servers MUST advertise their portability authorization endpoint in Ac
 ### Discovery Preference
 
 Destination servers can use either method:
-1. **RFC8414 first**: Standard OAuth discovery
-2. **Actor fallback**: If `.well-known` is not available
+1. **Actor discovery** (always available): `endpoints.oauthMigrationEndpoint` is advertised on every Actor (MUST)
+2. **RFC8414 discovery**: the `.well-known` document, when the source publishes one (SHOULD)
 3. **Validation**: Cross-reference both sources
 
 ### LOLA Workflow Integration

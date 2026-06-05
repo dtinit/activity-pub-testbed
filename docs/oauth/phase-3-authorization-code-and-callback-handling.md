@@ -141,9 +141,8 @@ This testbed is **source server**, so it is responsible for the other half of th
 
 **Location**: `testbed/core/oauth/views.py` — `PortabilityAuthorizationView`
 
-- `PortabilityAuthorizationView` subclasses django-oauth-toolkit's
-- `AuthorizationView` and is wired ahead of the `oauth2_provider` URL include in
-- `testbed/urls.py`. DOT already produces `code` and `state`; this subclass only appends `activitypub_actor` to the redirect's `Location` header:
+`PortabilityAuthorizationView` subclasses django-oauth-toolkit's `AuthorizationView` and is wired ahead of the `oauth2_provider` URL include in `testbed/urls.py`.
+DOT already produces `code` and `state`; this subclass only appends `activitypub_actor` to the redirect's `Location` header:
 
 ```python
 class PortabilityAuthorizationView(AuthorizationView):
