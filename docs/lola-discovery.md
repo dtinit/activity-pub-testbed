@@ -337,14 +337,20 @@ curl -s https://localhost:8000/.well-known/oauth-authorization-server | \
 While this implementation focuses on RFC8414 discovery, LOLA also supports Actor-based discovery. Both methods can coexist:
 
 **RFC8414 Discovery**: `/.well-known/oauth-authorization-server`\
-**Actor Discovery**: `accountPortabilityOauth` field in Actor objects
+**Actor Discovery**: `endpoints.oauthMigrationEndpoint` field in Actor objects
+
+Supporting servers MUST advertise their portability authorization endpoint in Actor objects under
+`endpoints.oauthMigrationEndpoint`, in parallel with `endpoints.oauthAuthorizationEndpoint`:
 
 ```json
 {
   "@context": "https://www.w3.org/ns/activitystreams",
   "type": "Person",
   "id": "https://source.example/actors/1",
-  "accountPortabilityOauth": "https://source.example/oauth/authorize/"
+  "endpoints": {
+    "oauthAuthorizationEndpoint": "https://source.example/oauth/authorize/",
+    "oauthMigrationEndpoint": "https://source.example/oauth/authorize/"
+  }
 }
 ```
 
