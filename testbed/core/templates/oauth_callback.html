@@ -29,6 +29,14 @@
         <pre class="state">{{ state }}</pre>
         <p class="state-note">The state parameter helps prevent CSRF attacks and should be verified by the client.</p>
       </div>
+
+      {% if activitypub_actor %}
+      <div class="actor-container">
+        <h3>Source Actor (LOLA §5.3):</h3>
+        <pre class="actor">{{ activitypub_actor }}</pre>
+        <p class="actor-note">The canonical source Actor URL. Per LOLA §5.3 the destination MUST treat this as authoritative for the migration, even if it differs from the source the user originally entered.</p>
+      </div>
+      {% endif %}
     </div>
     {% endif %}
     
@@ -42,7 +50,13 @@
         <li>You (the user) approved the request</li>
         <li>The authorization server redirected back to this callback URL with an authorization code</li>
       </ol>
-      
+
+      <p>
+        For a LOLA portability authorization the source redirect carries three callback parameters —
+        <code>code</code>, <code>state</code>, and <code>activitypub_actor</code> — and only
+        <code>activitypub_actor</code> (the canonical source Actor URL) is LOLA-specific.
+      </p>
+
       <p>
         In a real implementation, the next steps would be:
       </p>
@@ -54,7 +68,7 @@
     
     <div class="callback-actions">
       {% if code and not error %}
-      <a href="{% url 'test-oauth-token' %}?code={{ code }}&state={{ state }}" class="btn btn-primary">
+      <a href="{% url 'test-oauth-token' %}?code={{ code }}&state={{ state }}{% if activitypub_actor %}&activitypub_actor={{ activitypub_actor|urlencode }}{% endif %}" class="btn btn-primary">
         Exchange Code for Token →
       </a>
       {% endif %}
