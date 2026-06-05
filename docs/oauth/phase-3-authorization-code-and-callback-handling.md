@@ -13,6 +13,7 @@ In the context of LOLA portability, this phase confirms user intent to transfer 
 - Deliver a **temporary, one-time-use authorization code** securely to the Destination Service.
 - Maintain security integrity by validating the **state parameter** to prevent CSRF attacks.
 - Ensure the code is properly **bound** to the specific client, scope, and redirect URI.
+- For LOLA portability authorizations, include **`activitypub_actor`** in the approval redirect so the destination learns exactly which source Actor granted access.
 - Provide a clear **callback handling process** that prepares for token exchange.
 - Handle **success and error scenarios** gracefully for the end-user and client application.
 
@@ -41,10 +42,16 @@ This phase begins **after** the user has consented to the data transfer (Phase 2
 After generating the authorization code:
 
 - The Source Service **redirects the user’s browser** to the pre-registered redirect_uri on the Destination Service.
-- The **authorization code** and the original **state parameter** are appended as query parameters, for example:
+- The **authorization code** and the original **state parameter** are appended as query parameters. For a standard OAuth authorization:
 
 ```
 https://destination.com/callback?code=abc123&state=xyz789
+```
+
+- For a **LOLA portability authorization** (a request that carried the `activitypub_account_portability` scope), the Source Service additionally appends **`activitypub_actor`** — the absolute URL of the source Actor that granted access (LOLA §5.3):
+
+```
+https://destination.com/callback?code=abc123&state=xyz789&activitypub_actor=https%3A%2F%2Fsource.example%2Fapi%2Factors%2F1%2F
 ```
 
 This preserves the security context established earlier and signals the Destination Service to begin callback handling.
@@ -124,6 +131,43 @@ def validate_state_from_session(request, state):
     # Constant-time comparison
     return secrets.compare_digest(stored_state, state)
 ```
+
+### Source-Server Response: Appending `activitypub_actor` (LOLA §5.3)
+
+This testbed is **source server**, so it is responsible for the other half of the redirect: emitting the `activitypub_actor` parameter when it approves a portability authorization.
+
+> LOLA §5.3: "If authorization is approved, the source redirects back with: `code`, `state`, `activitypub_actor`."
+> "The destination MUST use the Actor ID returned in `activitypub_actor`, even if it differs from what the user originally supplied."
+
+**Location**: `testbed/core/oauth/views.py` — `PortabilityAuthorizationView`
+
+- `PortabilityAuthorizationView` subclasses django-oauth-toolkit's
+- `AuthorizationView` and is wired ahead of the `oauth2_provider` URL include in
+- `testbed/urls.py`. DOT already produces `code` and `state`; this subclass only appends `activitypub_actor` to the redirect's `Location` header:
+
+```python
+class PortabilityAuthorizationView(AuthorizationView):
+    def form_valid(self, form):
+        # POST approval path. Resolve the source actor BEFORE super() so we
+        # never append on a failure path, then let DOT build the redirect.
+        scopes = form.cleaned_data.get("scope") or ""
+        actor = self._prepare_actor_binding(scopes)
+        response = super().form_valid(form)
+        if actor is not None:
+            self._append_actor_to_redirect(response, actor)
+        return response
+```
+
+Key behavior, mirrored exactly by the code:
+
+- **Scope-gated.** `_prepare_actor_binding` returns `None` for any authorization that did not request `activitypub_account_portability`, so regular OAuth flows are completely unaffected.
+- **Approved redirects only.** `_append_actor_to_redirect` parses DOT's `Location` header and appends `activitypub_actor` only when `code` is present. Denial and error redirects are left untouched.
+- **Canonical Actor URL.** The appended value is built with `build_actor_id`, so it is byte-identical to the Actor's JSON-LD `id` and to the actor the issued token is bound to (see [Token-to-Actor Binding](../lola-authentication.md#token-to-actor-binding-lola-section-5)).
+- **Redirect omission vs. access denial.** If no source Actor resolves for the approving user, the view logs a warning and omits the parameter rather than blocking the redirect;
+the matching token, however, is never issued unbound (the validator fails closed at issuance).
+
+Resolution of the approving user's source Actor is deterministic (`Actor.objects.get(user=user, role=ROLE_SOURCE)`), and the validator that
+binds the token performs the same lookup independently, which is what keeps the redirect Actor and the token-bound Actor aligned.
 
 ## Security Considerations
 
