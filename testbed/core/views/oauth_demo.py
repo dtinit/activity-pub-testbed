@@ -23,6 +23,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.urls import reverse
 
+from ..json_ld_utils import build_actor_id
 from ..models import Actor
 from ..oauth.utils import (
     generate_secure_state,
@@ -45,6 +46,7 @@ def oauth_callback(request):
     error = request.GET.get("error")
     error_description = request.GET.get("error_description")
     state = request.GET.get("state")
+    activitypub_actor = request.GET.get("activitypub_actor") # The canonical source Actor URL
 
     # Initialize context with received parameters
     context = {
@@ -52,6 +54,7 @@ def oauth_callback(request):
         "error": error,
         "error_description": error_description,
         "state": state,
+        "activitypub_actor": activitypub_actor,
     }
 
     # Validate the state parameter to prevent CSRF attacks
@@ -69,6 +72,8 @@ def oauth_callback(request):
     # Log successful authorization
     if code and not error and not context.get("error"):
         logger.info("Successfully received authorization code in callback")
+        if activitypub_actor:
+            logger.info("Callback included LOLA activitypub_actor: %s", activitypub_actor)
 
     return render(request, "oauth_callback.html", context)
 
@@ -148,18 +153,29 @@ def test_token_exchange_view(request):
     code = request.GET.get("code")
     state = request.GET.get("state")
     error = request.GET.get("error")
+    activitypub_actor = request.GET.get("activitypub_actor")
 
     # Get the user's source actor for LOLA testing
     user_actors = Actor.objects.filter(user=request.user)
     source_actor = user_actors.filter(role=Actor.ROLE_SOURCE).first()
 
+    # build_actor_id is the same builder the source uses for
+    # activitypub_actor, so an exact match is expected on the testbed.
+    callback_actor_matches = None
+    if activitypub_actor and source_actor:
+        callback_actor_matches = activitypub_actor == build_actor_id(
+            source_actor.pk, request
+        )
+
     context = {
         "code": code,
         "state": state,
         "error": error,
+        "activitypub_actor": activitypub_actor,
+        "callback_actor_matches": callback_actor_matches,
         "token_response": None,
         "token_error": None,
-        "source_actor": source_actor,  # Add source actor for LOLA testing
+        "source_actor": source_actor,
     }
 
     # If we have an error or no code, don't attempt token exchange
