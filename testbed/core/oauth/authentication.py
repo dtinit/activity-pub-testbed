@@ -6,6 +6,8 @@ ActivityPub federation and LOLA account portability requirements.
 """
 
 import logging
+
+from django.conf import settings
 from oauth2_provider.contrib.rest_framework import OAuth2Authentication
 from rest_framework import exceptions
 
@@ -33,17 +35,20 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         Attempt to authenticate the request using OAuth2 with multiple methods.
 
         Authentication priority:
-        1. Authorization header (production - the normative LOLA path)
-        2. URL parameter (?auth_token=) - developer testing convenience only
-        3. Session storage - demo enhancement only
+        1. Authorization header - the only normative LOLA path (always enabled)
+        2. Session-stored token - gated by LOLA_ALLOW_SESSION_TOKEN_AUTH
 
-        Paths 2 and 3 are developer/demo conveniences that exist because this
-        testbed doubles as a destination-side demo tool. They are NOT part of the
-        normative LOLA source-server contract. See docs/lola-authentication.md.
+        Path 2 is a non-normative testbed convenience that exists because this testbed doubles
+        as a destination-side demo tool: after the demo token-exchange flow stores a token in
+        the session, the browser can browse the LOLA collections without re-sending a header.
+        
+        It is NOT part of the LOLA source-server contract and is gated inside its own helper.
+        See docs/lola-authentication.md.
 
-        All three paths produce the same (user, token) shape and set request.auth
-        to the AccessToken instance. The actor binding check in validate_lola_access()
-        operates on request.auth and therefore covers all three paths uniformly.
+        Both enabled paths produce the same (user, token) shape and set
+        request.auth to the AccessToken instance. The actor binding check in
+        validate_lola_access() operates on request.auth and therefore covers
+        every path uniformly.
 
         If authentication succeeds, checks if the token has the portability scope.
         If authentication fails, allows the request to continue as unauthenticated.
@@ -59,17 +64,13 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         request.has_portability_scope = False
         
         try:
-            # 1. First try standard Authorization header authentication (PRODUCTION)
+            # 1. Normative path: standard Authorization: Bearer header auth
             result = super().authenticate(request)
-            
-            # 2. If header auth failed, try URL parameter auth (TESTING)
-            if result is None:
-                result = self._authenticate_with_url_token(request)
-            
-            # 3. NEW: If URL auth failed, try session auth (DEMO ENHANCEMENT)
+
+            # 2. Demo fallback: session-stored token
             if result is None:
                 result = self._try_session_auth(request)
-            
+
             if result is not None:
                 user, token = result
                 
@@ -100,102 +101,85 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         # This allows the request to continue as unauthenticated rather than failing
         return None
     
-    def _authenticate_with_url_token(self, request):
-        """
-        Try to authenticate using token from URL parameter (for LOLA testing convenience).
-        
-        Checks for 'auth_token' in URL parameters and validates it as an OAuth token.
-        This enables simple <a> links in templates for testing LOLA functionality.
-        
-        Args:
-            request: The HTTP request object
-            
-        Returns:
-            A tuple of (user, token) if authentication succeeds, None otherwise
-        """
-        from oauth2_provider.models import AccessToken
-        
-        # Get token from URL parameter
-        token_string = request.GET.get('auth_token')
-        if not token_string:
-            return None
-            
-        try:
-            # Look up the token in the database
-            access_token = AccessToken.objects.select_related('user', 'application').get(
-                token=token_string
-            )
-            
-            # Check if token is valid (not expired)
-            if access_token.is_valid():
-                logger.debug(f"URL parameter authentication successful for user: {access_token.user.username}")
-                return access_token.user, access_token
-            else:
-                logger.debug("URL parameter token is expired or invalid")
-                return None
-                
-        except AccessToken.DoesNotExist:
-            logger.debug("URL parameter token not found in database")
-            return None
-        except Exception as e:
-            logger.debug(f"Error during URL parameter authentication: {str(e)}")
-            return None
-
     def _try_session_auth(self, request):
         """
-        Try to authenticate using token stored in session (demo enhancement).
-        
-        This provides seamless authentication after successful OAuth token exchange,
-        eliminating the need for manual token handling in demo workflows. The method
-        validates session tokens against the database to ensure they haven't been
-        revoked and handles automatic cleanup of expired tokens.
-        
-        Supports 'public_only' parameter to disable session auth for comparison demos.
-        
+        Try to authenticate using a token stored in the Django session.
+
+        NON-NORMATIVE demo path. After the demo token-exchange flow stores the access token in the
+        session (store_token_in_session), later requests from that browser session authenticate automatically.
+        The token is re-validated against the DB each request (handles revocation) and expired
+        tokens are cleared from the session.
+
+        Supports the 'public_only' query parameter to suppress session auth for
+        the demo's public-vs-gated comparison.
+
         Args:
             request: The HTTP request object
-            
+
         Returns:
             A tuple of (user, token) if authentication succeeds, None otherwise
+            (including when this path is disabled for the environment).
         """
-        from oauth2_provider.models import AccessToken
-        from testbed.core.oauth.utils import get_token_from_session, clear_token_from_session
-        
-        # Check if public_only parameter is set (for demo comparison)
-        if request.GET.get('public_only'):
-            logger.debug("public_only parameter detected - skipping session authentication")
+        from testbed.core.oauth.utils import (
+            clear_token_from_session,
+            get_token_from_session,
+        )
+
+        # Skip entirely unless this environment opts in.
+        if not getattr(settings, "LOLA_ALLOW_SESSION_TOKEN_AUTH", False):
+            logger.debug(
+                "Session auth skipped: LOLA_ALLOW_SESSION_TOKEN_AUTH disabled "
+                "for this environment"
+            )
             return None
-        
-        # Get token from session (this handles expiration checking)
+
+        # public_only forces the unauthenticated view for demo comparison.
+        if request.GET.get("public_only"):
+            logger.debug("public_only set - skipping session authentication")
+            return None
+
+        # get_token_from_session handles session-side expiry checking.
         token_string = get_token_from_session(request)
         if not token_string:
             return None
-            
-        try:
-            # Look up the token in the database to ensure it's still valid
-            # (handles cases where token was revoked but still in session)
-            access_token = AccessToken.objects.select_related('user', 'application').get(
-                token=token_string
-            )
-            
-            # Verify token is still valid (handles revocation, etc.)
-            if access_token.is_valid():
-                logger.debug(f"Session authentication successful for user: {access_token.user.username}")
-                return access_token.user, access_token
-            else:
-                # Token invalid - clear from session to prevent future attempts
-                clear_token_from_session(request)
-                logger.debug("Session token invalid, cleared from session")
-                return None
-                
-        except AccessToken.DoesNotExist:
-            # Token not found in database - clear from session
-            logger.debug("Session token not found in database, clearing from session")
+
+        result = self._resolve_valid_access_token(token_string)
+        if result is None:
+            # Token missing/expired/revoked in the DB: clear it from the session
+            # so we don't keep retrying a dead token on every request.
             clear_token_from_session(request)
+            logger.debug("Session token invalid - cleared from session")
             return None
-        except Exception as e:
-            logger.debug(f"Error during session authentication: {str(e)}")
+
+        logger.debug(
+            "Session authentication successful for user: %s", result[0].username
+        )
+        return result
+
+    def _resolve_valid_access_token(self, token_string):
+        """
+        Look up an AccessToken by its raw string and return (user, token) if it
+        exists and is currently valid (not expired), else None.
+
+        Validation step for the session path (_try_session_auth): turns the token
+        string read from the session into the (user, AccessToken) pair the auth
+        contract expects, rejecting unknown or expired tokens. 
+        
+        Returns None for a missing token, so callers fail closed to unauthenticated; unexpected
+        lookup errors propagate to authenticate(), whose broad handler degrades the request to unauthenticated.
+        """
+        from oauth2_provider.models import AccessToken
+
+        try:
+            access_token = AccessToken.objects.select_related(
+                "user", "application"
+            ).get(token=token_string)
+        except AccessToken.DoesNotExist:
             return None
+
+        if access_token.is_valid():
+            return access_token.user, access_token
+        return None
     
     def _has_portability_scope(self, token):
         """
