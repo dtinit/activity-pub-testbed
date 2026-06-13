@@ -2,7 +2,7 @@ import pytest
 from rest_framework.test import APIClient
 from rest_framework import status
 from django.urls import reverse
-from django.test import RequestFactory, override_settings
+from django.test import RequestFactory
 from django.contrib.auth import get_user_model
 from oauth2_provider.models import Application, AccessToken
 from testbed.core.models import Actor, Following, Followers
@@ -458,29 +458,20 @@ class TestLOLACollectionDiscovery:
                 assert "followers" not in data
 
 
-# OptionalOAuth2Authentication session-auth gate
+# OptionalOAuth2Authentication session-auth path
 
 """
 Auth class has two paths:
 Normative Authorization: Bearer header (covered by the existing header tests in this file and by test_token_actor_binding.py)
-and the NON-NORMATIVE session-stored token path, gated by LOLA_ALLOW_SESSION_TOKEN_AUTH.
+and the NON-NORMATIVE session-stored token path, which is demo-scoped by construction.
+
+These cover the session path and the token-validation step it relies on.
 """
 class TestOptionalAuthenticationEnvironmentScoping:
 
-    # With the flag off, session auth is skipped before any session read
+    # A valid session-stored token authenticates via the session path.
     @pytest.mark.django_db
-    @override_settings(LOLA_ALLOW_SESSION_TOKEN_AUTH=False)
-    def test_session_path_disabled_by_environment(self):
-        request = RequestFactory().get("/api/actors/1/")
-        request.session = {}  # would carry a token if the path were enabled
-
-        result = OptionalOAuth2Authentication()._try_session_auth(request)
-        assert result is None
-
-    # With the flag on, a valid session-stored token authenticates
-    @pytest.mark.django_db
-    @override_settings(LOLA_ALLOW_SESSION_TOKEN_AUTH=True)
-    def test_session_path_enabled_authenticates(self):
+    def test_session_path_authenticates(self):
         token = AccessTokenFactory(lola_scope=True)
         request = RequestFactory().get("/api/actors/1/")
         request.session = {}
@@ -491,7 +482,7 @@ class TestOptionalAuthenticationEnvironmentScoping:
         result = OptionalOAuth2Authentication()._try_session_auth(request)
         assert result == (token.user, token)
 
-    # An expired token is rejected by the session path's validation step
+    # An expired token is rejected by the session path's validation step.
     @pytest.mark.django_db
     def test_resolve_valid_access_token_rejects_expired(self):
         token = AccessTokenFactory(lola_scope=True, expired=True)
