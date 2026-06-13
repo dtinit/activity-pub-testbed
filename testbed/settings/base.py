@@ -252,8 +252,6 @@ OAUTH2_PROVIDER = {
 
 OAUTH2_PROVIDER_ACCESS_TOKEN_MODEL = "oauth2_provider.AccessToken"
 
-LOLA_ALLOW_SESSION_TOKEN_AUTH = True
-
 # Configure REST framework to use OAuth2 authentication
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
