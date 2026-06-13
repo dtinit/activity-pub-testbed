@@ -7,7 +7,6 @@ ActivityPub federation and LOLA account portability requirements.
 
 import logging
 
-from django.conf import settings
 from oauth2_provider.contrib.rest_framework import OAuth2Authentication
 from rest_framework import exceptions
 
@@ -35,14 +34,15 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         Attempt to authenticate the request using OAuth2 with multiple methods.
 
         Authentication priority:
-        1. Authorization header - the only normative LOLA path (always enabled)
-        2. Session-stored token - gated by LOLA_ALLOW_SESSION_TOKEN_AUTH
+        1. Authorization header - the only normative LOLA path
+        2. Session-stored token - non-normative demo convenience
 
-        Path 2 is a non-normative testbed convenience that exists because this testbed doubles
-        as a destination-side demo tool: after the demo token-exchange flow stores a token in
-        the session, the browser can browse the LOLA collections without re-sending a header.
-        
-        It is NOT part of the LOLA source-server contract and is gated inside its own helper.
+        Path 2 exists because this testbed doubles as a destination-side demo tool: after the
+        demo token-exchange flow stores a token in the session, the browser can browse the LOLA
+        collections without re-sending a header.
+
+        It is NOT part of the LOLA source-server contract. It is demo-scoped by construction.
+        Only the demo flow populates the session, it is cookie-bound, and it is suppressed by ?public_only.
         See docs/lola-authentication.md.
 
         Both enabled paths produce the same (user, token) shape and set
@@ -110,28 +110,19 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         The token is re-validated against the DB each request (handles revocation) and expired
         tokens are cleared from the session.
 
-        Supports the 'public_only' query parameter to suppress session auth for
-        the demo's public-vs-gated comparison.
+        Demo-scoped by construction: only the demo token-exchange flow populates the session, the
+        token is cookie-bound (never in a URL), and ?public_only suppresses it.
 
         Args:
             request: The HTTP request object
 
         Returns:
-            A tuple of (user, token) if authentication succeeds, None otherwise
-            (including when this path is disabled for the environment).
+            A tuple of (user, token) if authentication succeeds, None otherwise.
         """
         from testbed.core.oauth.utils import (
             clear_token_from_session,
             get_token_from_session,
         )
-
-        # Skip entirely unless this environment opts in.
-        if not getattr(settings, "LOLA_ALLOW_SESSION_TOKEN_AUTH", False):
-            logger.debug(
-                "Session auth skipped: LOLA_ALLOW_SESSION_TOKEN_AUTH disabled "
-                "for this environment"
-            )
-            return None
 
         # public_only forces the unauthenticated view for demo comparison.
         if request.GET.get("public_only"):
