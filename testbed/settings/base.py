@@ -252,23 +252,7 @@ OAUTH2_PROVIDER = {
 
 OAUTH2_PROVIDER_ACCESS_TOKEN_MODEL = "oauth2_provider.AccessToken"
 
-"""
-LOLA convenience authentication paths.
-
-OptionalOAuth2Authentication supports three ways to present a portability token
-1. Authorization: Bearer header (the only normative LOLA path)
-2. ?auth_token= query string
-3. Token stored in the Django session.
-
-The last two exist solely so this testbed can demo the process involving a destination-server
-and so developers can click links during local testing.
-They are NOT part of the source-server contract.
-
-Both flags default to False here so that any settings module that forgets to
-opt in fails CLOSED (only the Bearer header authenticates).
-"""
-LOLA_ALLOW_URL_TOKEN_AUTH = False
-LOLA_ALLOW_SESSION_TOKEN_AUTH = False
+LOLA_ALLOW_SESSION_TOKEN_AUTH = True
 
 # Configure REST framework to use OAuth2 authentication
 REST_FRAMEWORK = {
