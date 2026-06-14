@@ -838,7 +838,7 @@ The implementation includes comprehensive test coverage across multiple test fil
 
 **5. Technical Implementation**
 - `test_content_type_headers_set_correctly()` - HTTP header validation
-- `TestOptionalAuthenticationEnvironmentScoping` - session-auth path and token-validation
+- `TestOptionalAuthenticationSessionPath` - session-auth path and token-validation
 
 ### Test Fixtures and Factories
 

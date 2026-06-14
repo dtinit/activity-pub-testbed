@@ -156,8 +156,9 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         string read from the session into the (user, AccessToken) pair the auth
         contract expects, rejecting unknown or expired tokens. 
         
-        Returns None for a missing token, so callers fail closed to unauthenticated; unexpected
-        lookup errors propagate to authenticate(), whose broad handler degrades the request to unauthenticated.
+        Returns None for a missing or invalid (unknown/expired) token, so callers fail closed to
+        unauthenticated; unexpected lookup errors propagate to authenticate(), whose broad handler
+        degrades the request to unauthenticated.
         """
         from oauth2_provider.models import AccessToken
 

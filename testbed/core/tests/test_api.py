@@ -467,7 +467,7 @@ and the NON-NORMATIVE session-stored token path, which is demo-scoped by constru
 
 These cover the session path and the token-validation step it relies on.
 """
-class TestOptionalAuthenticationEnvironmentScoping:
+class TestOptionalAuthenticationSessionPath:
 
     # A valid session-stored token authenticates via the session path.
     @pytest.mark.django_db
