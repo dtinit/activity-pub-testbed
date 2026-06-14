@@ -109,7 +109,7 @@ def get_user_application(user, request=None):
 
 ## OptionalOAuth2Authentication Class
 
-The core of the LOLA authentication system is the `OptionalOAuth2Authentication` class located in `testbed/core/utils/authentication.py`.
+The core of the LOLA authentication system is the `OptionalOAuth2Authentication` class located in `testbed/core/oauth/authentication.py`.
 
 ### Purpose
 
@@ -117,24 +117,26 @@ This authentication class enables endpoints to function in two distinct modes:
 1. **Unauthenticated Mode**: Standard ActivityPub federation (public data only)
 2. **Authenticated Mode**: LOLA account portability with enhanced data access
 
-### Three-Tier Authentication Chain
+### Two-Path Authentication Chain
 
-The authentication system implements intelligent prioritization across three authentication methods:
+The class accepts a portability token two ways, tried in priority order:
 
-**Tier 1: Authorization Header (Production)**
+**Path 1: Authorization Header (normative)**
 - Standard OAuth 2.0 RFC 6750 Bearer token authentication
+- The only path that is part of the LOLA source-server contract — a real
+  destination always uses this
 - Used by external ActivityPub servers and production API clients
-- Most explicit authentication method (highest priority)
+- Always enabled
 
-**Tier 2: URL Parameter (Testing)**
-- `?auth_token=TOKEN` parameter for development and testing convenience
-- Enables simple HTML link-based testing without JavaScript
-- Visible authentication method for debugging
-
-**Tier 3: Session Storage (Demo Enhancement)**
-- Automatic authentication using tokens stored in Django sessions
-- Seamless demo experience after successful OAuth completion
-- Implicit authentication method (lowest priority)
+**Path 2: Session-stored token (NON-NORMATIVE demo convenience)**
+- Automatic authentication using a token the demo token-exchange flow stored in
+  the Django session (`store_token_in_session`)
+- Powers the seamless "Session Authentication Active" demo, where the browser
+  opens the LOLA collection links without re-sending a header
+- **Demo-scoped by construction** (no setting flag): only the demo flow ever
+  populates the session, the token is cookie-bound (never in a URL), and it is
+  re-validated against the DB each request; `?public_only=true` suppresses it
+  for the public-vs-gated comparison
 
 ### Authentication Method Implementation
 
@@ -143,33 +145,29 @@ def authenticate(self, request):
     # Initialize authentication flags
     request.is_oauth_authenticated = False
     request.has_portability_scope = False
-    
+
     try:
-        # Tier 1: Authorization header (production)
+        # 1. Normative path: Authorization: Bearer header
         result = super().authenticate(request)
-        
-        # Tier 2: URL parameter (testing)
-        if result is None:
-            result = self._authenticate_with_url_token(request)
-        
-        # Tier 3: Session storage (demo)
+
+        # 2. Demo fallback: session-stored token (demo-scoped; see _try_session_auth)
         if result is None:
             result = self._try_session_auth(request)
-        
+
         # Process successful authentication
         if result is not None:
             user, token = result
             request.is_oauth_authenticated = True
-            
+
             if self._has_portability_scope(token):
                 request.has_portability_scope = True
-            
+
             return user, token
-            
+
     except exceptions.AuthenticationFailed:
         # Graceful degradation: continue as unauthenticated
         pass
-    
+
     return None
 ```
 
@@ -177,7 +175,7 @@ def authenticate(self, request):
 
 - **Optional Authentication**: Unlike standard OAuth2Authentication, this doesn't fail requests without tokens
 - **Scope Validation**: Checks for `activitypub_account_portability` scope
-- **Multiple Auth Methods**: Supports header, URL parameter, and session authentication
+- **Two Auth Paths**: the normative `Authorization` header plus a demo-scoped session path
 - **Request Flag Setting**: Adds authentication status flags to request objects
 - **Graceful Error Handling**: Invalid/expired tokens fall back to unauthenticated behavior
 
@@ -206,36 +204,25 @@ After authentication, the following flags are available on request objects:
 
 ### Authentication Methods
 
-#### 1. Authorization Header (Production)
+#### 1. Authorization Header (normative)
 ```http
 GET /api/actors/1/ HTTP/1.1
 Authorization: Bearer your-oauth-token-here
 ```
 
 **Implementation**: Standard OAuth 2.0 RFC 6750 Bearer token authentication
-**Use Cases**: External ActivityPub servers, production API clients, federation
-**Priority**: Highest (Tier 1)
+**Use Cases**: External ActivityPub servers, real destination implementations, federation
+**Priority**: Highest (Path 1) — the only path in the source-server contract
 
-#### 2. URL Parameter (Testing)
-```http
-GET /api/actors/1/?auth_token=your-oauth-token-here HTTP/1.1
-```
-
-**Implementation**: `_authenticate_with_url_token()` method validates URL parameter against OAuth database
-**Use Cases**: Development testing, debugging, educational demonstrations
-**Priority**: Medium (Tier 2)
-
-The URL parameter method enables simple `<a>` link testing in HTML templates without JavaScript.
-
-#### 3. Session Storage (Demo Enhancement)
+#### 2. Session Storage (NON-NORMATIVE demo convenience)
 ```http
 GET /api/actors/1/ HTTP/1.1
 Cookie: sessionid=abc123...
 ```
 
-**Implementation**: `_try_session_auth()` method validates session-stored OAuth tokens
+**Implementation**: `_try_session_auth()` validates a token the demo token-exchange flow stored in the session
 **Use Cases**: Seamless demo experience, community education, conference presentations
-**Priority**: Lowest (Tier 3)
+**Priority**: Fallback (Path 2). Demo-scoped by construction; no setting flag
 
 **Session Authentication Flow**:
 1. User completes OAuth authorization and token exchange
@@ -326,10 +313,12 @@ GET /api/actors/1/?public_only=true
 GET /api/actors/1/
 ```
 
-**Template Integration**:
+**Template Integration**: the authenticated links authenticate via the session
+(set during token exchange), so they carry no token in the URL; the public
+comparison links add `?public_only=true` to suppress session auth.
 ```html
-<!-- Authenticated links -->
-<a href="/api/actors/{{ actor.pk }}/?format=json&auth_token={{ token }}" target="_blank">
+<!-- Authenticated links (session-based; no token in the URL) -->
+<a href="/api/actors/{{ actor.pk }}/?format=json" target="_blank">
   Details (with LOLA fields)
 </a>
 
@@ -343,23 +332,19 @@ GET /api/actors/1/
 
 ### Error Handling
 
-The class handles various authentication scenarios across all three tiers:
+The class handles various authentication scenarios across both paths:
 
-**Authorization Header (Tier 1):**
+**Authorization Header (Path 1):**
 - **Invalid tokens**: Continue as unauthenticated
 - **Expired tokens**: Continue as unauthenticated  
 - **Malformed headers**: Continue as unauthenticated
 
-**URL Parameter (Tier 2):**
-- **Invalid auth_token parameter**: Continue as unauthenticated
-- **Missing token in database**: Continue as unauthenticated
-
-**Session Storage (Tier 3):**
+**Session Storage (Path 2):**
 - **Expired session tokens**: Automatically cleared and continue as unauthenticated
 - **Missing session data**: Continue as unauthenticated
 - **public_only parameter**: Bypass session auth for comparison demos
 
-**Scope Validation (All Tiers):**
+**Scope Validation (both paths):**
 - **Missing scope**: Authenticated but without portability access
 - **Malformed scope**: Continue as unauthenticated
 
@@ -440,9 +425,9 @@ runs two layers:
   binding rows, and requests without a URL pk all return 403 `actor_mismatch`
   (fail closed).
 
-The binding check covers all three `OptionalOAuth2Authentication` paths
-(Authorization header, `?auth_token=` URL parameter, session) because all
-three set `request.auth` to the same `AccessToken` instance.
+The binding check covers both `OptionalOAuth2Authentication` paths
+(Authorization header and session) because both set `request.auth` to the same
+`AccessToken` instance.
 
 ### Endpoints Enforcing Binding
 
@@ -772,31 +757,33 @@ The enhanced OAuth token exchange template (`testbed/core/templates/oauth_token_
 - Includes troubleshooting guides for "invalid_client" and other errors
 
 #### 2. Interactive LOLA Testing Links
-When a token is successfully obtained, the interface provides direct HTML links for testing LOLA authentication using URL parameter authentication:
+When a token is successfully obtained, it is stored in the session, so the
+interface provides direct HTML links that authenticate via **session auth** — no
+token is placed in any URL:
 
 ```html
-<!-- LOLA-authenticated links -->
-<a href="/api/actors/{{ source_actor.pk }}/?format=json&auth_token={{ token_response.access_token }}" target="_blank">
+<!-- LOLA-authenticated links (session-based; the token is never in the URL) -->
+<a href="/api/actors/{{ source_actor.pk }}/?format=json" target="_blank">
   Details (with LOLA fields)
 </a>
 
-<a href="/api/actors/{{ source_actor.pk }}/outbox?format=json&auth_token={{ token_response.access_token }}" target="_blank">
+<a href="/api/actors/{{ source_actor.pk }}/outbox?format=json" target="_blank">
   Outbox (all activities)
 </a>
 
-<!-- Compare with public versions -->
-<a href="/api/actors/{{ source_actor.pk }}/?format=json" target="_blank">
+<!-- Compare with public versions (suppress session auth) -->
+<a href="/api/actors/{{ source_actor.pk }}/?format=json&public_only=true" target="_blank">
   Details (basic ActivityPub)
 </a>
 
-<a href="/api/actors/{{ source_actor.pk }}/outbox?format=json" target="_blank">
+<a href="/api/actors/{{ source_actor.pk }}/outbox?format=json&public_only=true" target="_blank">
   Outbox (public only)
 </a>
 ```
 
 **Key Features:**
-- Uses URL parameter authentication (`?auth_token=...`) for easy testing without JavaScript
-- Provides side-by-side comparison between LOLA-authenticated and public responses
+- Uses session authentication (token stored during token exchange); the token never appears in a URL
+- Provides side-by-side comparison between LOLA-authenticated and public (`?public_only=true`) responses
 - Opens results in new tabs for easy comparison
 - Works directly in any browser without additional tools
 
@@ -849,9 +836,9 @@ The implementation includes comprehensive test coverage across multiple test fil
 - `test_invalid_token_graceful_degradation()` - Invalid token handling
 - `test_malformed_authorization_header_handling()` - Malformed header tolerance with parameterized test cases
 
-**5. Technical Implementation (2 tests)**
-- `test_actor_detail_url_parameter_authentication()` - URL parameter authentication method
+**5. Technical Implementation**
 - `test_content_type_headers_set_correctly()` - HTTP header validation
+- `TestOptionalAuthenticationEnvironmentScoping` - session-auth path and token-validation
 
 ### Test Fixtures and Factories
 
@@ -1291,7 +1278,7 @@ This maintains semantic compatibility while adding LOLA-specific vocabularies.
 ### 5. **Testing and Development Experience**
 - Comprehensive test coverage across all authentication states
 - Interactive testing interface for manual verification
-- URL parameter authentication for easy template-based testing
+- Session-based authentication for easy template-based testing (no token in the URL)
 - Visual highlighting of LOLA-specific fields in responses
 
 ## Related Documentation
