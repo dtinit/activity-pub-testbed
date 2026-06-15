@@ -11,11 +11,13 @@ from .utils import (
     validate_state_from_session,
 )
 from .validators import ActivityPubOAuth2Validator
+from .views import PortabilityAuthorizationView
 
 __all__ = [
     "OptionalOAuth2Authentication",
     "OAuthApplicationForm",
     "ActivityPubOAuth2Validator",
+    "PortabilityAuthorizationView",
     "clear_token_from_session",
     "generate_secure_state",
     "get_token_from_session",

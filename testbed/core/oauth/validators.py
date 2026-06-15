@@ -132,18 +132,10 @@ class ActivityPubOAuth2Validator(OAuth2Validator):
         """
         Resolve which source Actor a newly-issued LOLA token should be bound to.
 
-        Preference order:
-          1. `request.activitypub_bound_actor_id` — the actor id the user
-             explicitly selected at the authorization step. Populated by
-             following PR's authorization view; absent today. Re-validated here
-             against (user, role=ROLE_SOURCE) so a client-supplied id cannot
-             bind to another user's actor.
-          2. Fallback: the authenticated user's unique source Actor.
-             `Actor.clean()` enforces one source actor per user, so this
-             lookup is deterministic when an actor exists.
-
-        Returns None when no valid source actor can be resolved; the caller
-        treats that as a hard failure (refuse to issue the token).
+        Returns the authenticated user's unique source Actor, or None if no
+        source actor exists (the caller treats None as a hard failure and
+        refuses to issue the token). `Actor.clean()` enforces one source actor
+        per user, so this lookup is deterministic.
         """
         # Import lazily — this module is imported by DOT at app startup before
         # the core app's models are fully available in some test configs.
@@ -153,14 +145,7 @@ class ActivityPubOAuth2Validator(OAuth2Validator):
         if user is None or not getattr(user, "is_authenticated", False):
             return None
 
-        bound_id = getattr(request, "activitypub_bound_actor_id", None)
         try:
-            if bound_id is not None:
-                return Actor.objects.get(
-                    pk=bound_id,
-                    user=user,
-                    role=Actor.ROLE_SOURCE,
-                )
             return Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
         except Actor.DoesNotExist:
             return None
