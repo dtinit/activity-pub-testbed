@@ -127,12 +127,16 @@
         <h3>🧪 Test LOLA ActivityPub Endpoints</h3>
         <p>Your <strong>Source Actor</strong> with LOLA portability scope:</p>
         
+        {# Authenticated links rely on session auth: the token was stored in the  #}
+        {# session during token exchange, so these requests authenticate via the  #}
+        {# session cookie -- the token is never placed in a URL. The matching     #}
+        {# ?public_only=true links below suppress session auth for comparison.    #}
         <div class="actor">
           <div>Username: {{ source_actor.username }}</div>
-          <div><a href="/api/actors/{{ source_actor.pk }}/?format=json&auth_token={{ token_response.access_token }}" target="_blank">Details (with LOLA fields)</a></div>
-          <div><a href="/api/actors/{{ source_actor.pk }}/outbox?format=json&auth_token={{ token_response.access_token }}" target="_blank">Outbox (all activities)</a></div>
-          <div><a href="/api/actors/{{ source_actor.pk }}/following/?format=json&auth_token={{ token_response.access_token }}" target="_blank">Following Collection (public)</a></div>
-          <div><a href="/api/actors/{{ source_actor.pk }}/followers/?format=json&auth_token={{ token_response.access_token }}" target="_blank">Followers Collection (LOLA-gated)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/?format=json" target="_blank">Details (with LOLA fields)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/outbox?format=json" target="_blank">Outbox (all activities)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/following/?format=json" target="_blank">Following Collection (public)</a></div>
+          <div><a href="/api/actors/{{ source_actor.pk }}/followers/?format=json" target="_blank">Followers Collection (LOLA-gated)</a></div>
         </div>
         
         <p><strong>Compare with public versions (no authentication):</strong></p>

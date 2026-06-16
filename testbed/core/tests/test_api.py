@@ -19,6 +19,8 @@ from testbed.core.json_ld_utils import (
     build_actor_id,
     build_outbox_id,
 )
+from testbed.core.oauth.authentication import OptionalOAuth2Authentication
+from testbed.core.oauth.utils import store_token_in_session
 
 User = get_user_model()
 
@@ -84,22 +86,7 @@ Edge case tests for LOLA authentication.
 These tests focus on specific edge cases: URL params, outbox filtering, error handling, headers.
 """
 class TestLOLAAuthenticationAPI:
-    
-    # Test that URL parameter authentication works for LOLA testing
-    @pytest.mark.django_db
-    def test_actor_detail_url_parameter_authentication(self):
-        actor = create_isolated_actor("url_param_test")
-        lola_token = AccessTokenFactory(lola_scope=True)
-        client = APIClient()
-        
-        # Use auth_token URL parameter instead of Authorization header
-        url = reverse("actor-detail", kwargs={"pk": actor.id})
-        response = client.get(f"{url}?auth_token={lola_token.token}")
-        
-        assert response.status_code == status.HTTP_200_OK
-        # Should have migration field (proves URL parameter auth worked)
-        assert "migration" in response.data
-    
+
     # Test that outbox shows different content based on authentication
     @pytest.mark.django_db
     def test_outbox_content_filtering_by_authentication(self, mock_request):
@@ -469,3 +456,35 @@ class TestLOLACollectionDiscovery:
                 # Public and basic OAuth should not see collection URLs
                 assert "following" not in data
                 assert "followers" not in data
+
+
+# OptionalOAuth2Authentication session-auth path
+
+"""
+Auth class has two paths:
+Normative Authorization: Bearer header (covered by the existing header tests in this file and by test_token_actor_binding.py)
+and the NON-NORMATIVE session-stored token path, which is demo-scoped by construction.
+
+These cover the session path and the token-validation step it relies on.
+"""
+class TestOptionalAuthenticationSessionPath:
+
+    # A valid session-stored token authenticates via the session path.
+    @pytest.mark.django_db
+    def test_session_path_authenticates(self):
+        token = AccessTokenFactory(lola_scope=True)
+        request = RequestFactory().get("/api/actors/1/")
+        request.session = {}
+        store_token_in_session(
+            request, {"access_token": token.token, "scope": token.scope}
+        )
+
+        result = OptionalOAuth2Authentication()._try_session_auth(request)
+        assert result == (token.user, token)
+
+    # An expired token is rejected by the session path's validation step.
+    @pytest.mark.django_db
+    def test_resolve_valid_access_token_rejects_expired(self):
+        token = AccessTokenFactory(lola_scope=True, expired=True)
+        result = OptionalOAuth2Authentication()._resolve_valid_access_token(token.token)
+        assert result is None
