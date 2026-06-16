@@ -410,10 +410,14 @@ The binding is persisted inside the same `transaction.atomic()` block DOT
 1. `super()._save_bearer_token(...)` lets DOT write the `AccessToken` row.
 2. If the issued scope does not include `activitypub_account_portability`,
    the validator early-returns (non-portability tokens are not actor-keyed).
-3. The validator resolves the source Actor to bind via `_resolve_bound_actor`:
-   - Preferred: `request.activitypub_bound_actor_id` (set by the authorization
-     view; re-validated against `user` and `role=ROLE_SOURCE`).
-   - Fallback: `Actor.objects.get(user=request.user, role=ROLE_SOURCE)`.
+3. The validator resolves the source Actor to bind via `_resolve_bound_actor`,
+   which performs a single deterministic lookup:
+   `Actor.objects.get(user=request.user, role=ROLE_SOURCE)`. `Actor.clean()`
+   enforces one source Actor per user, so this lookup is unambiguous. The
+   authorization view (`PortabilityAuthorizationView`) resolves the redirect's
+   `activitypub_actor` with the *same* lookup independently — that shared
+   invariant, not any cross-request attribute passing, is what keeps the
+   redirect Actor and the token-bound Actor aligned.
 4. If no valid source Actor is resolvable, the validator raises
    `InvalidRequestFatalError`, which rolls back the transaction and prevents
    an unbound portability token from being issued (fail closed).
@@ -470,6 +474,16 @@ A mismatched/missing binding produces a standardized 403 response
 }
 ```
 
+### Relationship to the `activitypub_actor` Callback
+
+The actor a token is bound to is the *same* actor the source server names in the authorization callback. On an approved portability authorization,
+the source redirect carries `code`, `state`, and `activitypub_actor` (LOLA §5.3), where `activitypub_actor` is the absolute URL of the granted source Actor.
+
+`PortabilityAuthorizationView` (which appends `activitypub_actor`) and `ActivityPubOAuth2Validator._save_bearer_token` (which writes the binding) each
+resolve that Actor independently with the same deterministic lookup (`Actor.objects.get(user=user, role=ROLE_SOURCE)`).
+Because `Actor.clean()` enforces one source Actor per user, both resolve the same row, so the Actor advertised in the callback always matches the Actor the issued token can access.
+See [Phase 3: Authorization Code & Callback Handling](oauth/phase-3-authorization-code-and-callback-handling.md#source-server-response-appending-activitypub_actor-lola-53).
+
 ## Enhanced API Endpoints
 
 Two core ActivityPub endpoints have been enhanced with LOLA authentication support:
@@ -499,14 +513,28 @@ Two core ActivityPub endpoints have been enhanced with LOLA authentication suppo
   "id": "https://example.com/actors/1",
   
   // Standard ActivityPub fields...
-  
-  // LOLA-specific fields (only with portability scope)
-  "accountPortabilityOauth": "https://example.com/oauth/authorize/",
+
+  // endpoints is ALWAYS present, even unauthenticated (public OAuth discovery surface, LOLA §4.2)
+  "endpoints": {
+    "oauthAuthorizationEndpoint": "https://example.com/oauth/authorize/",
+    "oauthMigrationEndpoint": "https://example.com/oauth/authorize/"
+  },
+
+  // The fields below are added ONLY with a valid portability-scoped token.
+  // Regular Actor collections (liked/followers are NOT migration collections):
+  "outbox": "https://example.com/actors/1/outbox",
   "following": "https://example.com/actors/1/following",
   "followers": "https://example.com/actors/1/followers",
-  "content": "https://example.com/actors/1/content",
-  "blocked": "https://example.com/actors/1/blocked", 
-  "migration": "https://example.com/actors/1/outbox"
+  "liked": "https://example.com/actors/1/liked",
+  "blocked": "https://example.com/actors/1/blocked",
+
+  // Migration feature discovery -> dedicated migration/... routes (LOLA §4.4)
+  "migration": {
+    "outbox": "https://example.com/actors/1/migration/outbox",
+    "content": "https://example.com/actors/1/migration/content",
+    "following": "https://example.com/actors/1/migration/following",
+    "blocked": "https://example.com/actors/1/migration/blocked"
+  }
 }
 ```
 
@@ -914,8 +942,10 @@ class TestLOLAAuthenticationAPI:
         assert data["preferredUsername"] == actor.username
         
     def assert_has_lola_fields(self, data, actor):
-        assert "accountPortabilityOauth" in data
-        assert data["accountPortabilityOauth"].endswith("/oauth/authorize/")
+        # endpoints.oauthMigrationEndpoint is the always-public discovery surface
+        assert data["endpoints"]["oauthMigrationEndpoint"].endswith("/oauth/authorize/")
+        # migration.* are the dedicated migration-collection routes (scope-gated)
+        assert data["migration"]["content"].endswith(f"/actors/{actor.id}/migration/content")
         # ... additional LOLA field validations
     
     def get_authenticated_client(self, token):
@@ -936,14 +966,13 @@ def test_actor_detail_with_lola_scope_returns_enhanced_data(self, lola_token):
     assert data["preferredUsername"] == actor.username
     
     # Validate LOLA-specific fields are present
-    assert "accountPortabilityOauth" in data
-    assert "content" in data
+    assert "endpoints" in data
     assert "blocked" in data
-    assert "migration" in data
-    
+    assert set(data["migration"]) == {"outbox", "content", "following", "blocked"}
+
     # Validate URL formats
-    assert data["accountPortabilityOauth"].endswith("/oauth/authorize/")
-    assert data["content"].endswith(f"/actors/{actor.id}/content")
+    assert data["endpoints"]["oauthMigrationEndpoint"].endswith("/oauth/authorize/")
+    assert data["migration"]["content"].endswith(f"/actors/{actor.id}/migration/content")
 ```
 
 #### Content Filtering Validation
@@ -994,11 +1023,13 @@ headers = {'Authorization': f'Bearer {token}'}
 response = requests.get('https://server.example/api/actors/1/', headers=headers)
 actor_data = response.json()
 
-# LOLA-specific fields now available
-print(actor_data['accountPortabilityOauth'])  # OAuth endpoint for discovery
-print(actor_data['content'])                  # Content collection endpoint
-print(actor_data['blocked'])                  # Blocked actors endpoint
-print(actor_data['migration'])                # Migration outbox endpoint
+# Public discovery surface (present even without a token)
+print(actor_data['endpoints']['oauthMigrationEndpoint'])  # OAuth endpoint for portability discovery
+
+# Migration feature discovery (only with portability scope)
+print(actor_data['migration']['content'])     # Content collection endpoint
+print(actor_data['migration']['outbox'])      # Migration outbox endpoint
+print(actor_data['blocked'])                  # Blocked actors collection
 
 # Access complete outbox (including private activities)
 outbox_response = requests.get(
@@ -1120,15 +1151,15 @@ This implementation complies with the LOLA specification across all major requir
 
 ### 1. Discovery and Authentication ✅
 
-**Specification Requirement**: "Source server advertises an OAuth endpoint for authorizing account portability"
+**Specification Requirement** (LOLA §4.2): "Supporting servers MUST provide their portability authorization endpoint in Actor objects … advertised under `endpoints.oauthMigrationEndpoint` … parallel to `oauthAuthorizationEndpoint`."
 
-**Implementation**: 
-- Actor objects include `accountPortabilityOauth` field when accessed with portability scope
+**Implementation**:
+- Actor objects always expose the public `endpoints` object carrying `oauthMigrationEndpoint` (and the parallel `oauthAuthorizationEndpoint`) — present even on unauthenticated responses
 - OAuth endpoint URL dynamically built based on current server configuration
 - Proper `activitypub_account_portability` scope implementation
 - State parameter validation for CSRF protection
 
-**Note**: This implementation uses Actor-based discovery (via the `accountPortabilityOauth` field) rather than RFC8414 `.well-known` metadata endpoints. The LOLA specification supports both approaches.
+**Note**: This implementation supports **both** discovery paths the spec allows, and both are implemented. Actor-based discovery uses `endpoints.oauthMigrationEndpoint` (LOLA §4.2). RFC8414 `.well-known` discovery advertises the same authorization endpoint as the `activitypub_account_portability` URL string (LOLA §4.1) — see [LOLA Discovery](lola-discovery.md). The legacy top-level `accountPortabilityOauth` field has been removed.
 
 ```json
 {
@@ -1137,7 +1168,10 @@ This implementation complies with the LOLA specification across all major requir
     "https://swicg.github.io/activitypub-data-portability/lola.jsonld"
   ],
   "type": "Person",
-  "accountPortabilityOauth": "https://example.com/oauth/authorize/"
+  "endpoints": {
+    "oauthAuthorizationEndpoint": "https://example.com/oauth/authorize/",
+    "oauthMigrationEndpoint": "https://example.com/oauth/authorize/"
+  }
 }
 ```
 
@@ -1183,19 +1217,23 @@ if not auth_context or not auth_context.get('has_portability_scope'):
 
 ### 4. Discovery Collections ✅
 
-**Specification Requirement**: "Content can be copied from a new content collection endpoint"
+**Specification Requirement** (LOLA §4.4): the authenticated Actor advertises a `migration` object whose members (`outbox`, `content`, `following`, `blocked`) are the dedicated migration-collection routes.
 
 **Implementation**:
-- `content` endpoint URL provided in authenticated Actor responses
-- `blocked` endpoint for block list access
-- `migration` endpoint pointing to outbox for activity migration
-- Following/followers collections maintained per ActivityPub spec
+- `migration` is an **object** (not a single URL) pointing at the four dedicated `actors/<pk>/migration/...` routes
+- `liked` and `followers` are regular **Actor collections**, not migration collections, and are advertised at the top level — never inside `migration`
+- These fields appear only on responses carrying a valid portability-scoped token
 
 ```json
 {
-  "content": "https://example.com/actors/1/content",
+  "liked": "https://example.com/actors/1/liked",
   "blocked": "https://example.com/actors/1/blocked",
-  "migration": "https://example.com/actors/1/outbox"
+  "migration": {
+    "outbox": "https://example.com/actors/1/migration/outbox",
+    "content": "https://example.com/actors/1/migration/content",
+    "following": "https://example.com/actors/1/migration/following",
+    "blocked": "https://example.com/actors/1/migration/blocked"
+  }
 }
 ```
 
