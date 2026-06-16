@@ -28,7 +28,18 @@
         <pre class="state">{{ state }}</pre>
       </div>
       {% endif %}
-      
+
+      {% if activitypub_actor %}
+      <div class="actor-container">
+        <h3>Source Actor:</h3>
+        <pre class="actor">{{ activitypub_actor }}</pre>
+        <p>The canonical source Actor URL from the callback — the actor the issued portability token will be bound to.</p>
+        {% if callback_actor_matches %}
+        <p class="alert alert-info">✓ Callback actor matches your source actor below.</p>
+        {% endif %}
+      </div>
+      {% endif %}
+
       {% if error %}
       <div class="authorization-error">
         <h3>Authorization Error:</h3>
