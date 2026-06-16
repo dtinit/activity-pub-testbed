@@ -10,11 +10,14 @@ from .models import CreateActivity, LikeActivity, FollowActivity
 # Build JSON-LD Actor with LOLA compliance.
 def build_actor_json_ld(actor, auth_context=None):
     """
-    The accountPortabilityOauth field MUST always be present
-    for OAuth endpoint discovery (public visibility).
-    
-    The migration.* properties are conditionally included only 
-    when the request includes a valid portability token (scoped access).
+    Build an ActivityPub Actor object with revised-LOLA portability discovery.
+
+    - `endpoints.oauthMigrationEndpoint` MUST always be present
+      for OAuth endpoint discovery (public visibility).
+    - It is advertised in parallel with `endpoints.oauthAuthorizationEndpoint`.
+      Both point at `/oauth/authorize/` endpoint, which is also the URL advertised in the RFC8414 metadata.
+    - The `migration` object (outbox / content / following / blocked) is privacy-sensitive feature
+      discovery and is only included when the request carries a valid portability-scoped token.
     
     Args:
         actor: The Actor model instance
@@ -33,6 +36,10 @@ def build_actor_json_ld(actor, auth_context=None):
     # Build actor URL
     actor_id = build_actor_id(actor.id, request)
     
+    # The migration OAuth endpoint and the general OAuth authorization endpoint are the same URL,
+    # so both `endpoints.*` fields resolve to it. Computed once and reused.
+    oauth_authorize_url = build_oauth_endpoint_url(request)
+
     # Base ActivityPub Actor (always included)
     actor_data = {
         "@context": build_actor_context(),
@@ -42,27 +49,28 @@ def build_actor_json_ld(actor, auth_context=None):
         "name": actor.username,
         "inbox": f"{actor_id}/inbox",
         "previously": actor.previously or [],
-        "accountPortabilityOauth": build_oauth_endpoint_url(request)
+        "endpoints": {
+            "oauthAuthorizationEndpoint": oauth_authorize_url,
+            "oauthMigrationEndpoint": oauth_authorize_url,
+        },
     }
-    
+
     # Privacy-sensitive fields ONLY with portability scope
     if auth_context and auth_context.get('has_portability_scope'):
-        # Standard ActivityPub collections (privacy-sensitive)
         actor_data["outbox"] = f"{actor_id}/outbox"
         actor_data["following"] = f"{actor_id}/following"
         actor_data["followers"] = f"{actor_id}/followers"
         actor_data["liked"] = f"{actor_id}/liked"
         actor_data["blocked"] = f"{actor_id}/blocked"
         
-        # LOLA migration endpoints (same URLs, scope-filtered responses)
+        # LOLA migration feature discovery
         actor_data["migration"] = {
-            "outbox": f"{actor_id}/outbox",
-            "content": f"{actor_id}/content",
-            "following": f"{actor_id}/following",
-            "blocked": f"{actor_id}/blocked",
-            "liked": f"{actor_id}/liked"
+            "outbox": f"{actor_id}/migration/outbox",
+            "content": f"{actor_id}/migration/content",
+            "following": f"{actor_id}/migration/following",
+            "blocked": f"{actor_id}/migration/blocked",
         }
-    
+
     return actor_data
 
 def build_note_json_ld(note, auth_context=None):

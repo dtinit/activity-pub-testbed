@@ -48,4 +48,28 @@ urlpatterns = [
         blocked_collection,
         name="blocked-collection",
     ),
+    # Dedicated LOLA migration collection routes. These are the URLs advertised under the Actor `migration` object.
+    # Each route delegates to the existing collection view so the advertised URL is real and resolves.
+    # The behavioral update of the migration surface (migration-outbox activity filtering, pagination, and
+    # the public-vs-migration following/blocked gating decisions) is upcoming work and is intentionally not done here.
+    path(
+        "actors/<int:pk>/migration/outbox/",
+        portability_outbox_detail,
+        name="migration-outbox",
+    ),
+    path(
+        "actors/<int:pk>/migration/content/",
+        content_collection,
+        name="migration-content",
+    ),
+    path(
+        "actors/<int:pk>/migration/following/",
+        following_collection,
+        name="migration-following",
+    ),
+    path(
+        "actors/<int:pk>/migration/blocked/",
+        blocked_collection,
+        name="migration-blocked",
+    ),
 ]

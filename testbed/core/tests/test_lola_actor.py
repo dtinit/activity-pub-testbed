@@ -1,21 +1,28 @@
 from rest_framework.test import APIClient
 from rest_framework import status
 from testbed.core.models import Actor
-from testbed.core.factories import UserWithActorsFactory, AccessTokenFactory
+from testbed.core.factories import (
+    UserWithActorsFactory,
+    AccessTokenFactory,
+    TokenActorBindingFactory,
+)
 
 """
 LOLA Compliance Tests for Actor Endpoint
 
-Actor.accountPortabilityOauth Field (Public OAuth Discovery)
-- The accountPortabilityOauth field MUST always be present for OAuth discovery
+Actor.endpoints.oauthMigrationEndpoint (Public OAuth Discovery)
+- MUST always be present so destinations can discover where to authorize,
+  even from an unauthenticated Actor fetch (§4.2).
+- Advertised in parallel with endpoints.oauthAuthorizationEndpoint.
 - No authentication required (public visibility)
 
-Actor Migration Properties (Authenticated Access) 
+Actor.migration.* (Authenticated Feature Discovery)
 - Migration properties MUST only appear with valid portability scope
-- Requires 'activitypub_account_portability' scope
+- Contains exactly outbox / content / following / blocked, each pointing at a
+  dedicated actors/<pk>/migration/... route (§4.4).
 """
 
-# Verify Actor without token includes OAuth endpoint but NO migration data
+# Verify Actor without token includes OAuth migration endpoint but NO migration object
 def test_actor_without_token_includes_oauth_endpoint_but_no_migration():
     client = APIClient()
     user = UserWithActorsFactory()
@@ -27,12 +34,16 @@ def test_actor_without_token_includes_oauth_endpoint_but_no_migration():
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     
-    # OAuth endpoint must be present for public discovery
-    assert 'accountPortabilityOauth' in data, \
-        "OAuth endpoint must be present for public discovery"
-    assert data['accountPortabilityOauth'].endswith('/oauth/authorize/'), \
-        "OAuth endpoint should point to authorization endpoint"
-    
+    # endpoints object must be present for public discovery
+    assert 'endpoints' in data, \
+        "endpoints object must be present for public OAuth discovery"
+    endpoints = data['endpoints']
+    assert endpoints['oauthMigrationEndpoint'].endswith('/oauth/authorize/'), \
+        "oauthMigrationEndpoint should point to the authorization endpoint"
+    # Parallel authorization endpoint must also be advertised
+    assert endpoints['oauthAuthorizationEndpoint'].endswith('/oauth/authorize/'), \
+        "oauthAuthorizationEndpoint should be advertised in parallel"
+
     # Migration data must NOT be present without authentication
     assert 'migration' not in data, \
         "migration object requires portability token"
@@ -56,8 +67,8 @@ def test_actor_without_token_includes_oauth_endpoint_but_no_migration():
     assert 'https://purl.archive.org/socialweb/blocked' in data['@context']
 
 
-# Verify OAuth endpoint URL is properly formatted
-def test_oauth_endpoint_url_is_absolute_and_valid():
+# Verify OAuth migration endpoint URL is absolute and correctly formatted
+def test_oauth_migration_endpoint_url_is_absolute_and_valid():
     client = APIClient()
     user = UserWithActorsFactory()
     actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
@@ -65,18 +76,18 @@ def test_oauth_endpoint_url_is_absolute_and_valid():
     response = client.get(f'/api/actors/{actor.id}/')
     data = response.json()
     
-    oauth_url = data['accountPortabilityOauth']
+    oauth_url = data['endpoints']['oauthMigrationEndpoint']
     
     # URL must be absolute with scheme
     assert oauth_url.startswith('http://') or oauth_url.startswith('https://'), \
-        "OAuth endpoint must be absolute URL"
+        "oauthMigrationEndpoint must be an absolute URL"
     
-    # URL must point to correct path
+    # URL must point to the correct path
     assert oauth_url.endswith('/oauth/authorize/'), \
-        "OAuth endpoint must point to /oauth/authorize/"
+        "oauthMigrationEndpoint must point to /oauth/authorize/"
 
 
-# Verify Actor with portability token includes migration data
+# Verify Actor with portability token includes corrected migration object
 def test_actor_with_portability_token_includes_migration():
     client = APIClient()
     user = UserWithActorsFactory()
@@ -92,18 +103,19 @@ def test_actor_with_portability_token_includes_migration():
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     
-    # OAuth endpoint still present (always public)
-    assert 'accountPortabilityOauth' in data, \
-        "OAuth endpoint must always be present"
+    # OAuth discovery endpoints still present (always public)
+    assert 'endpoints' in data, \
+        "endpoints object must always be present"
     
     # Migration object must be present with authentication
     assert 'migration' in data, \
         "migration object required with portability token"
     
-    # All migration properties must be present and absolute URLs
+    # Migration object must be present and absolute URLs
     migration = data['migration']
-    for field in ['outbox', 'content', 'following', 'blocked', 'liked']:
-        assert field in migration, f"migration.{field} is required"
+    assert set(migration.keys()) == {'outbox', 'content', 'following', 'blocked'}, \
+        "migration object must contain exactly outbox/content/following/blocked"
+    for field in ['outbox', 'content', 'following', 'blocked']:
         assert migration[field].startswith('http'), f"migration.{field} must be absolute URL"
     
     # Privacy-sensitive collections must be present
@@ -134,8 +146,8 @@ def test_actor_with_wrong_scope_returns_public_response():
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     
-    # Should have OAuth endpoint (public)
-    assert 'accountPortabilityOauth' in data
+    # Should have public OAuth discovery endpoints
+    assert 'endpoints' in data
     
     # Should NOT have migration data (insufficient scope)
     assert 'migration' not in data
@@ -143,8 +155,8 @@ def test_actor_with_wrong_scope_returns_public_response():
     assert 'followers' not in data
 
 
-# Verify migration URLs point to correct endpoints
-def test_migration_urls_point_to_correct_collection_endpoints():
+# Verify migration URLs point to the dedicated migration routes
+def test_migration_urls_point_to_dedicated_migration_routes():
     client = APIClient()
     user = UserWithActorsFactory()
     actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
@@ -159,12 +171,30 @@ def test_migration_urls_point_to_correct_collection_endpoints():
     migration = data['migration']
     actor_url = f'http://testserver/api/actors/{actor.id}'
     
-    # Verify each migration URL points to correct endpoint
-    assert migration['outbox'] == f'{actor_url}/outbox'
-    assert migration['content'] == f'{actor_url}/content'
-    assert migration['following'] == f'{actor_url}/following'
-    assert migration['blocked'] == f'{actor_url}/blocked'
-    assert migration['liked'] == f'{actor_url}/liked'
+    # Each migration URL points to its dedicated /migration/... route
+    assert migration['outbox'] == f'{actor_url}/migration/outbox'
+    assert migration['content'] == f'{actor_url}/migration/content'
+    assert migration['following'] == f'{actor_url}/migration/following'
+    assert migration['blocked'] == f'{actor_url}/migration/blocked'
+
+
+# Verify every advertised dedicated migration route is real and resolves
+def test_dedicated_migration_routes_resolve():
+    client = APIClient()
+    user = UserWithActorsFactory()
+    actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
+
+    # LOLA-gated migration routes (content, blocked) enforce token-to-actor
+    # binding via validate_lola_access, so bind a portability token to this actor.
+    token = AccessTokenFactory(lola_scope=True, user=user)
+    TokenActorBindingFactory(token=token, actor=actor)
+    client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
+
+    # All four advertised migration URLs must resolve (routed and implemented)
+    for surface in ['outbox', 'content', 'following', 'blocked']:
+        response = client.get(f'/api/actors/{actor.id}/migration/{surface}/')
+        assert response.status_code == status.HTTP_200_OK, \
+            f"migration/{surface} route must resolve for a bound portability token"
 
 
 # Compare public and authenticated responses side-by-side
@@ -193,10 +223,10 @@ def test_public_vs_authenticated_response_comparison():
         assert public_data[field] == auth_data[field], \
             f"Basic field '{field}' should match in both responses"
     
-    # Both should have accountPortabilityOauth
-    assert 'accountPortabilityOauth' in public_data
-    assert 'accountPortabilityOauth' in auth_data
-    assert public_data['accountPortabilityOauth'] == auth_data['accountPortabilityOauth']
+    # Both should expose the same public OAuth discovery endpoints
+    assert 'endpoints' in public_data
+    assert 'endpoints' in auth_data
+    assert public_data['endpoints'] == auth_data['endpoints']
     
     # Only authenticated should have migration data
     assert 'migration' not in public_data

@@ -87,14 +87,22 @@ auth_context = {
 ### 4. Enhanced Data Features
 
 #### **Actor Enhancements (LOLA Fields)**
-When authenticated with portability scope, actor objects include:
+The `endpoints` object is always public. When authenticated with portability scope,
+actor objects additionally include the `migration` object plus the regular Actor collections:
 
 ```json
 {
-    "accountPortabilityOauth": "https://source.example.com/oauth/authorize/",
-    "content": "https://source.example.com/api/actors/1/content",
-    "blocked": "https://source.example.com/api/actors/1/blocked", 
-    "migration": "https://source.example.com/api/actors/1/outbox"
+    "endpoints": {
+        "oauthAuthorizationEndpoint": "https://source.example.com/oauth/authorize/",
+        "oauthMigrationEndpoint": "https://source.example.com/oauth/authorize/"
+    },
+    "liked": "https://source.example.com/api/actors/1/liked",
+    "migration": {
+        "outbox": "https://source.example.com/api/actors/1/migration/outbox",
+        "content": "https://source.example.com/api/actors/1/migration/content",
+        "following": "https://source.example.com/api/actors/1/migration/following",
+        "blocked": "https://source.example.com/api/actors/1/migration/blocked"
+    }
 }
 ```
 
@@ -155,23 +163,31 @@ def authenticate(self, request):
 
 ```python
 def build_actor_json_ld(actor, auth_context=None):
-    # Base ActivityPub Actor (always included)
+    # Base ActivityPub Actor (always included, public discovery surface).
+    # endpoints.oauthMigrationEndpoint MUST always be present.
     actor_data = {
         "@context": build_actor_context(),
         "type": "Person", 
         "id": build_actor_id(actor.id),
         "preferredUsername": actor.username,
-        # Standard ActivityPub collections
-        "outbox": f"{build_actor_id(actor.id)}/outbox",
-        # ...
+        "endpoints": {
+            "oauthAuthorizationEndpoint": build_oauth_endpoint_url(auth_context['request']),
+            "oauthMigrationEndpoint": build_oauth_endpoint_url(auth_context['request']),
+        },
     }
     
     # Add LOLA fields ONLY when authenticated with portability scope
     if auth_context and auth_context.get('has_portability_scope'):
-        actor_data["accountPortabilityOauth"] = build_oauth_endpoint_url(auth_context['request'])
-        actor_data["content"] = f"{build_actor_id(actor.id)}/content"
-        actor_data["blocked"] = f"{build_actor_id(actor.id)}/blocked"
-        actor_data["migration"] = f"{build_actor_id(actor.id)}/outbox"
+        # Regular Actor collections (liked/followers are NOT migration collections)
+        actor_data["outbox"] = f"{build_actor_id(actor.id)}/outbox"
+        actor_data["liked"] = f"{build_actor_id(actor.id)}/liked"
+        # Migration feature discovery -> dedicated migration/... routes
+        actor_data["migration"] = {
+            "outbox": f"{build_actor_id(actor.id)}/migration/outbox",
+            "content": f"{build_actor_id(actor.id)}/migration/content",
+            "following": f"{build_actor_id(actor.id)}/migration/following",
+            "blocked": f"{build_actor_id(actor.id)}/migration/blocked",
+        }
     
     return actor_data
 ```
@@ -208,6 +224,9 @@ def build_outbox_json_ld(outbox, auth_context=None):
 ## API Response Examples
 
 ### **Unauthenticated Actor Request**
+
+The public response exposes the `endpoints` discovery object but omits the privacy-sensitive Actor collections and the `migration` object:
+
 ```json
 {
     "@context": ["https://www.w3.org/ns/activitystreams"],
@@ -216,9 +235,10 @@ def build_outbox_json_ld(outbox, auth_context=None):
     "preferredUsername": "testuser",
     "name": "testuser",
     "inbox": "https://source.example.com/api/actors/1/inbox",
-    "outbox": "https://source.example.com/api/actors/1/outbox",
-    "followers": "https://source.example.com/api/actors/1/followers",
-    "following": "https://source.example.com/api/actors/1/following"
+    "endpoints": {
+        "oauthAuthorizationEndpoint": "https://source.example.com/oauth/authorize/",
+        "oauthMigrationEndpoint": "https://source.example.com/oauth/authorize/"
+    }
 }
 ```
 
@@ -231,13 +251,21 @@ def build_outbox_json_ld(outbox, auth_context=None):
     "preferredUsername": "testuser",
     "name": "testuser",
     "inbox": "https://source.example.com/api/actors/1/inbox",
+    "endpoints": {
+        "oauthAuthorizationEndpoint": "https://source.example.com/oauth/authorize/",
+        "oauthMigrationEndpoint": "https://source.example.com/oauth/authorize/"
+    },
     "outbox": "https://source.example.com/api/actors/1/outbox",
     "followers": "https://source.example.com/api/actors/1/followers",
     "following": "https://source.example.com/api/actors/1/following",
-    "accountPortabilityOauth": "https://source.example.com/oauth/authorize/",
-    "content": "https://source.example.com/api/actors/1/content",
+    "liked": "https://source.example.com/api/actors/1/liked",
     "blocked": "https://source.example.com/api/actors/1/blocked",
-    "migration": "https://source.example.com/api/actors/1/outbox"
+    "migration": {
+        "outbox": "https://source.example.com/api/actors/1/migration/outbox",
+        "content": "https://source.example.com/api/actors/1/migration/content",
+        "following": "https://source.example.com/api/actors/1/migration/following",
+        "blocked": "https://source.example.com/api/actors/1/migration/blocked"
+    }
 }
 ```
 

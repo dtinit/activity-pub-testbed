@@ -355,10 +355,10 @@ def build_oauth_endpoint_url(request):
     The URL allows other ActivityPub services to discover where users can
     authorize access for account migration.
     
-    Per LOLA specification: "ActivityPub servers supporting this specification 
-    MUST provide the URL for their portability authorization endpoint in Actor 
-    objects, using the 'accountPortabilityOauth' field."
-    
+    Per LOLA specification: "Supporting servers MUST provide their portability authorization endpoint in Actor objects."
+    It is advertised under `endpoints.oauthMigrationEndpoint`." The Actor builder places this URL under
+    both `endpoints.oauthMigrationEndpoint` and the parallel `endpoints.oauthAuthorizationEndpoint`.
+
     Args:
         request: The HTTP request object containing scheme and host information
         
