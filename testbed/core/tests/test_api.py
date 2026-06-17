@@ -91,7 +91,10 @@ class TestLOLAAuthenticationAPI:
     @pytest.mark.django_db
     def test_outbox_content_filtering_by_authentication(self, mock_request):
         actor = create_isolated_actor("outbox_filtering_test")
-        lola_token = AccessTokenFactory(lola_scope=True)
+        # Dual-mode endpoints enforce token-to-actor binding.
+        # Bind the portability token to this actor so it is not rejected with
+        # actor_mismatch when a LOLA token is present.
+        lola_token = TokenActorBindingFactory(actor=actor).token
         client = APIClient()
         
         # Test unauthenticated outbox (public activities only)
@@ -162,7 +165,10 @@ class TestLOLAAuthenticationAPI:
     @pytest.mark.django_db
     def test_content_type_headers_set_correctly(self):
         actor = create_isolated_actor("content_type_test")
-        lola_token = AccessTokenFactory(lola_scope=True)
+        # Dual-mode endpoints enforce token-to-actor binding.
+        # Bind the portability token to this actor so it is not rejected with
+        # actor_mismatch when a LOLA token is present.
+        lola_token = TokenActorBindingFactory(actor=actor).token
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
         
@@ -404,7 +410,10 @@ class TestLOLACollectionDiscovery:
     @pytest.mark.django_db
     def test_collection_urls_appear_only_with_lola_auth(self):
         actor = create_isolated_actor("discovery_test")
-        lola_token = AccessTokenFactory(lola_scope=True)
+        # Dual-mode endpoints enforce token-to-actor binding.
+        # Bind the portability token to this actor so it is not rejected with
+        # actor_mismatch when a LOLA token is present.
+        lola_token = TokenActorBindingFactory(actor=actor).token
         
         # Public request should not show collection URLs
         public_client = APIClient()
@@ -429,7 +438,10 @@ class TestLOLACollectionDiscovery:
     @pytest.mark.django_db
     def test_collection_discovery_demonstrates_lola_privacy_model(self):
         actor = create_isolated_actor("privacy_demo")
-        lola_token = AccessTokenFactory(lola_scope=True)
+        # Dual-mode endpoints enforce token-to-actor binding.
+        # Bind the portability token to this actor so it is not rejected with
+        # actor_mismatch when a LOLA token is present.
+        lola_token = TokenActorBindingFactory(actor=actor).token
         basic_token = AccessTokenFactory(scope='read write')
         
         # Test three authentication states
