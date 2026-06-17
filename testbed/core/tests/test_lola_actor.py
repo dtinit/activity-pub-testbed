@@ -93,8 +93,11 @@ def test_actor_with_portability_token_includes_migration():
     user = UserWithActorsFactory()
     actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
     
-    # Create OAuth token with portability scope
-    token = AccessTokenFactory(lola_scope=True)
+    # Create a portability token bound to this actor.
+    # actor-detail is dual-mode and enforces token-to-actor binding when a
+    # LOLA token is present, so an unbound token would be rejected with actor_mismatch.
+    token = AccessTokenFactory(lola_scope=True, user=user)
+    TokenActorBindingFactory(token=token, actor=actor)
     
     # Make authenticated request
     client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
@@ -161,8 +164,11 @@ def test_migration_urls_point_to_dedicated_migration_routes():
     user = UserWithActorsFactory()
     actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
     
-    # Create OAuth token with portability scope
-    token = AccessTokenFactory(lola_scope=True)
+    # Create a portability token bound to this actor.
+    # actor-detail is dual-mode and enforces token-to-actor binding when a
+    # LOLA token is present, so an unbound token would be rejected with actor_mismatch.
+    token = AccessTokenFactory(lola_scope=True, user=user)
+    TokenActorBindingFactory(token=token, actor=actor)
     
     client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
     response = client.get(f'/api/actors/{actor.id}/')
@@ -207,9 +213,13 @@ def test_public_vs_authenticated_response_comparison():
     public_response = client.get(f'/api/actors/{actor.id}/')
     public_data = public_response.json()
     
-    # Get authenticated response with portability token
-    token = AccessTokenFactory(lola_scope=True)
-    
+    # Create a portability token bound to this actor.
+    # actor-detail is dual-mode and enforces token-to-actor binding when a
+    # LOLA token is present, so an unbound token would be rejected with actor_mismatch.
+    token = AccessTokenFactory(lola_scope=True, user=user)
+    token = AccessTokenFactory(lola_scope=True, user=user)
+    TokenActorBindingFactory(token=token, actor=actor)
+
     client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
     auth_response = client.get(f'/api/actors/{actor.id}/')
     auth_data = auth_response.json()
