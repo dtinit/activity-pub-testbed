@@ -217,7 +217,6 @@ def test_public_vs_authenticated_response_comparison():
     # actor-detail is dual-mode and enforces token-to-actor binding when a
     # LOLA token is present, so an unbound token would be rejected with actor_mismatch.
     token = AccessTokenFactory(lola_scope=True, user=user)
-    token = AccessTokenFactory(lola_scope=True, user=user)
     TokenActorBindingFactory(token=token, actor=actor)
 
     client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
