@@ -20,36 +20,46 @@ def validate_lola_access(request, required_scope=True):
     """
     Scope gate and actor binding check for LOLA-protected endpoints.
 
-    Two-layer check (both layers apply when required_scope=True):
+    Two-layer check, each regulated by a different condition:
 
-    Layer 1 - Scope validation:
-        Confirms the request carries a token with the activitypub_account_portability
-        scope. Returns 403 insufficient_scope if not.
+    Layer 1 - Scope presence (controlled by `required_scope`):
+        Strict endpoints (required_scope=True) MUST carry a token with the activitypub_account_portability scope.
+        Returns 403 insufficient_scope otherwise.
+        Dual-mode endpoints (required_scope=False) skip this layer so
+        unauthenticated/public traffic falls through to their public response.
 
     Layer 2 - Actor binding enforcement (LOLA Section 5 MUST):
-        Confirms the token is bound to the Actor whose <pk> appears in the URL.
-        Returns 403 actor_mismatch if not.
+        Runs whenever a portability token is present (request.has_portability_scope) -- regardless of required_scope.
+        A dual-mode endpoint stays publicly readable, but the moment a portability token is supplied it must be bound
+        to the Actor whose <pk> is in the URL, or the request is rejected with 403 actor_mismatch.
 
-        LOLA Section 5: "This scope MUST be limited to an account - if there is
-        more than one account on the source server, the source server MUST NOT
-        allow access to any other accounts than the one granted."
+        Binding is persisted at token issuance by ActivityPubOAuth2Validator._save_bearer_token (the write side).
+        This gate is the read/enforcement side. The check covers both OptionalOAuth2Authentication paths (Authorization header
+        and the demo-only session token) because both set request.auth to the same AccessToken instance, so
+        request.auth.actor_binding is available whenever request.has_portability_scope is True.
 
-        This check covers all three authentication paths because
-        OptionalOAuth2Authentication (header, URL param, session) all produce the
-        same request.auth object, so request.auth.actor_binding is available
-        whenever request.has_portability_scope is True.
+    Mode summary:
+        required_scope=True  (strict):    no token -> 403 insufficient_scope;
+                                          token bound to other actor -> 403 actor_mismatch.
+        required_scope=False (dual-mode): no token -> public access (valid);
+                                          token bound to other actor -> 403 actor_mismatch.
 
     Args:
         request: HTTP request with OAuth authentication attributes set by
             OptionalOAuth2Authentication. request.auth is the AccessToken.
         required_scope: Whether the LOLA portability scope is required (default: True).
+            Pass False for dual-mode endpoints that also serve public traffic but
+            must still reject mis-bound portability tokens.
 
     Returns:
         dict: {'valid': True} on success, or
               {'valid': False, 'error_response': Response} on any failure.
     """
-    # Layer 1: scope check
-    if required_scope and not getattr(request, "has_portability_scope", False):
+
+    has_scope = bool(getattr(request, "has_portability_scope", False))
+
+    # Layer 1: scope presence (strict endpoints only)
+    if required_scope and not has_scope:
         logger.warning("LOLA access denied: insufficient_scope for %s", request.path)
         return {
             "valid": False,
@@ -60,37 +70,48 @@ def validate_lola_access(request, required_scope=True):
             ),
         }
 
-    # Layer 2: actor binding check (only when a portability token is present)
-    if required_scope and getattr(request, "has_portability_scope", False):
-        token = getattr(request, "auth", None)
-        url_pk = _get_url_pk(request)
+    # No portability token
+    if not has_scope:
+        return {"valid": True}
 
-        if url_pk is None:
-            # All LOLA-gated endpoints are actor-scoped with <pk> in the
-            # URL. A missing pk here means the decorator is being invoked from an
-            # unexpected endpoint shape. Fail closed rather than silently skip
-            # a LOLA Section 5 MUST.
-            logger.warning(
-                "LOLA access denied: actor binding check invoked without URL pk "
-                "path=%s",
-                request.path,
-            )
-            return {
-                "valid": False,
-                "error_response": build_actor_mismatch_error(request=request),
-            }
-
-        if token is not None:
-            mismatch = _check_actor_binding(request, token, url_pk)
-            if mismatch is not None:
-                return mismatch
-
-        logger.info(
-            "LOLA access granted: scope=activitypub_account_portability "
-            "endpoint=%s actor_pk=%s",
+    # Layer 2: actor binding. Reached whenever a portability token is present, so dual-mode
+    # endpoints cannot leak another actor's augmented data to a token bound to a different actor.
+    url_pk = _get_url_pk(request)
+    if url_pk is None:
+        # Fail closed. All LOLA actor-scoped endpoints carry <pr> in the URL, so this should not occur in normal operation.
+        logger.warning(
+            "LOLA access denied: actor binding check invoked without URL pk path=%s",
             request.path,
-            url_pk,
         )
+        return {
+            "valid": False,
+            "error_response": build_actor_mismatch_error(request=request),
+        }
+
+    token = getattr(request, "auth", None)
+    if token is None:
+        # In normal flows has_portability_scope is derived from the token, so this state should not occur;
+        # if it does the binding is unverifiable -> fail closed rather than grant on an unverifiable claim.
+        logger.warning(
+            "LOLA access denied: portability scope claimed without a token object "
+            "path=%s",
+            request.path,
+        )
+        return {
+            "valid": False,
+            "error_response": build_actor_mismatch_error(request=request),
+        }
+
+    mismatch = _check_actor_binding(request, token, url_pk)
+    if mismatch is not None:
+        return mismatch
+
+    logger.info(
+        "LOLA access granted: scope=activitypub_account_portability "
+        "endpoint=%s actor_pk=%s",
+        request.path,
+        url_pk,
+    )
 
     return {"valid": True}
 

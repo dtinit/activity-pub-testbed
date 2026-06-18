@@ -10,9 +10,8 @@ from testbed.core.factories import (
     ActorFactory,
     ApplicationFactory,
     AccessTokenFactory,
-    TokenActorBindingFactory,
 )
-from testbed.core.tests.conftest import create_isolated_actor
+from testbed.core.tests.conftest import bind_portability_token, create_isolated_actor
 from testbed.core.json_ld_utils import (
     build_basic_context,
     build_actor_context,
@@ -91,7 +90,7 @@ class TestLOLAAuthenticationAPI:
     @pytest.mark.django_db
     def test_outbox_content_filtering_by_authentication(self, mock_request):
         actor = create_isolated_actor("outbox_filtering_test")
-        lola_token = AccessTokenFactory(lola_scope=True)
+        lola_token = bind_portability_token(actor)
         client = APIClient()
         
         # Test unauthenticated outbox (public activities only)
@@ -162,7 +161,7 @@ class TestLOLAAuthenticationAPI:
     @pytest.mark.django_db
     def test_content_type_headers_set_correctly(self):
         actor = create_isolated_actor("content_type_test")
-        lola_token = AccessTokenFactory(lola_scope=True)
+        lola_token = bind_portability_token(actor)
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
         
@@ -334,10 +333,7 @@ class TestFollowersCollectionEndpoint:
     @pytest.mark.django_db
     def test_followers_collection_with_lola_token(self):
         target_actor, follower1, follower2 = self.setup_followers_data()
-        # Bind the token to target_actor so the Task 9.2 token-to-actor
-        # binding check (LOLA Section 5 MUST) succeeds for this request.
-        binding = TokenActorBindingFactory(actor=target_actor)
-        lola_token = binding.token
+        lola_token = bind_portability_token(target_actor)
 
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
@@ -375,8 +371,7 @@ class TestFollowersCollectionEndpoint:
     @pytest.mark.django_db
     def test_followers_collection_includes_complete_actor_data(self):
         target_actor, follower1, follower2 = self.setup_followers_data()
-        binding = TokenActorBindingFactory(actor=target_actor)
-        lola_token = binding.token
+        lola_token = bind_portability_token(target_actor)
 
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
@@ -404,7 +399,7 @@ class TestLOLACollectionDiscovery:
     @pytest.mark.django_db
     def test_collection_urls_appear_only_with_lola_auth(self):
         actor = create_isolated_actor("discovery_test")
-        lola_token = AccessTokenFactory(lola_scope=True)
+        lola_token = bind_portability_token(actor)
         
         # Public request should not show collection URLs
         public_client = APIClient()
@@ -429,7 +424,7 @@ class TestLOLACollectionDiscovery:
     @pytest.mark.django_db
     def test_collection_discovery_demonstrates_lola_privacy_model(self):
         actor = create_isolated_actor("privacy_demo")
-        lola_token = AccessTokenFactory(lola_scope=True)
+        lola_token = bind_portability_token(actor)
         basic_token = AccessTokenFactory(scope='read write')
         
         # Test three authentication states
