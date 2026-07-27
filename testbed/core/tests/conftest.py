@@ -31,7 +31,8 @@ Both the strict and the dual-mode LOLA endpoints enforce token-to-actor binding
 
 When `user` is given, the token is issued for that user so token.user matches actor.user;
 otherwise the factory creates a fresh token user. Only the token<->actor binding is what
-validate_lola_access checks, so both shapes satisfy the gate.
+lola_access_error() (behind the @lola_scope_* gate decorators) checks, so both shapes
+satisfy the gate.
 """
 def bind_portability_token(actor, user=None):
     if user is not None:

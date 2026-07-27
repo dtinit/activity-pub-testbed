@@ -47,8 +47,8 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
 
         Both enabled paths produce the same (user, token) shape and set
         request.auth to the AccessToken instance. The actor binding check in
-        validate_lola_access() operates on request.auth and therefore covers
-        every path uniformly.
+        lola_access_error() (behind the @lola_scope_* gate decorators) operates on
+        request.auth and therefore covers every path uniformly.
 
         If authentication succeeds, checks if the token has the portability scope.
         If authentication fails, allows the request to continue as unauthenticated.
