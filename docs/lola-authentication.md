@@ -412,19 +412,23 @@ The binding is persisted inside the same `transaction.atomic()` block DOT
 
 ### Enforcement at Request Time
 
-**Location**: `testbed/core/views/decorators.py` - `validate_lola_access`
+**Location**: `testbed/core/views/decorators.py` — the `@lola_scope_required` /
+`@lola_scope_optional` gate decorators (stacked under `@actor_required`), backed
+by `lola_access_error(request, required_scope, url_pk)`.
 
-Every LOLA actor-scoped endpoint calls `validate_lola_access(request, ...)`,
-which runs two layers governed by *different* conditions:
+Every LOLA actor-scoped view is decorated with `@actor_required` above a gate
+decorator. The gate runs `lola_access_error(...)` and short-circuits with the
+error `Response` it returns (or `None` to let the request through). It runs two
+layers governed by *different* conditions:
 
-- **Layer 1 - Scope presence (controlled by `required_scope`).** Strict
-  endpoints (`required_scope=True`) reject requests without
+- **Layer 1 - Scope presence (the choice of gate decorator).** Strict endpoints
+  (`@lola_scope_required`) reject requests without
   `activitypub_account_portability` scope with 403 `insufficient_scope`.
-  Dual-mode endpoints (`required_scope=False`) skip this layer so public
+  Dual-mode endpoints (`@lola_scope_optional`) skip this layer so public
   traffic passes through to their public response.
 - **Layer 2 - Actor binding check (runs whenever a portability token is
-  present, regardless of `required_scope`).** Reads the requested actor pk from
-  `request.resolver_match.kwargs["pk"]` and compares it to
+  present, regardless of the decorator).** Compares the requested actor pk (the
+  view's URL `<pk>`, passed into the gate) to
   `request.auth.actor_binding.actor_id`. Mismatches, missing binding rows,
   a missing URL pk, and a claimed scope with no token object all return 403
   `actor_mismatch` (fail closed).
@@ -439,7 +443,7 @@ Token-to-actor binding is enforced on **every** actor-scoped LOLA endpoint that
 can expose scope-gated data — both the strict collections and the dual-mode
 endpoints.
 
-**Strict endpoints** — `validate_lola_access(request, required_scope=True)`.
+**Strict endpoints** — `@lola_scope_required`.
 No portability scope ⇒ 403 `insufficient_scope`; wrong actor ⇒ 403
 `actor_mismatch`:
 
@@ -448,7 +452,7 @@ No portability scope ⇒ 403 `insufficient_scope`; wrong actor ⇒ 403
 - `GET /api/actors/<pk>/liked/`
 - `GET /api/actors/<pk>/blocked/` (and `…/migration/blocked/`)
 
-**Dual-mode endpoints** — `validate_lola_access(request, required_scope=False)`.
+**Dual-mode endpoints** — `@lola_scope_optional`.
 No token ⇒ public response (200); a portability token bound to a *different*
 actor ⇒ 403 `actor_mismatch`:
 
@@ -506,7 +510,7 @@ Two core ActivityPub endpoints have been enhanced with LOLA authentication suppo
 | ✅ Portability token bound to **this** actor | Enhanced Actor with LOLA discovery fields |
 | ⛔ Portability token bound to a **different** actor | `403 actor_mismatch` (dual-mode binding) |
 
-This is a dual-mode endpoint: it calls `validate_lola_access(request, required_scope=False)`, so anonymous access stays a normal public response, but a portability token must be bound to `<pk>` before the LOLA fields are exposed (see [Endpoints Enforcing Binding](#endpoints-enforcing-binding)).
+This is a dual-mode endpoint (`@lola_scope_optional`), so anonymous access stays a normal public response, but a portability token must be bound to `<pk>` before the LOLA fields are exposed (see [Endpoints Enforcing Binding](#endpoints-enforcing-binding)).
 
 #### LOLA Fields Added (when authenticated with portability scope)
 
@@ -598,7 +602,7 @@ This is a dual-mode endpoint: it calls `validate_lola_access(request, required_s
 | ✅ Portability token bound to **this** actor | ALL activities (public + private) |
 | ⛔ Portability token bound to a **different** actor | `403 actor_mismatch` (dual-mode binding) |
 
-Like actor-detail, this is a dual-mode endpoint (`validate_lola_access(request, required_scope=False)`): a mis-bound portability token is rejected rather than served another actor's private activities. The same applies to the advertised `…/migration/outbox/` route (same view).
+Like actor-detail, this is a dual-mode endpoint (`@lola_scope_optional`): a mis-bound portability token is rejected rather than served another actor's private activities. The same applies to the advertised `…/migration/outbox/` route (same view).
 
 #### Response Structure
 
