@@ -1,4 +1,10 @@
-from .decorators import activitypub_content, build_auth_context, validate_lola_access
+from .decorators import (
+    actor_required,
+    activitypub_content,
+    build_auth_context,
+    lola_scope_optional,
+    lola_scope_required,
+)
 
 from .api import (
     actor_detail,
@@ -21,7 +27,9 @@ from .oauth_demo import (
 )
 
 __all__ = [
-    "validate_lola_access",
+    "actor_required",
+    "lola_scope_required",
+    "lola_scope_optional",
     "build_auth_context",
     "activitypub_content",
     "actor_detail",
