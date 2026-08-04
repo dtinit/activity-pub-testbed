@@ -20,6 +20,9 @@ DATABASES = {
     }
 }
 
+# test_rate_limiting.py re-enables it explicitly with override_settings
+RATE_LIMIT_ENABLED = False
+
 # Faster password hashing for tests
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",
