@@ -16,7 +16,7 @@ from testbed.core.factories import (
 )
 from testbed.core.models import Actor, TokenActorBinding
 from testbed.core.oauth.validators import ActivityPubOAuth2Validator
-from testbed.core.views.decorators import validate_lola_access
+from testbed.core.views.decorators import lola_access_error
 
 
 # Model
@@ -86,15 +86,16 @@ def test_validator_skips_binding_for_non_portability_token():
 
 # Decorator
 
-def _make_lola_request(actor, token):
-    """Build a fake request with portability scope targeting the given actor pk."""
-    rf = RequestFactory()
-    request = rf.get(f"/api/actors/{actor.pk}/followers/")
+def _make_lola_request(token):
+    """
+    Build a fake request that claims portability scope and carries `token` as request.auth.
+    The actor pk the token must be bound to is passed to lola_access_error directly as url_pk,
+    so no request.resolver_match is needed. Pass token=None to model the "scope claimed but no token object" state.
+    """
+    request = RequestFactory().get("/api/actors/1/followers/")
     request.is_oauth_authenticated = True
     request.has_portability_scope = True
     request.auth = token
-    request.resolver_match = MagicMock()
-    request.resolver_match.kwargs = {"pk": actor.pk}
     return request
 
 
@@ -102,10 +103,9 @@ def _make_lola_request(actor, token):
 def test_same_actor_access_succeeds():
     """Token bound to actor A may access actor A."""
     binding = TokenActorBindingFactory()
-    request = _make_lola_request(binding.actor, binding.token)
+    request = _make_lola_request(binding.token)
 
-    result = validate_lola_access(request)
-    assert result["valid"] is True
+    assert lola_access_error(request, required_scope=True, url_pk=binding.actor.pk) is None
 
 
 @pytest.mark.django_db
@@ -118,18 +118,13 @@ def test_cross_actor_access_denied():
         user=user_b, username=f"{user_b.username}_src", role=Actor.ROLE_SOURCE
     )
 
-    rf = RequestFactory()
-    request = rf.get(f"/api/actors/{actor_b.pk}/followers/")
-    request.is_oauth_authenticated = True
-    request.has_portability_scope = True
-    request.auth = binding.token
-    request.resolver_match = MagicMock()
-    request.resolver_match.kwargs = {"pk": actor_b.pk}
+    # Token bound to actor A, but the URL pk is actor B.
+    request = _make_lola_request(binding.token)
 
-    result = validate_lola_access(request)
-    assert result["valid"] is False
-    assert result["error_response"].status_code == 403
-    assert result["error_response"].data["error_code"] == "actor_mismatch"
+    error = lola_access_error(request, required_scope=True, url_pk=actor_b.pk)
+    assert error is not None
+    assert error.status_code == 403
+    assert error.data["error_code"] == "actor_mismatch"
 
 
 @pytest.mark.django_db
@@ -142,12 +137,12 @@ def test_unbound_token_denied():
     token = AccessTokenFactory(user=user, lola_scope=True)
     # Intentionally: no TokenActorBinding created.
 
-    request = _make_lola_request(actor, token)
+    request = _make_lola_request(token)
 
-    result = validate_lola_access(request)
-    assert result["valid"] is False
-    assert result["error_response"].status_code == 403
-    assert result["error_response"].data["error_code"] == "actor_mismatch"
+    error = lola_access_error(request, required_scope=True, url_pk=actor.pk)
+    assert error is not None
+    assert error.status_code == 403
+    assert error.data["error_code"] == "actor_mismatch"
 
 
 @pytest.mark.django_db
@@ -155,18 +150,13 @@ def test_missing_url_pk_fails_closed():
     """A LOLA request without a URL pk is rejected (fail closed, no silent skip)."""
     binding = TokenActorBindingFactory()
 
-    rf = RequestFactory()
-    request = rf.get("/api/unexpected/")
-    request.is_oauth_authenticated = True
-    request.has_portability_scope = True
-    request.auth = binding.token
-    request.resolver_match = MagicMock()
-    request.resolver_match.kwargs = {}  # no "pk" key
+    # url_pk=None models an actor-scoped gate invoked without a pk in the URL
+    request = _make_lola_request(binding.token)
 
-    result = validate_lola_access(request)
-    assert result["valid"] is False
-    assert result["error_response"].status_code == 403
-    assert result["error_response"].data["error_code"] == "actor_mismatch"
+    error = lola_access_error(request, required_scope=True, url_pk=None)
+    assert error is not None
+    assert error.status_code == 403
+    assert error.data["error_code"] == "actor_mismatch"
 
 
 # Integration
@@ -245,12 +235,11 @@ def test_dual_mode_cross_actor_denied(route_name):
 @pytest.mark.django_db
 def test_scope_claimed_without_token_fails_closed():
     binding = TokenActorBindingFactory()
-    request = _make_lola_request(binding.actor, binding.token)
     # Anomalous state: the scope flag is set but no token object is present, so
     # no binding can be verified. The gate must deny, not grant.
-    request.auth = None
+    request = _make_lola_request(token=None)
 
-    result = validate_lola_access(request)
-    assert result["valid"] is False
-    assert result["error_response"].status_code == 403
-    assert result["error_response"].data["error_code"] == "actor_mismatch"
+    error = lola_access_error(request, required_scope=True, url_pk=binding.actor.pk)
+    assert error is not None
+    assert error.status_code == 403
+    assert error.data["error_code"] == "actor_mismatch"

@@ -2,17 +2,33 @@
 LOLA API views
 
 Contains:
-- actor_detail: ActivityPub Actor with conditional LOLA migration.* properties
-- portability_outbox_detail: Outbox with LOLA content filtering
-- following_collection: public Following OrderedCollection
-- followers_collection: LOLA-gated Followers OrderedCollection
-- content_collection: LOLA-gated raw Notes (no Activity wrappers)
-- liked_collection: LOLA-gated liked objects with migration metadata
-- blocked_collection: LOLA-gated block list (FEP-c648)
-- oauth_authorization_server_metadata: RFC8414 discovery endpoint
+- actor_detail [dual-mode]: ActivityPub Actor with conditional LOLA migration.* properties
+- portability_outbox_detail [dual-mode]: Outbox with LOLA content filtering
+- following_collection [dual-mode]: Following OrderedCollection
+- followers_collection [strict]: LOLA-gated Followers OrderedCollection
+- content_collection [strict]: LOLA-gated raw Notes (no Activity wrappers)
+- liked_collection [strict]: LOLA-gated liked objects with migration metadata
+- blocked_collection [strict]: LOLA-gated block list (FEP-c648)
+- oauth_authorization_server_metadata [public]: RFC8414 discovery endpoint (no actor)
 
-All LOLA-gated endpoints call validate_lola_access() from decorators.py.
-All endpoints use build_auth_context() to produce a consistent dict for JSON-LD builders.
+Access model (actor-scoped views):
+Below the DRF chain (@api_view / @authentication_classes / @activitypub_content),
+every actor-scoped view stacks two decorators from decorators.py:
+
+- @actor_required resolves <pk> -> Actor (404 actor_not_found if missing) and injects it as the `actor` argument.
+- @lola_scope_required OR @lola_scope_optional is the LOLA gate.
+  It runs AFTER @actor_required, so the 404 existence check always precedes the 403 auth check.
+
+The two gate differ only in whether the portability scope is mandatory:
+- @lola_scope_required (STRICT) - followers, content, liked, blocked.
+  No token -> 403 insufficient_scope; a token bound to a different actor -> 403 actor_mismatch.
+- @lola_scope_optional (DUAL-MODE) - actor-detail, outbox, following.
+  Public access stays open (no token -> plain public response), but a token bound to a different
+  actor -> 403 actor_mismatch, so it is never served this actor's augmented/private data.
+  The dedicated .../migration/{outbox,following} routes reuse these same views and inherit the gate.
+
+Each view below therefore assumes `actor` exists and the caller is authorized for it, and documents only
+what is endpoint-specific. All views build their payload via json_ld_builders, passing the dict from build_auth_context(request).
 """
 
 import logging
@@ -32,17 +48,20 @@ from ..json_ld_builders import (
 )
 from ..json_ld_utils import build_actor_id, build_note_id
 from ..models import (
-    Actor,
     Blocked,
     Followers,
     Following,
     LikeActivity,
     Note,
-    PortabilityOutbox,
 )
 from ..oauth.authentication import OptionalOAuth2Authentication
-from ..utils.errors import build_actor_not_found_error
-from .decorators import activitypub_content, build_auth_context, validate_lola_access
+from .decorators import (
+    actor_required,
+    activitypub_content,
+    build_auth_context,
+    lola_scope_optional,
+    lola_scope_required,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,24 +69,9 @@ logger = logging.getLogger(__name__)
 @api_view(["GET"])
 @authentication_classes([OptionalOAuth2Authentication])
 @activitypub_content
-def actor_detail(request, pk):
-    """
-    Returns basic ActivityPub data for unauthenticated requests,
-    and enhanced LOLA data for authenticated requests with portability scope.
-    """
-    try:
-        actor = Actor.objects.get(pk=pk)
-    except Actor.DoesNotExist:
-        return build_actor_not_found_error(pk, request)
-
-    # Dual-mode gate: public access is allowed (required_scope=False), but a portability token
-    # must be bound to this actor before its scope-gated discovery surface is exposed (LOLA Section 5).
-    # A token bound to another actor is rejected with 403 actor_mismatch
-    # instead of leaking actor <pk>'s migration object / collection URLs.
-    validation_result = validate_lola_access(request, required_scope=False)
-    if not validation_result["valid"]:
-        return validation_result["error_response"]
-
+@actor_required
+@lola_scope_optional
+def actor_detail(request, pk, actor):
     # Build standardized authentication context
     auth_context = build_auth_context(request)
 
@@ -79,19 +83,10 @@ def actor_detail(request, pk):
 @api_view(["GET"])
 @authentication_classes([OptionalOAuth2Authentication])
 @activitypub_content
-def portability_outbox_detail(request, pk):
-    """
-    Returns public activities for unauthenticated requests,
-    and all activities for authenticated requests with portability scope.
-    """
-    try:
-        outbox = PortabilityOutbox.objects.get(actor_id=pk)
-    except PortabilityOutbox.DoesNotExist:
-        return build_actor_not_found_error(pk, request)
-
-    validation_result = validate_lola_access(request, required_scope=False)
-    if not validation_result["valid"]:
-        return validation_result["error_response"]
+@actor_required
+@lola_scope_optional
+def portability_outbox_detail(request, pk, actor):
+    outbox = actor.portability_outbox
 
     # Build standardized authentication context
     auth_context = build_auth_context(request)
@@ -104,24 +99,15 @@ def portability_outbox_detail(request, pk):
 @api_view(["GET"])
 @authentication_classes([OptionalOAuth2Authentication])
 @activitypub_content
-def following_collection(request, pk):
+@actor_required
+@lola_scope_optional
+def following_collection(request, pk, actor):
     """
     Returns who an actor is currently following in ActivityPub OrderedCollection format.
     Per LOLA spec: "The Following collection as per https://www.w3.org/TR/activitypub/#following
     SHOULD be provided on the Actor object when accessed with the account migration authorization token."
-
-    Note: While the collection URL only appears in LOLA-authenticated Actor objects,
-    the collection itself follows standard ActivityPub public access patterns.
+    Also serves the advertised .../migration/following/ route.
     """
-    try:
-        actor = Actor.objects.get(pk=pk)
-    except Actor.DoesNotExist:
-        return build_actor_not_found_error(pk, request)
-
-    validation_result = validate_lola_access(request, required_scope=False)
-    if not validation_result["valid"]:
-        return validation_result["error_response"]
-
     # Get all active following relationships for this actor
     following_qs = Following.objects.filter(
         actor=actor, status=Following.STATUS_ACTIVE
@@ -149,22 +135,9 @@ def following_collection(request, pk):
 @api_view(["GET"])
 @authentication_classes([OptionalOAuth2Authentication])
 @activitypub_content
-def followers_collection(request, pk):
-    """
-    Returns who is currently following an actor in ActivityPub OrderedCollection format.
-    This is privacy-sensitive data that requires LOLA scope authentication.
-    Per LOLA implementation: Followers collection requires account migration authorization token.
-    """
-    try:
-        actor = Actor.objects.get(pk=pk)
-    except Actor.DoesNotExist:
-        return build_actor_not_found_error(pk, request)
-
-    # Apply centralized LOLA validation
-    validation_result = validate_lola_access(request, required_scope=True)
-    if not validation_result["valid"]:
-        return validation_result["error_response"]
-
+@actor_required
+@lola_scope_required
+def followers_collection(request, pk, actor):
     # Get all active follower relationships for this actor
     followers_qs = Followers.objects.filter(
         actor=actor, status=Followers.STATUS_ACTIVE
@@ -192,26 +165,13 @@ def followers_collection(request, pk):
 @api_view(["GET"])
 @authentication_classes([OptionalOAuth2Authentication])
 @activitypub_content
-def content_collection(request, pk):
+@actor_required
+@lola_scope_required
+def content_collection(request, pk, actor):
     """
-    Returns raw authored objects (Notes) without Activity wrappers per LOLA specification.
-    Applies visibility gating: unauthenticated requests receive public-only content; LOLA-authenticated
-    requests receive all content including non-public objects.
-
-    Spec: "MUST provide raw authored objects (no wrapper Activities) for fidelity."
-
-    Auth: Requires activitypub_account_portability scope.
+    The actor's raw authored objects (Notes) without Activity wrappers, for migration fidelity.
+    Spec: "MUST provide raw authored objects (no wrapper Activities) for fidelity.
     """
-    try:
-        actor = Actor.objects.get(pk=pk)
-    except Actor.DoesNotExist:
-        return build_actor_not_found_error(pk, request)
-
-    # Apply centralized LOLA validation
-    validation_result = validate_lola_access(request, required_scope=True)
-    if not validation_result["valid"]:
-        return validation_result["error_response"]
-
     # Apply content filtering based on authentication and scope
     notes_qs = Note.objects.filter(actor=actor).order_by("-published")
 
@@ -236,24 +196,13 @@ def content_collection(request, pk):
 @api_view(["GET"])
 @authentication_classes([OptionalOAuth2Authentication])
 @activitypub_content
-def liked_collection(request, pk):
+@actor_required
+@lola_scope_required
+def liked_collection(request, pk, actor):
     """
     Returns objects that an actor has liked with migration-ready metadata per LOLA specification.
     Applies field projection to minimize payload size while retaining sufficient migration context.
-
-    This endpoint requires LOLA scope authentication and applies field projection
-    to minimize payload size while providing sufficient metadata for migration.
     """
-    try:
-        actor = Actor.objects.get(pk=pk)
-    except Actor.DoesNotExist:
-        return build_actor_not_found_error(pk, request)
-
-    # Apply centralized LOLA validation
-    validation_result = validate_lola_access(request, required_scope=True)
-    if not validation_result["valid"]:
-        return validation_result["error_response"]
-
     # Get all LikeActivity objects for this actor in reverse chronological order
     likes_qs = LikeActivity.objects.filter(actor=actor).order_by("-timestamp")
 
@@ -325,31 +274,20 @@ def liked_collection(request, pk):
 @api_view(["GET"])
 @authentication_classes([OptionalOAuth2Authentication])
 @activitypub_content
-def blocked_collection(request, pk):
+@actor_required
+@lola_scope_required
+def blocked_collection(request, pk, actor):
     """
-    LOLA Blocked collection endpoint.
+    LOLA Blocked collection endpoint (FEP-c648).
 
-    Returns actors that have been blocked by an actor in ActivityPub OrderedCollection format.
+    The actor's block list as an ActivityPub OrderedCollection.
     Per LOLA spec: "If the source server does blocking, the personal block list SHOULD be fetchable at the
     URL advertised on the Actor object, as per https://codeberg.org/fediverse/fep/src/branch/main/fep/c648/fep-c648.md"
-
-    This is highly privacy-sensitive data that requires LOLA scope authentication.
-    Block lists are critical user safety data that must never be exposed without proper authorization.
 
     Security Note: This endpoint implements the strongest privacy protection in the entire LOLA specification,
     as block lists reveal who users consider threats, harassers, or sources of harm.
     Unauthorized access could compromise user safety.
     """
-    try:
-        actor = Actor.objects.get(pk=pk)
-    except Actor.DoesNotExist:
-        return build_actor_not_found_error(pk, request)
-
-    # Apply centralized LOLA validation - MANDATORY for blocked collection
-    validation_result = validate_lola_access(request, required_scope=True)
-    if not validation_result["valid"]:
-        return validation_result["error_response"]
-
     # Get all active blocking relationships for this actor
     blocked_qs = Blocked.objects.filter(
         actor=actor, status=Blocked.STATUS_ACTIVE
