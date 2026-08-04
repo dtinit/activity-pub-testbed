@@ -203,3 +203,54 @@ def test_bearer_cross_actor_denied():
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert response.data["error_code"] == "actor_mismatch"
+
+
+"""
+Dual-mode binding enforcement
+
+The dual-mode views (actor_detail, portability_outbox_detail, following_collection)
+stay publicly readable but must reject a portability token bound to a different actor.
+Public access and same-actor access are already exercised by the public and bound-token tests in
+test_api.py / test_lola_actor.py, this guarantee to assert here is the cross-actor denial.
+
+One representative route per dual-mode view. The migration/outbox and
+migration/following routes resolve to these same views (proven by
+test_dedicated_migration_routes_resolve), so they share this enforcement.
+"""
+DUAL_MODE_ROUTE_NAMES = [
+    "actor-detail",
+    "actor-outbox",
+    "following-collection",
+]
+
+# A portability token bound to actor A is rejected on actor B's dual-mode endpoints
+@pytest.mark.django_db
+@pytest.mark.parametrize("route_name", DUAL_MODE_ROUTE_NAMES)
+def test_dual_mode_cross_actor_denied(route_name):    
+    binding = TokenActorBindingFactory()  # token bound to actor A
+    user_b = UserOnlyFactory()
+    actor_b = Actor.objects.create(
+        user=user_b, username=f"{user_b.username}_src", role=Actor.ROLE_SOURCE
+    )
+
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {binding.token.token}")
+    response = client.get(reverse(route_name, kwargs={"pk": actor_b.pk}))
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.data["error_code"] == "actor_mismatch"
+
+
+# Portability scope claimed with no token object is denied (fail closed)
+@pytest.mark.django_db
+def test_scope_claimed_without_token_fails_closed():
+    binding = TokenActorBindingFactory()
+    request = _make_lola_request(binding.actor, binding.token)
+    # Anomalous state: the scope flag is set but no token object is present, so
+    # no binding can be verified. The gate must deny, not grant.
+    request.auth = None
+
+    result = validate_lola_access(request)
+    assert result["valid"] is False
+    assert result["error_response"].status_code == 403
+    assert result["error_response"].data["error_code"] == "actor_mismatch"

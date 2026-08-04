@@ -8,6 +8,8 @@ from testbed.core.factories import (
     CreateActivityFactory,
     LikeActivityFactory,
     FollowActivityFactory,
+    AccessTokenFactory,
+    TokenActorBindingFactory,
 )
 from testbed.core.models import Actor, User
 from testbed.core.utils.actor_utils import populate_source_actor_outbox
@@ -22,6 +24,21 @@ def create_isolated_actor(username_prefix, role=None):
         username=f"{username_prefix}_actor",
         role=role
     )
+
+"""
+Create a portability token bound to an actor.
+Both the strict and the dual-mode LOLA endpoints enforce token-to-actor binding
+
+When `user` is given, the token is issued for that user so token.user matches actor.user;
+otherwise the factory creates a fresh token user. Only the token<->actor binding is what
+validate_lola_access checks, so both shapes satisfy the gate.
+"""
+def bind_portability_token(actor, user=None):
+    if user is not None:
+        token = AccessTokenFactory(lola_scope=True, user=user)
+        TokenActorBindingFactory(token=token, actor=actor)
+        return token
+    return TokenActorBindingFactory(actor=actor).token
 
 # Helper function to create an isolated LikeActivity with remote object
 def create_isolated_remote_like(username_prefix="remote_like_test"):

@@ -60,6 +60,14 @@ def actor_detail(request, pk):
     except Actor.DoesNotExist:
         return build_actor_not_found_error(pk, request)
 
+    # Dual-mode gate: public access is allowed (required_scope=False), but a portability token
+    # must be bound to this actor before its scope-gated discovery surface is exposed (LOLA Section 5).
+    # A token bound to another actor is rejected with 403 actor_mismatch
+    # instead of leaking actor <pk>'s migration object / collection URLs.
+    validation_result = validate_lola_access(request, required_scope=False)
+    if not validation_result["valid"]:
+        return validation_result["error_response"]
+
     # Build standardized authentication context
     auth_context = build_auth_context(request)
 
@@ -80,6 +88,10 @@ def portability_outbox_detail(request, pk):
         outbox = PortabilityOutbox.objects.get(actor_id=pk)
     except PortabilityOutbox.DoesNotExist:
         return build_actor_not_found_error(pk, request)
+
+    validation_result = validate_lola_access(request, required_scope=False)
+    if not validation_result["valid"]:
+        return validation_result["error_response"]
 
     # Build standardized authentication context
     auth_context = build_auth_context(request)
@@ -105,6 +117,10 @@ def following_collection(request, pk):
         actor = Actor.objects.get(pk=pk)
     except Actor.DoesNotExist:
         return build_actor_not_found_error(pk, request)
+
+    validation_result = validate_lola_access(request, required_scope=False)
+    if not validation_result["valid"]:
+        return validation_result["error_response"]
 
     # Get all active following relationships for this actor
     following_qs = Following.objects.filter(

@@ -4,8 +4,8 @@ from testbed.core.models import Actor
 from testbed.core.factories import (
     UserWithActorsFactory,
     AccessTokenFactory,
-    TokenActorBindingFactory,
 )
+from testbed.core.tests.conftest import bind_portability_token
 
 """
 LOLA Compliance Tests for Actor Endpoint
@@ -93,8 +93,7 @@ def test_actor_with_portability_token_includes_migration():
     user = UserWithActorsFactory()
     actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
     
-    # Create OAuth token with portability scope
-    token = AccessTokenFactory(lola_scope=True)
+    token = bind_portability_token(actor, user=user)
     
     # Make authenticated request
     client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
@@ -161,8 +160,7 @@ def test_migration_urls_point_to_dedicated_migration_routes():
     user = UserWithActorsFactory()
     actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
     
-    # Create OAuth token with portability scope
-    token = AccessTokenFactory(lola_scope=True)
+    token = bind_portability_token(actor, user=user)
     
     client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
     response = client.get(f'/api/actors/{actor.id}/')
@@ -184,10 +182,9 @@ def test_dedicated_migration_routes_resolve():
     user = UserWithActorsFactory()
     actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
 
-    # LOLA-gated migration routes (content, blocked) enforce token-to-actor
-    # binding via validate_lola_access, so bind a portability token to this actor.
-    token = AccessTokenFactory(lola_scope=True, user=user)
-    TokenActorBindingFactory(token=token, actor=actor)
+    # The migration routes enforce token-to-actor binding, so bind a portability
+    # token to this actor (an unbound token would be rejected with actor_mismatch).
+    token = bind_portability_token(actor, user=user)
     client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
 
     # All four advertised migration URLs must resolve (routed and implemented)
@@ -207,9 +204,8 @@ def test_public_vs_authenticated_response_comparison():
     public_response = client.get(f'/api/actors/{actor.id}/')
     public_data = public_response.json()
     
-    # Get authenticated response with portability token
-    token = AccessTokenFactory(lola_scope=True)
-    
+    token = bind_portability_token(actor, user=user)
+
     client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
     auth_response = client.get(f'/api/actors/{actor.id}/')
     auth_data = auth_response.json()
