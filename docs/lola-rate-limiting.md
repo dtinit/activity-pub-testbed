@@ -1,625 +1,265 @@
-# LOLA Rate Limiting Implementation Guide
+# LOLA Rate Limiting Implementation
 
 ## Overview
 
 This document provides a comprehensive guide to the rate limiting system implemented in the ActivityPub LOLA testbed. The rate limiting middleware ensures LOLA specification compliance while protecting OAuth and API endpoints from abuse.
 
-**LOLA Compliance**: Per LOLA specification: *"The source server MAY rate limit requests by sending a 429 Too Many Requests response as defined in RFC6585, with a Retry-After header."*
-
 ## Table of Contents
 
 1. [LOLA Specification Requirements](#lola-specification-requirements)
-2. [Implementation Architecture](#implementation-architecture)
-3. [Rate Limit Configuration](#rate-limit-configuration)
-4. [Request Processing Flow](#request-processing-flow)
-5. [Real-World Usage Scenarios](#real-world-usage-scenarios)
-6. [Development Testing](#development-testing)
-7. [Production Readiness Assessment](#production-readiness-assessment)
-8. [Federation Compatibility](#federation-compatibility)
-9. [Monitoring and Troubleshooting](#monitoring-and-troubleshooting)
+2. [Design Goals](#design-goals)
+3. [Implementation Architecture](#implementation-architecture)
+4. [Rate Limit Configuration](#rate-limit-configuration)
+5. [Client IP Detection](#client-ip-detection)
+6. [The 429 Response Contract](#the-429-response-contract)
+7. [Cloud Run and Per-Instance Counters](#cloud-run-and-per-instance-counters)
+9. [Development Testing](#development-testing)
 
 ---
 
 ## LOLA Specification Requirements
 
-### RFC6585 Compliance
+LOLA §6.7, *Load Management During Fetching of Content*:
 
-Our implementation strictly follows [RFC6585 - Additional HTTP Status Codes](https://tools.ietf.org/html/rfc6585) for 429 responses:
+> The source server **MAY** rate limit requests by sending a 429 Too Many Requests response as defined in [RFC6585], with a Retry-After header. If the destination receives a 429 response status code, it **SHOULD** respect the Retry-After header and resume its requests after the chosen delay.
 
-- **Status Code 429**: "Too Many Requests"
-- **Retry-After Header**: Specifies when client may retry (in seconds)
-- **Response Body**: Human-readable explanation
+Parsed carefully, this is a very light obligation on a source server:
 
-### ActivityPub Federation Requirements
+| Dimension | Obligation |
+|---|---|
+| Rate limit at all? | **Optional** — MAY. |
+| Status code | `429` — required |
+| `Retry-After` header | Required as part of the described mechanism |
+| Explanatory body | SHOULD, per RFC6585 |
+| Counting accuracy | **Unspecified** |
+| Global consistency | **Unspecified** |
+| Algorithm / limits / identity key | **Our choice** |
 
-Rate limiting is crucial for LOLA source servers because:
+RFC6585 is explicit that it "does not define how the origin server identifies the user, nor how it counts requests." So the algorithm, the limit values, the identity key, the window and the consistency model are all implementation choices, not compliance requirements.
 
-1. **External Server Protection**: Destination servers implementing LOLA need reliable source servers
-2. **OAuth Endpoint Security**: OAuth authorization is critical for account portability workflows  
-3. **Service Availability**: Prevents individual clients from impacting legitimate LOLA operations
-4. **Specification Compliance**: Enables real-world LOLA implementations to test against standards-compliant infrastructure
+**The normative weight sits on the destination.** The only SHOULD in §6.7 is about destinations honoring `Retry-After`. That is what destination developers must implement — and this testbed exists so they can implement and verify it against a compliant source.
 
-### LOLA-Specific Considerations
+---
 
-- **Account Migration Workflows**: OAuth endpoints get stricter limits due to sensitivity
-- **Federation Compatibility**: CORS headers enable destination servers to handle rate limits gracefully
-- **Educational Balance**: Limits are strict enough for protection but permissive enough for learning
+## Design Goals
+
+Because compliance is nearly free here, the design optimizes for something else: **usefulness to destination implementers.**
+
+1. **Predictable, correlatable 429s.** A destination developer must be able to trigger a 429, read `Retry-After`, back off, retry, and confirm their logic works. A limiter that fires for reasons unrelated to the caller's own request pattern is worse than no limiter, because backoff logic cannot be developed against an arbitrary signal.
+2. **A machine-readable body.** The 429 uses the same JSON error contract as every other endpoint, so it can be parsed rather than pattern-matched.
+3. **Light abuse dampening.** Secondary. This is a testbed, not an enforcement boundary.
+
+Accuracy of counting is explicitly *not* a goal — see Cloud Run and per-instance counters.
 
 ---
 
 ## Implementation Architecture
 
-### Sliding Window Algorithm
+Implemented in `testbed/core/middleware/rate_limiting.py` as `RateLimitingMiddleware`, registered in `settings/base.py` early in the `MIDDLEWARE` list.
 
-The rate limiting uses a **sliding time window** approach that tracks request timestamps per client IP:
+### Per-(rule, client) fixed-window counters
 
-```python
-# Example for IP 203.0.113.42 with 5-minute window
-request_timestamps = [
-    1693315800,  # 14:30:00
-    1693315815,  # 14:30:15  
-    1693315930,  # 14:32:10
-    1693316025   # 14:33:45
-]
+Each request resolves to exactly one **rule** by longest matching path prefix. Counting happens against a bucket keyed by that rule *and* the client:
 
-# At 14:34:02, window is 14:29:02 to 14:34:02
-# All 4 requests are within window
+```
+ratelimit:<rule_name>:<client_ip>
 ```
 
-**Algorithm Benefits:**
-- **Fair Distribution**: Allows bursts but prevents sustained abuse
-- **Automatic Recovery**: Old requests automatically expire from window
-- **Memory Efficient**: Only stores timestamps, not full request data
+Keying by rule is what keeps budgets isolated. Traffic to `/api/actors/` can never consume the `/oauth/authorize/` allowance.
 
-### In-Memory Storage Design
+Each bucket is a single integer stored with a TTL equal to the rule's window:
 
-**Data Structure:**
-```python
-# Collections.defaultdict(list) stores IP -> timestamp list
-request_counts = {
-    '203.0.113.42': [1693315800, 1693315815, 1693315930],
-    '198.51.100.10': [1693316000, 1693316050],
-    # ... more IPs
-}
-```
+- The first request of a window creates it with `cache.add(key, 1, window)`
+- Later requests use `cache.incr(key)`
+- Expiry is the cache's responsibility, so there is no cleanup pass and no unbounded growth
 
-**Storage Characteristics:**
-- **Temporary**: Lost on server restart (acceptable for basic production)
-- **Per-Server**: Each application instance has separate counters
-- **Bounded**: Automatic cleanup prevents unlimited growth
-- **Fast**: In-memory access with O(1) IP lookup
+A companion `<key>:reset` entry records when the window ends, so `Retry-After` reports the true remaining time rather than a whole window.
 
-### Client IP Detection
+### Accepted trade-off: fixed vs sliding window
 
-The middleware attempts to identify real client IPs through proxy headers:
+A fixed window permits up to 2× the limit across a boundary — N requests just before it, N just after. A sliding window is more precise.
 
-```python
-def get_client_ip(self, request):
-    # Priority order for IP detection
-    
-    # 1. X-Forwarded-For (most common proxy header)
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        return x_forwarded_for.split(',')[0].strip()
-    
-    # 2. X-Real-IP (alternative proxy header)  
-    x_real_ip = request.META.get('HTTP_X_REAL_IP')
-    if x_real_ip:
-        return x_real_ip
-    
-    # 3. Direct connection (fallback)
-    return request.META.get('REMOTE_ADDR', '127.0.0.1')
-```
+For a dampening signal under a MAY, that imprecision is irrelevant and the simplicity is worth it. This is a deliberate choice, not an oversight.
 
-**Production Considerations:**
-- Configure proxy headers based on infrastructure
-- Validate proxy sources to prevent header spoofing
-- Consider subnet-based limiting for complex networks
+### Backend constraint
 
-### Memory Management and Cleanup
+The design relies on `incr()` **preserving the key's TTL**, so that continued traffic cannot extend a window. If hammering while blocked pushed the window out, `Retry-After` would become a lie — and §6.7 asks destinations to trust that value.
 
-**Automatic Cleanup Process:**
-- **Trigger**: Runs on every request
-- **Age Limit**: Removes entries older than 1 hour
-- **Scope**: Cleans both old timestamps and empty IP records
-- **Performance**: O(n) where n = number of tracked IPs
+`LocMemCache`, the default and what this deployment uses, preserves it: `incr()` writes straight to its internal dict under a lock and never touches the expiry table. Django's **database cache backend does not**. It inherits `BaseCache.incr`, which does `get()` then `set()` without a timeout, resetting the TTL to `DEFAULT_TIMEOUT`. Swapping to it would quietly turn this into a sliding window, and no test would fail — so do not change the cache backend without first checking that its `incr()` leaves the TTL alone.
 
-```python
-def cleanup_old_entries(self, current_time, max_age=3600):
-    cutoff_time = current_time - max_age
-    
-    for ip in list(self.request_counts.keys()):
-        # Remove old timestamps
-        self.request_counts[ip] = [
-            t for t in self.request_counts[ip] if t > cutoff_time
-        ]
-        
-        # Remove empty IP records
-        if not self.request_counts[ip]:
-            del self.request_counts[ip]
-```
+### Fail-open
+
+If the cache raises for any reason, the middleware logs and allows the request. A limiter is a dampening signal under a MAY; it must never take down the endpoints it protects.
 
 ---
 
 ## Rate Limit Configuration
 
-### Endpoint-Specific Limits
+All values live in `settings/base.py`, which every environment module inherits. The middleware keeps no copies of the tuned values — identical numbers in two files drift, and settings is where an operator looks to change them.
 
-The middleware applies different limits based on endpoint sensitivity:
+| Setting | If absent | Purpose |
+|---|---|---|
+| `RATE_LIMIT_ENABLED` | defaults to `True` | Master switch |
+| `RATE_LIMIT_RULES` | defaults to `[]` | Per-path rules; longest prefix wins |
+| `RATE_LIMIT_DEFAULT` | **required** — raises | Fallback rule for unmatched paths |
+| `RATE_LIMIT_EXEMPT_PREFIXES` | **required** — raises | Paths that never count |
+| `RATE_LIMIT_TRUSTED_PROXY_DEPTH` | defaults to `0` | Trusted trailing `X-Forwarded-For` entries |
 
-| Endpoint | Requests | Window | Rationale |
-|----------|----------|---------|-----------|
-| `/oauth/authorize/` | 10 | 5 minutes | Critical for LOLA authentication |
-| `/oauth/token/` | 20 | 5 minutes | Token exchange endpoint |  
-| `/.well-known/oauth-authorization-server` | 30 | 1 minute | LOLA discovery |
-| `/api/actors/` | 100 | 1 minute | LOLA collections |
-| **Default** | 200 | 1 minute | General endpoints |
+The two inline defaults encode a **safety posture** rather than configuration: limiting stays on, and `X-Forwarded-For` stays untrusted, unless a deployment says otherwise. The two required settings deliberately have no fallback, so a missing value fails loudly instead of silently applying a number hidden in code.
 
-### Path-Based Matching Logic
+### Default rules
 
-The system uses **longest prefix matching** to find the most specific rate limit:
+| Rule | Prefix | Limit | Window |
+|---|---|---|---|
+| `oauth_authorize` | `/oauth/authorize/` | 60 | 300s |
+| `oauth_token` | `/oauth/token/` | 120 | 300s |
+| `lola_discovery` | `/.well-known/oauth-authorization-server` | 60 | 60s |
+| `lola_api` | `/api/actors/` | 120 | 60s |
+| *(fallback)* | everything else | 300 | 60s |
 
-```python
-def get_rate_limit_for_path(self, path):
-    # Example: path = "/api/actors/123/followers"
-    # Matches: "/api/actors/" (not "/api/" or "/")
-    
-    best_match = self.default_limit
-    best_match_length = 0
-    
-    for pattern, limit in self.rate_limits.items():
-        if path.startswith(pattern) and len(pattern) > best_match_length:
-            best_match = limit
-            best_match_length = len(pattern)
-    
-    return best_match
-```
+Limits are deliberately generous. One interactive OAuth authorization spans several requests — consent page, approval POST, redirect, token exchange — and this testbed exists for people to exercise that flow repeatedly. A limit that throttles honest integration testing would defeat its purpose.
 
-### Customization Options
+Longest-prefix matching means rules can be declared in any order; specificity decides.
 
-**BasicRateLimitingMiddleware** (Development/Basic Production):
-```python
-rate_limits = {
-    '/oauth/authorize/': {'requests': 10, 'window': 300},
-    '/oauth/token/': {'requests': 20, 'window': 300},
-    '/api/actors/': {'requests': 100, 'window': 60},
-}
-default_limit = {'requests': 200, 'window': 60}
-```
+### Per-environment behaviour
 
-**LOLARateLimitingMiddleware** (Strict Production):
-```python
-rate_limits = {
-    '/oauth/authorize/': {'requests': 5, 'window': 300},    # Stricter
-    '/oauth/token/': {'requests': 10, 'window': 300},       # Stricter
-    '/api/actors/': {'requests': 50, 'window': 60},         # Stricter
-}
-default_limit = {'requests': 100, 'window': 60}  # More conservative
-```
+| Environment | Enabled | Notes |
+|---|---|---|
+| Development | **No** | `DEBUG=True` serves static through Django, so a page load would spend a dozen requests of budget. Set `DJANGO_RATE_LIMIT_ENABLED=1` to exercise it. |
+| Test | **No** | Prevents unrelated suites being throttled. `test_rate_limiting.py` re-enables explicitly via `override_settings`. |
+| CI | Yes | Inherits base defaults |
+| Staging / Production | Yes | Plus `RATE_LIMIT_TRUSTED_PROXY_DEPTH=1` |
+
+### Exemptions
+
+Static and media matter only in development, where Django serves them; in staging and production they come from Cloud Storage and never reach this middleware. Health checks belong to Cloud Run rather than to any user and must not exhaust a user's allowance.
 
 ---
 
-## Request Processing Flow
+## Client IP Detection
 
-### Step-by-Step Processing
+`X-Forwarded-For` is **appended to** by each proxy in a chain, so its leftmost entry is whatever the client sent and is entirely under the client's control. Reading index 0 lets a client mint a fresh bucket per request simply by varying the header.
 
-Every HTTP request goes through this detailed evaluation:
+`RATE_LIMIT_TRUSTED_PROXY_DEPTH` is the number of proxies that append to the header in front of this application. The real client sits that many entries in **from the right**, so anything injected by a client lands further left and is ignored.
 
 ```
-1. REQUEST INTERCEPTION
-   ├── Middleware activates early in Django stack
-   ├── Positioned after sessions, before CSRF
-   └── Has access to session data for IP tracking
+depth = 1, well-formed:   "203.0.113.5, 130.211.0.1"
+                            ^^^^^^^^^^^ client (index -2)
 
-2. CLIENT IDENTIFICATION  
-   ├── Extract IP from proxy headers or direct connection
-   ├── Handle X-Forwarded-For, X-Real-IP scenarios
-   └── Fallback to REMOTE_ADDR if needed
-
-3. MEMORY CLEANUP
-   ├── Remove timestamps older than 1 hour
-   ├── Delete IPs with no recent activity
-   └── Maintain bounded memory usage
-
-4. RATE LIMIT EVALUATION
-   ├── Find most specific rate limit for request path
-   ├── Get request history for client IP
-   ├── Filter to requests within time window
-   ├── Count recent requests vs limit
-   └── Calculate retry time if exceeded
-
-5. DECISION & RESPONSE
-   ├── If under limit: Record request, continue
-   └── If over limit: Generate 429 response
+depth = 1, client injects: "1.1.1.1, 203.0.113.5, 130.211.0.1"
+                                     ^^^^^^^^^^^ still the client
 ```
 
-### 429 Response Generation
+**Default is 0**, meaning `X-Forwarded-For` is not trusted at all and `REMOTE_ADDR` is used. Every deployment opts in by declaring how deep its own chain is.
 
-When rate limits are exceeded, the middleware generates RFC6585-compliant responses:
+If the observed chain is shorter than the configured depth, the middleware logs a warning and falls back to `REMOTE_ADDR`, since the header is not the shape the deployment expects.
+
+The warning only fires when the chain is *shorter* than configured. A depth set too **high** fails silently, and lets a caller mint a fresh bucket per request by padding the header.
+
+> **Verify before relying on it.** Production sets `1`, but that is a considered bet rather than a documented fact: Google specifies the `<client>, <load-balancer>` format for external Application Load Balancers, which this service does not use, and documents no stable layout for the `run.app` / domain-mapping path. Send one request with no `X-Forwarded-For` and read `client resolution: xff_entries=N` from the logs, then set the depth to `N - 1`. Check on production via the custom domain — staging has no custom domain, so it cannot exercise that path. Correctable via `DJANGO_RATE_LIMIT_TRUSTED_PROXY_DEPTH` without a redeploy.
+
+---
+
+## The 429 Response Contract
+
+Built by `build_rate_limit_error` in `testbed/core/utils/errors.py`. The whole response is the template — status, body and headers.
 
 ```http
 HTTP/1.1 429 Too Many Requests
-Content-Type: text/plain
-Retry-After: 238
+Content-Type: application/json
+Retry-After: 47
+Cache-Control: no-store
 Access-Control-Allow-Origin: *
 Access-Control-Expose-Headers: Retry-After
-
-Rate limit exceeded. Try again in 238 seconds.
 ```
 
-**Retry-After Calculation:**
-```python
-# Find when oldest request in window expires
-oldest_request = min(recent_requests)
-window_expires = oldest_request + rate_limit['window']
-retry_after = max(window_expires - current_time, 1)  # At least 1 second
+```json
+{
+  "error_code": "rate_limit_exceeded",
+  "detail": "Request rate limit exceeded",
+  "timestamp": "2026-07-27T14:33:05.123456+00:00",
+  "hint": "Too many requests: the limit is 60 per 300 seconds. Please wait 47 seconds before retrying",
+  "remediation": "Honor the Retry-After header, then resume with exponential backoff",
+  "endpoint": "/oauth/authorize/",
+  "method": "GET",
+  "request_id": "5f3c2e91-..."
+}
 ```
+
+Why each header is present:
+
+- **`Retry-After`** — §6.7 describes rate limiting as a 429 "with a Retry-After header"; destinations SHOULD honor it.
+- **`Cache-Control: no-store`** — 429 is not in HTTP's heuristically-cacheable set, so a compliant cache would not store it anyway. Stating it explicitly is cheap defence against a non-compliant intermediary replaying a stale 429 at a client that has already backed off.
+- **`Access-Control-Expose-Headers`** — ActivityPub federation clients are frequently browser-based. `Retry-After` is unreadable to `fetch()` unless explicitly exposed, which would leave a destination unable to honor the SHOULD above.
+
+The body uses the same `build_error_payload` as every other error in the project, so clients see one contract regardless of which layer rejected them.
 
 ---
 
-## Real-World Usage Scenarios
+## Cloud Run and Per-Instance Counters
 
-### Scenario: External ActivityPub Server Testing LOLA
+Counters live in Django's cache. Under the default `LocMemCache` that is **per-process**, and Cloud Run autoscales. The effective ceiling is therefore:
 
-**Background**: MastodonPlus.social is implementing LOLA account portability and testing their destination server against our testbed.
-
-**Timeline with Real Requests:**
-
-**14:30:00 - Developer starts OAuth testing**
 ```
-Request 1: POST /oauth/authorize/ from 203.0.113.42
-✅ ALLOWED (1/10 requests in window)
-Response: 200 OK
-Memory: ['14:30:00']
+limit × gunicorn_workers × running_cloud_run_instances
 ```
 
-**14:30:15 to 14:33:45 - Rapid development testing**
-```
-Requests 2-10: POST /oauth/authorize/ from 203.0.113.42
-✅ ALL ALLOWED (10/10 requests in window)
-Memory: ['14:30:00', '14:30:15', ..., '14:33:45']
-```
+Threads do not multiply it — they share one process's memory, which is exactly why `incr()` has to be atomic. Worker processes and Cloud Run instances do. The container currently runs `--workers 1`, so today this reduces to `limit × instances`.
 
-**14:34:02 - Rate limit triggered**
-```
-Request 11: POST /oauth/authorize/ from 203.0.113.42
-❌ RATE LIMITED!
+Two consequences, stated plainly:
 
-Calculation:
-- Window: 14:29:02 to 14:34:02 (5 minutes)
-- Recent requests: 10 (all within window)
-- Limit: 10 per 5 minutes → EXCEEDED
-- Oldest request: 14:30:00
-- Retry after: (14:30:00 + 300) - 14:34:02 = 238 seconds
+**These limits are best-effort dampening, not an enforcement boundary.** §6.7's MAY is what makes that acceptable rather than a compliance gap. Nothing in LOLA or RFC6585 asks for globally consistent counting.
 
-Response: HTTP 429 with Retry-After: 238
-```
+**The multiplier has no stated upper bound, deliberately.** No `--max-instances` is configured on the Cloud Run service, so the platform default applies. Capping instances was considered and **declined**.
 
-**14:38:05 - Automatic recovery**
-```
-Request 12: POST /oauth/authorize/ from 203.0.113.42
-✅ ALLOWED!
+**In practice the testbed usually runs a single instance**, where counters are effectively global. The multiplier only appears under concurrent load — which is also the situation where letting some extra traffic through matters least.
 
-Why? Sliding window moved:
-- Window: 14:33:05 to 14:38:05
-- Oldest request (14:30:00) expired from window
-- Now only 9 requests in current window
-```
+Other platform interactions worth knowing:
 
-### Memory State Evolution
-
-**Before Rate Limit (14:34:02):**
-```python
-request_counts = {
-    '203.0.113.42': [
-        1693315800,  # 14:30:00
-        1693315815,  # 14:30:15
-        1693315882,  # 14:31:22  
-        1693315930,  # 14:32:10
-        1693315965,  # 14:32:45
-        1693316000,  # 14:33:20
-        1693316025,  # 14:33:45
-        # ... 3 more timestamps ...
-    ]
-    # Total: 10 requests in memory
-}
-```
-
-**After Rate Limit + Recovery (14:38:05):**
-```python
-request_counts = {
-    '203.0.113.42': [
-        # 14:30:00, 14:30:15 expired (outside window)
-        1693315882,  # 14:31:22  
-        1693315930,  # 14:32:10
-        # ... remaining requests ...
-        1693316285   # 14:38:05 (new allowed request)
-    ]
-    # Total: 9 requests (oldest expired naturally)
-}
-```
+- **Cold starts reset counters.** A scale-to-zero followed by a new instance starts every bucket empty. Acceptable under a MAY.
+- **Static files never reach this middleware in staging/production**, because they are served from Cloud Storage. They only count in development, where `DEBUG=True` makes Django serve them.
+- **Health checks are exempt** so platform probes do not consume user budget.
 
 ---
 
 ## Development Testing
 
-### Method 1: Browser Testing (Easiest)
+Coverage lives in `testbed/core/tests/test_rate_limiting.py` (18 tests). Rate limiting is disabled by default in the test settings, so each test enables it explicitly with its own small rule set rather than depending on production limits.
 
-**OAuth Authorization Endpoint (10 requests/5 minutes):**
+Areas covered:
 
-1. Start development server: `python manage.py runserver`
-2. Navigate to OAuth URL:
-   ```
-   http://127.0.0.1:8000/oauth/authorize/?client_id=YOUR_CLIENT_ID&response_type=code&scope=activitypub_account_portability
-   ```
-3. **Rapid refresh test**: Press F5 or Ctrl+R rapidly 11+ times
-4. **Expected result**: 11th request shows "Rate limit exceeded"
+- **Bucket isolation** — traffic on one rule never drains another, and one client never affects another
+- **Limit boundary** — N allowed, N+1 rejected, rejected requests never reach the view
+- **Window semantics** — hammering while blocked does not extend `Retry-After`
+- **429 contract** — JSON body keys, `Retry-After` range, cache and CORS headers
+- **Client identification** — depth-0 ignores `X-Forwarded-For`; depth-1 counts in from the right and ignores injected entries; short chains fall back to `REMOTE_ADDR`
+- **Exemptions** — static and health paths never count
+- **Operational safety** — disabled switch, and fail-open on cache failure
+- **Wiring** — one integration test through the real client proving the middleware is installed in `MIDDLEWARE`
 
-### Method 2: curl Command Testing (Most Reliable)
+### Exercising it by hand
 
-**Quick Rate Limit Test:**
 ```bash
-# Test OAuth authorization endpoint
-for i in {1..11}; do
-  echo "Request $i:"
-  curl -v http://127.0.0.1:8000/oauth/authorize/ 2>&1 | grep -E "(HTTP|Retry-After)"
-  echo "---"
+# Enable locally, then hammer an endpoint
+DJANGO_RATE_LIMIT_ENABLED=1 python manage.py runserver
+
+# Watch the limit engage
+for i in $(seq 1 70); do
+  curl -s -o /dev/null -w "%{http_code} " http://127.0.0.1:8000/oauth/authorize/
 done
-```
+echo
 
-**Expected Output (11th request):**
-```
-Request 11:
-< HTTP/1.1 429 Too Many Requests
-< Retry-After: 287
-< Access-Control-Allow-Origin: *
----
-```
-
-### Method 3: Python Test Script (Most Controlled)
-
-```python
-import requests
-import time
-
-def test_oauth_rate_limiting():
-    # Test OAuth endpoint rate limiting with detailed output
-    url = "http://127.0.0.1:8000/oauth/authorize/"
-    
-    print("Testing OAuth Rate Limiting (10 requests/5 minutes)")
-    print("=" * 50)
-    
-    for i in range(1, 12):
-        start_time = time.time()
-        response = requests.get(url)
-        end_time = time.time()
-        
-        print(f"Request {i:2d}: Status {response.status_code} "
-              f"({end_time - start_time:.3f}s)")
-        
-        if response.status_code == 429:
-            retry_after = response.headers.get('Retry-After', 'Not set')
-            cors_origin = response.headers.get('Access-Control-Allow-Origin', 'Not set')
-            
-            print(f"  ⚠️  Rate Limited!")
-            print(f"  📅 Retry-After: {retry_after} seconds") 
-            print(f"  🌐 CORS Origin: {cors_origin}")
-            print(f"  📝 Body: {response.text[:50]}...")
-            break
-        else:
-            print(f"  ✅ Allowed")
-            
-        time.sleep(0.1)  # Small delay between requests
-
-if __name__ == "__main__":
-    test_oauth_rate_limiting()
-```
-
-### Method 4: Testing Different Endpoints
-
-**Fastest to Trigger (Discovery - 30/minute):**
-```bash
-for i in {1..31}; do
-  echo -n "Request $i: "
-  curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/.well-known/oauth-authorization-server
-  echo
-done
-```
-
-**API Endpoints (100/minute):**
-```bash
-for i in {1..101}; do
-  curl -s -o /dev/null -w "Request $i: %{http_code}\n" http://127.0.0.1:8000/api/actors/1/
-done
-```
-
-## Production Readiness Assessment
-
-### ✅ Production-Ready Aspects
-
-**LOLA Specification Compliance:**
-- RFC6585 compliant 429 responses
-- Proper Retry-After header calculation  
-- ActivityPub federation CORS support
-- Standard HTTP semantics for automated clients
-
-**Security Protection:**
-- OAuth endpoint protection against brute force
-- Resource conservation preventing server overload
-- Graceful degradation with clear error messaging
-- IP-based tracking prevents individual client abuse
-
-**Operational Stability:**
-- Automatic memory cleanup prevents leaks
-- Reasonable limits balance protection with usability
-- Basic proxy support for common nginx setups
-- No external dependencies simplifying deployment
-
-### Production Deployment Scenarios
-
-**✅ Works Well For:**
-
-**Single-Server Deployments:**
-- Small to medium LOLA testbeds (< 1000 users)
-- Educational/research instances  
-- Single Django server behind nginx reverse proxy
-- Community demonstration servers
-- Docker containerized deployments (single instance)
-
-**Moderate Traffic Volumes:**
-- Hundreds of OAuth requests per hour
-- Developer testing and integration scenarios  
-- Community learning and experimentation
-- Basic ActivityPub federation testing
-
-**Simple Infrastructure:**
-- nginx → Django application server
-- Cloud Run single instance deployments
-- Basic load balancer with session affinity
-- Development/staging environments
-
-### ⚠️ Current Limitations
-
-**Multi-Server Challenges:**
-- **Issue**: Each app server maintains separate rate limit counters
-- **Impact**: Rate limiting becomes less effective with horizontal scaling
-- **Workaround**: Use sticky sessions or single-server deployments
-- **Future**: Upgrade to Redis storage for shared state
-
-**Server Restart Behavior:**
-- **Issue**: Rate limit memory cleared on application restart
-- **Impact**: Brief period where all rate limits reset
-- **Mitigation**: Usually not critical for basic production use
-- **Future**: Persistent storage will maintain state
-
-**Advanced IP Detection:**
-- **Issue**: Basic proxy header parsing may not handle complex chains
-- **Impact**: Could rate limit wrong IPs in edge cases
-- **Mitigation**: Configure X-Forwarded-For properly for your proxy setup
-- **Future**: Enhanced proxy validation and trusted proxy lists
-
-### 🚀 When to Upgrade
-
-**Consider advanced rate limiting when you reach:**
-- **Multiple Application Servers**: Need shared rate limit state
-- **High Traffic Volumes**: Thousands of requests per hour requiring optimization
-- **Complex Proxy Infrastructure**: Multiple load balancers, CDN, cloud proxies
-- **Enterprise Security**: Need IP whitelisting, progressive penalties
-- **Detailed Monitoring**: Require metrics, alerts, dashboards
-
----
-
-## Federation Compatibility
-
-### CORS Headers for ActivityPub Clients
-
-Our rate limiting includes ActivityPub-specific CORS headers:
-
-```python
-response['Access-Control-Allow-Origin'] = '*'
-response['Access-Control-Expose-Headers'] = 'Retry-After'
-```
-
-**Why This Matters:**
-- External ActivityPub servers can read rate limit headers from JavaScript
-- Enables destination servers to implement proper backoff logic
-- Follows web standards for cross-origin resource sharing
-
-### Error Response Format
-
-Our 429 responses follow standards that work with automated systems:
-
-```http
-HTTP/1.1 429 Too Many Requests
-Content-Type: text/plain
-Retry-After: 180
-Access-Control-Allow-Origin: *
-Access-Control-Expose-Headers: Retry-After
-Date: Thu, 29 Aug 2025 19:34:02 GMT
-
-Rate limit exceeded. Try again in 180 seconds.
-```
-
-**Machine-Readable Elements:**
-- **Status Code 429**: Universally recognized
-- **Retry-After Header**: Precise retry timing
-- **CORS Headers**: Enable browser-based clients
-- **Plain Text Body**: Human-readable explanation
-
----
-
-## Monitoring and Troubleshooting
-
-### Log Messages and Levels
-
-**Warning Level (Always Logged):**
-```
-WARNING Rate limit exceeded for IP 203.0.113.42 on /oauth/authorize/. Retry after 240 seconds.
-```
-
-**Info Level (LOLA-Specific Middleware):**
-```
-INFO LOLA rate limit triggered: IP=203.0.113.42, path=/oauth/authorize/, retry_after=240s
-```
-
-**Debug Level (Development Only):**
-```
-DEBUG Rate limit check: IP=127.0.0.1, path=/api/actors/1/, count=3/100, window=60s
-```
-
-### Common Issues and Solutions
-
-**Issue: Rate limits too strict for development**
-```python
-# Solution: Use BasicRateLimitingMiddleware instead of LOLARateLimitingMiddleware
-MIDDLEWARE = [
-    # ...
-    'testbed.core.middleware.rate_limiting.BasicRateLimitingMiddleware',
-    # ...
-]
-```
-
-**Issue: Rate limits not working after server restart**
-```
-# Expected behavior: In-memory storage is cleared on restart
-# This is normal for current implementation
-# Solution: Wait for limits to rebuild naturally, or upgrade to persistent storage
+# Inspect the 429 body and headers
+curl -i http://127.0.0.1:8000/oauth/authorize/
 ```
 
 ---
 
-## Configuration Reference
+### Log messages
 
-### Middleware Setup
-
-**settings/base.py:**
-```python
-MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    # Position rate limiting early to protect all endpoints
-    'testbed.core.middleware.rate_limiting.BasicRateLimitingMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    # ... rest of middleware stack
-]
-```
-
-### Rate Limit Customization
-
-**Custom Rate Limits:**
-```python
-# In middleware class
-rate_limits = {
-    '/oauth/authorize/': {'requests': 5, 'window': 300},  # 5 per 5 minutes
-    '/oauth/token/': {'requests': 15, 'window': 300},     # 15 per 5 minutes  
-    '/api/actors/': {'requests': 50, 'window': 60},       # 50 per minute
-    '/.well-known/': {'requests': 20, 'window': 60},      # 20 per minute
-}
-```
-
-## Conclusion
-
-The LOLA rate limiting implementation provides a solid foundation for protecting ActivityPub OAuth infrastructure while maintaining LOLA specification compliance. It balances security, usability, and educational value, making it suitable for development, demonstration, and basic production deployments.
-
-The middleware's design enables easy enhancement for more advanced production scenarios while providing immediate value for LOLA compliance and basic abuse protection.
+| Level | Message | Meaning |
+|---|---|---|
+| `INFO` | `Rate limit client resolution: xff_entries=… configured_depth=… resolved=…` | Emitted once per process on the first counted request. The chain shape this deployment actually sees — how you check the proxy depth without forcing a 429 |
+| `WARNING` | `Rate limit exceeded ip=… rule=… path=…` | A request was rejected; includes limit, window and retry-after |
+| `WARNING` | `X-Forwarded-For shorter than RATE_LIMIT_TRUSTED_PROXY_DEPTH` | Depth set too high; fell back to `REMOTE_ADDR`. Note the reverse case — depth too low — produces no warning |
+| `ERROR` | `Rate limiting check failed, allowing request` | Cache failure; request was allowed (fail-open) |

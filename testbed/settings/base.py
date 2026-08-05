@@ -62,7 +62,7 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     # LOLA Rate Limiting - positioned early to protect all endpoints
-    "testbed.core.middleware.rate_limiting.BasicRateLimitingMiddleware",
+    "testbed.core.middleware.rate_limiting.RateLimitingMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -259,3 +259,57 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
     ],
 }
+
+# Rate limiting (LOLA Section 6.7)
+
+# Counters are per (rule, client IP) and live in the cache, so they are per-process.
+# See testbed/core/middleware/rate_limiting.py and docs/lola-rate-limiting.md for the design rationale.
+
+RATE_LIMIT_ENABLED = True
+
+# Longest matching prefix wins, so declaration order does not matter.
+# Limits are intentionally generous: one interactive OAuth authorization
+# spans several requests, and this testbed exists for people to exercise that flow repeatedly.
+RATE_LIMIT_RULES = [
+    {
+        "name": "oauth_authorize",
+        "prefix": "/oauth/authorize/",
+        "limit": 60,
+        "window": 300,
+    },
+    {
+        "name": "oauth_token",
+        "prefix": "/oauth/token/",
+        "limit": 120,
+        "window": 300,
+    },
+    {
+        "name": "lola_discovery",
+        "prefix": "/.well-known/oauth-authorization-server",
+        "limit": 60,
+        "window": 60,
+    },
+    {
+        "name": "lola_api",
+        "prefix": "/api/actors/",
+        "limit": 120,
+        "window": 60,
+    },
+]
+
+# Applied to any path not matched by a rule above.
+RATE_LIMIT_DEFAULT = {"name": "default", "limit": 300, "window": 60}
+
+# Paths that never consume a budget
+RATE_LIMIT_EXEMPT_PREFIXES = [
+    "/static/",
+    "/media/",
+    "/health",
+    "/favicon.ico",
+]
+
+# Number of proxies that append to X-Forwarded-For in front.
+# 0 means the header is not trusted at all and REMOTE_ADDR is used instead; each
+# deployment opts in by declaring how deep its own chain is. Set for Cloud Run in
+# production.py / staging.py.
+RATE_LIMIT_TRUSTED_PROXY_DEPTH = 0

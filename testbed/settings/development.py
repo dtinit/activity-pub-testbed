@@ -14,6 +14,8 @@ SECRET_KEY = env.str("DJANGO_SECRET_KEY", default="your-dev-secret-key")
 ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 BASE_URL = "http://localhost:8000"
 
+RATE_LIMIT_ENABLED = env.bool("DJANGO_RATE_LIMIT_ENABLED", default=False)
+
 # Seeding settings
 SEED_ADMIN_USERNAME = "admin"
 SEED_ADMIN_EMAIL = "admin@seeding.com"

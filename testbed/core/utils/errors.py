@@ -1,5 +1,6 @@
 import uuid
 from datetime import timezone, datetime
+from django.http import JsonResponse
 from rest_framework.response import Response
 
 """
@@ -21,7 +22,6 @@ class ErrorCodes:
     FORBIDDEN_ACCESS = "forbidden_access"
     UNAUTHORIZED = "unauthorized"
     ACTOR_MISMATCH = "actor_mismatch"
-    
     # Rate Limiting Errors (429)
     RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
     
@@ -49,12 +49,61 @@ def generate_request_id():
     return str(uuid.uuid4())
 
 
+def build_error_payload(error_code, detail, request=None, hint=None, remediation=None):
+    """
+    Build the error body shared by every error response.
+
+    Two wrappers call this with the same body:
+        - build_error_response -> DRF Response for the view layer
+        - build_rate_limit_error -> JsonResponse for middleware
+
+    They can't share a wrapper because they run in different layers:
+        - Views need a DRF Response so activitypub_content can use
+            request.accepted_renderer to set application/activity+json.
+        - Middleware runs outside DRF, where a Response has no renderer
+            and raises on serialization, so it needs a plain JsonResponse.
+
+    Args:
+        error_code (str): Machine-readable error identifier from ErrorCodes
+        detail (str): Human-readable error description
+        request (HttpRequest, optional): Django request object for context
+        hint (str, optional): Additional context or explanation
+        remediation (str, optional): Actionable steps to fix the error
+
+    Returns:
+        dict: The error body, ready to be wrapped by either response class
+    """
+    error_data = {
+        "error_code": error_code,
+        "detail": detail,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # Add optional context fields if provided
+    if hint:
+        error_data["hint"] = hint
+
+    if remediation:
+        error_data["remediation"] = remediation
+
+    if request:
+        error_data["endpoint"] = request.path
+        error_data["method"] = request.method
+        # Generate request ID for this specific request
+        error_data["request_id"] = generate_request_id()
+
+    return error_data
+
+
 def build_error_response(error_code, detail, status_code, request=None, hint=None, remediation=None):
     """
-    Build standardized JSON error response.
+    Build standardized JSON error response for the DRF view layer.
     
     Creates consistent, developer-friendly error responses with comprehensive
     metadata for debugging, remediation, and support purposes.
+    
+    The body is built by build_error_payload; this function only wraps it in the
+    response class the view layer needs.
     
     Args:
         error_code (str): Machine-readable error identifier from ErrorCodes
@@ -77,26 +126,16 @@ def build_error_response(error_code, detail, status_code, request=None, hint=Non
         ...     remediation="Request OAuth token with 'activitypub_account_portability' scope"
         ... )
     """
-    error_data = {
-        "error_code": error_code,
-        "detail": detail,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-    
-    # Add optional context fields if provided
-    if hint:
-        error_data["hint"] = hint
-    
-    if remediation:
-        error_data["remediation"] = remediation
-        
-    if request:
-        error_data["endpoint"] = request.path
-        error_data["method"] = request.method
-        # Generate request ID for this specific request
-        error_data["request_id"] = generate_request_id()
-    
-    return Response(error_data, status=status_code)
+    return Response(
+        build_error_payload(
+            error_code=error_code,
+            detail=detail,
+            request=request,
+            hint=hint,
+            remediation=remediation,
+        ),
+        status=status_code,
+    )
 
 
 def build_actor_not_found_error(actor_id, request=None):
@@ -163,27 +202,53 @@ def build_actor_mismatch_error(request=None):
     )
 
 
-def build_rate_limit_error(retry_after_seconds, request=None):
+def build_rate_limit_error(retry_after_seconds, request=None, limit=None, window=None):
     """
-    Build standardized 429 error for rate limiting with Retry-After header.
+    Build the complete 429 response for rate-limited requests (LOLA Section 6.7).
+    
+    Returns a JsonResponse rather than a DRF Response, unlike every other builder in
+    this module, because rate limiting is enforced in middleware -- outside the DRF
+    view layer, where a Response has no renderer and raises on serialization.
+
+    - Retry-After: LOLA Section 6.7 describes rate limiting as a 429 "with a
+        Retry-After header", and destinations SHOULD honor it before resuming.
     
     Args:
-        retry_after_seconds (int): Seconds to wait before retrying
+        retry_after_seconds (int): Seconds until the current window resets
         request (HttpRequest, optional): Django request object for context
+        limit (int, optional): Configured request ceiling
+        window (int, optional): Window length in seconds
     
     Returns:
-        Response: 429 error response with rate limit context
+        JsonResponse: 429 response with Retry-After and federation-safe CORS headers
     """
-    response = build_error_response(
+    if limit is not None and window is not None:
+        hint = (
+            f"Too many requests: the limit is {limit} per {window} seconds. "
+            f"Please wait {retry_after_seconds} seconds before retrying"
+        )
+    else:
+        hint = f"Too many requests. Please wait {retry_after_seconds} seconds before retrying"
+    
+    payload = build_error_payload(
         error_code=ErrorCodes.RATE_LIMIT_EXCEEDED,
         detail="Request rate limit exceeded",
-        status_code=429,
         request=request,
-        hint=f"Too many requests. Please wait {retry_after_seconds} seconds before retrying",
-        remediation="Implement exponential backoff or reduce request frequency"
+        hint=hint,
+        remediation="Honor the Retry-After header, then resume with exponential backoff",
     )
     
-    # Add standard Retry-After header for rate limiting
-    response['Retry-After'] = str(retry_after_seconds)
+    response = JsonResponse(payload, status=429)
+    
+    # Standard rate-limiting header (RFC6585 / LOLA Section 6.7)
+    response["Retry-After"] = str(retry_after_seconds)
+    
+    # Never let a 429 be replayed from a cache after the client has backed off
+    response["Cache-Control"] = "no-store"
+
+    # CORS for ActivityPub federation: Retry-After is unreadable to browser
+    # clients unless it is explicitly exposed
+    response["Access-Control-Allow-Origin"] = "*"
+    response["Access-Control-Expose-Headers"] = "Retry-After"
     
     return response
