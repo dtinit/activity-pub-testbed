@@ -4,26 +4,48 @@ from oauthlib.oauth2.rfc6749.errors import InvalidRequestFatalError
 from oauth2_provider.models import get_access_token_model
 from oauth2_provider.oauth2_validators import OAuth2Validator
 
+from .scopes import LOLA_PORTABILITY_SCOPE, has_portability_scope
+
 logger = logging.getLogger(__name__)
 
 
 # Custom validator for ActivityPub-specific OAuth requirements
 class ActivityPubOAuth2Validator(OAuth2Validator):
-    # The OAuth scope that marks a token as a LOLA portability token.
-    LOLA_PORTABILITY_SCOPE = 'activitypub_account_portability'
 
-    # Ensure the client is requesting valid scopes for ActivityPub portability
     def validate_scopes(self, client_id, scopes, client, request, *args, **kwargs):
+        """
+        Gate every OAuth grant on the LOLA portability scope.
+
+        LOLA §5: "The advertised OAuth endpoint MUST support the `activitypub_account_portability` scope."
+        This method is where that support is enforced, and it is the decision that makes a token a
+        portability token -- which in turn is what makes `_save_bearer_token` bind it to a single Actor
+        (the Section 5 one-account MUST) and what makes the request-time gate in views/decorators.py engage.
+        
+        Fail-closed: both local checks run BEFORE delegating to django-oauth-toolkit,
+        so a request that misses the portability scope is rejected. `super()` then
+        applies DOT's requested scopes must be a subset of available scopes check.
+
+        Args:
+            client_id: OAuth client identifier.
+            scopes: requested scopes. oauthlib passes a list here today, but
+                `has_portability_scope` accepts a space-delimited string too so the check cannot
+                silently degrade to a substring match if that ever changes. See oauth/scopes.py.
+            client: the DOT Application the request is for.
+            request: the oauthlib Request object.
+
+        Returns:
+            bool: True only when the portability scope is present AND DOT's own
+            scope validation passes.
+        """
         if not scopes:
             logger.warning("Client %s requested OAuth with no scopes", client_id)
             return False
 
-        # For account portability, it requires the 'activitypub_account_portability' scope
-        if self.LOLA_PORTABILITY_SCOPE not in scopes:
+        if not has_portability_scope(scopes):
             logger.warning(
                 "Client %s requested OAuth without %r scope. Scopes: %s",
                 client_id,
-                self.LOLA_PORTABILITY_SCOPE,
+                LOLA_PORTABILITY_SCOPE,
                 scopes,
             )
             return False
@@ -59,8 +81,7 @@ class ActivityPubOAuth2Validator(OAuth2Validator):
         rolls back and no portability token is issued — i.e., we fail closed
         at issuance rather than leaving an unbound LOLA token in the database.
 
-        For non-portability scopes we skip binding entirely so normal
-        ActivityPub federation tokens keep working unchanged.
+        Binding is skipped for any token without the portability scope.
 
         Args:
             token: OAuthLib token dict. `token["access_token"]` is the
@@ -73,10 +94,9 @@ class ActivityPubOAuth2Validator(OAuth2Validator):
         # super() will propagate out of the atomic block and prevent any write.
         super()._save_bearer_token(token, request, *args, **kwargs)
 
-        scope_string = token.get("scope") or ""
-        if self.LOLA_PORTABILITY_SCOPE not in scope_string.split():
-            # Non-LOLA scopes don't get a binding: regular ActivityPub tokens
-            # are not actor-keyed. Explicit early-return keeps behavior clear.
+        if not has_portability_scope(token.get("scope")):
+            # validate_scopes() rejects every grant that lacks the portability scope,
+            # so no non-portability token can be issued.
             return
 
         # Resolve the Actor to bind BEFORE looking up the access token row, so a
