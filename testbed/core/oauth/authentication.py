@@ -10,6 +10,8 @@ import logging
 from oauth2_provider.contrib.rest_framework import OAuth2Authentication
 from rest_framework import exceptions
 
+from .scopes import has_portability_scope
+
 logger = logging.getLogger(__name__)
 
 class OptionalOAuth2Authentication(OAuth2Authentication):
@@ -25,9 +27,6 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
     provide enhanced data for authenticated requests while maintaining 
     compatibility with standard ActivityPub clients.
     """
-    
-    # The specific OAuth scope required for LOLA account portability
-    LOLA_PORTABILITY_SCOPE = 'activitypub_account_portability'
     
     def authenticate(self, request):
         """
@@ -175,22 +174,19 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
     
     def _has_portability_scope(self, token):
         """
-        Check if the token has the LOLA portability scope.
+        Check whether an authenticated token carries LOLA portability scope.
+        
+        Delegates to oauth/scopes.py so this request-time check cannot drift
+        from the authorization-time one in ActivityPubOAuth2Validator.validate_scopes.
+
+        `getattr(token, "scope", None)` covers tokens with no `scope` attribute
+        at all, and has_portability_scope() treats None/empty as "no scope", so
+        both degrade to False rather than raising.
         
         Args:
             token: The OAuth token object
-            
+        
         Returns:
             Boolean indicating whether the token has the portability scope
         """
-        if not hasattr(token, 'scope'):
-            return False
-            
-        # Handle both string and None scope values safely
-        scope = getattr(token, 'scope', '')
-        if not scope:
-            return False
-            
-        # Split the scope string and check if it contains the portability scope
-        scopes = scope.split()
-        return self.LOLA_PORTABILITY_SCOPE in scopes
+        return has_portability_scope(getattr(token, "scope", None))
