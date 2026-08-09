@@ -4,7 +4,7 @@ from oauthlib.oauth2.rfc6749.errors import InvalidRequestFatalError
 from oauth2_provider.models import get_access_token_model
 from oauth2_provider.oauth2_validators import OAuth2Validator
 
-from .scopes import LOLA_PORTABILITY_SCOPE, has_portability_scope
+from .scopes import LOLA_PORTABILITY_SCOPE, scope_grants_portability
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ class ActivityPubOAuth2Validator(OAuth2Validator):
         Args:
             client_id: OAuth client identifier.
             scopes: requested scopes. oauthlib passes a list here today, but
-                `has_portability_scope` accepts a space-delimited string too so the check cannot
+                `scope_grants_portability` accepts a space-delimited string too so the check cannot
                 silently degrade to a substring match if that ever changes. See oauth/scopes.py.
             client: the DOT Application the request is for.
             request: the oauthlib Request object.
@@ -41,7 +41,7 @@ class ActivityPubOAuth2Validator(OAuth2Validator):
             logger.warning("Client %s requested OAuth with no scopes", client_id)
             return False
 
-        if not has_portability_scope(scopes):
+        if not scope_grants_portability(scopes):
             logger.warning(
                 "Client %s requested OAuth without %r scope. Scopes: %s",
                 client_id,
@@ -94,7 +94,7 @@ class ActivityPubOAuth2Validator(OAuth2Validator):
         # super() will propagate out of the atomic block and prevent any write.
         super()._save_bearer_token(token, request, *args, **kwargs)
 
-        if not has_portability_scope(token.get("scope")):
+        if not scope_grants_portability(token.get("scope")):
             # validate_scopes() rejects every grant that lacks the portability scope,
             # so no non-portability token can be issued.
             return

@@ -20,7 +20,7 @@ from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
 from oauth2_provider.views import AuthorizationView
 
 from ..json_ld_utils import build_actor_id
-from .scopes import has_portability_scope
+from .scopes import scope_grants_portability
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class PortabilityAuthorizationView(AuthorizationView):
         untouched). Non-LOLA authorizations always return None so regular OAuth
         flows are unaffected.
         """
-        if not has_portability_scope(scope_string):
+        if not scope_grants_portability(scope_string):
             return None
 
         actor = self._resolve_source_actor()

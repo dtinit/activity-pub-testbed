@@ -10,7 +10,7 @@ import logging
 from oauth2_provider.contrib.rest_framework import OAuth2Authentication
 from rest_framework import exceptions
 
-from .scopes import has_portability_scope
+from .scopes import scope_grants_portability
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +180,7 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         from the authorization-time one in ActivityPubOAuth2Validator.validate_scopes.
 
         `getattr(token, "scope", None)` covers tokens with no `scope` attribute
-        at all, and has_portability_scope() treats None/empty as "no scope", so
+        at all, and scope_grants_portability() treats None/empty as "no scope", so
         both degrade to False rather than raising.
         
         Args:
@@ -189,4 +189,4 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         Returns:
             Boolean indicating whether the token has the portability scope
         """
-        return has_portability_scope(getattr(token, "scope", None))
+        return scope_grants_portability(getattr(token, "scope", None))

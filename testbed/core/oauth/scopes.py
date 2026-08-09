@@ -36,7 +36,7 @@ def _normalize_scopes(scopes):
     return set(scopes)
 
 
-def has_portability_scope(scopes):
+def scope_grants_portability(scopes):
     """
     Return True when `scopes` grants the LOLA portability scope.
 
