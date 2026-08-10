@@ -13,6 +13,9 @@ BASE_URL = "https://ap-testbed.dtinit.org"
 # Cloud Run uses X-Forwarded-Proto header for HTTPS detection
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
+# HTTPS-only OAuth redirect URIs (LOLA §6.1).
+OAUTH2_PROVIDER["ALLOWED_REDIRECT_URI_SCHEMES"] = ["https"]
+
 # PostgreSQL for production
 DATABASES = {"default": env.db_url("DJ_DATABASE_CONN_STRING")}
 
