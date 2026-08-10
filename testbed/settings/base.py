@@ -242,6 +242,7 @@ OAUTH2_PROVIDER = {
     'SCOPES': {
         'activitypub_account_portability': 'ActivityPub Account Portability',
     },
+    'ALLOWED_REDIRECT_URI_SCHEMES': ['http', 'https'],
     'ACCESS_TOKEN_EXPIRE_SECONDS': 3600,  # 1 hour
     'REFRESH_TOKEN_EXPIRE_SECONDS': 86400,  # 1 day
     'AUTHORIZATION_CODE_EXPIRE_SECONDS': 600,  # 10 minutes
