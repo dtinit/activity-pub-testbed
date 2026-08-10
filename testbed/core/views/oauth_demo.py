@@ -22,6 +22,7 @@ import requests
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from oauth2_provider.settings import oauth2_settings
 
 from ..json_ld_utils import build_actor_id
 from ..models import Actor
@@ -93,8 +94,18 @@ def test_authorization_view(request):
     host = request.get_host()
     redirect_uri = f"{scheme}://{host}/callback"
 
+    allowed_schemes = [s.lower() for s in oauth2_settings.ALLOWED_REDIRECT_URI_SCHEMES]
+    if scheme.lower() not in allowed_schemes:
+        logger.warning(
+            "Demo callback not registered: scheme %r is not allowed in this environment "
+            "(allowed: %s). Browse the site over %s to run the demo. client_id=%s",
+            scheme,
+            allowed_schemes,
+            allowed_schemes[0] if allowed_schemes else "an allowed scheme",
+            application.client_id,
+        )
     # Update the application's redirect URIs if needed
-    if redirect_uri not in application.redirect_uris:
+    elif redirect_uri not in application.redirect_uris:
         if application.redirect_uris:
             application.redirect_uris = f"{application.redirect_uris} {redirect_uri}"
         else:
