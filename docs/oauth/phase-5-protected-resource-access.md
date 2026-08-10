@@ -43,15 +43,17 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
     1. Unauthenticated Mode: For standard ActivityPub federation
     2. Authenticated Mode: For LOLA account portability with proper OAuth scope
     """
-    
-    LOLA_PORTABILITY_SCOPE = 'activitypub_account_portability'
+
+    def _has_portability_scope(self, token):
+        # The scope string and this membership test are owned by oauth/scopes.py
+        return scope_grants_portability(getattr(token, "scope", None))
 ```
 
 **Key Features:**
 - **Graceful Degradation:** Authentication failures don't cause API errors; requests continue as unauthenticated
-- **Scope Validation:** Only tokens with `activitypub_account_portability` scope unlock LOLA features
+- **Scope Validation:** Only tokens with `activitypub_account_portability` scope unlock LOLA features, checked via `scope_grants_portability()` in `oauth/scopes.py`
 - **Request Flags:** Adds `is_oauth_authenticated` and `has_portability_scope` flags to request objects
-- **Flexible Authentication:** Supports both Authorization header and URL parameter authentication
+- **Two Credential Paths:** the normative `Authorization: Bearer` header, plus a demo-only session-stored token.
 
 ### 2. Protected Endpoints
 
@@ -121,10 +123,11 @@ actor objects additionally include the `migration` object plus the regular Actor
    Accept: application/activity+json
    ```
 
-2. **URL Parameter Authentication** (Testing):
-   ```http
-   GET /api/actors/1/?auth_token=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
-   ```
+2. **Session-stored token** (demo only, no header needed):
+
+   After the demo token-exchange flow stores the token in the Django session, the
+   browser can open LOLA collection links directly. Cookie-bound, re-validated
+   against the DB on every request, and suppressed by `?public_only`.
 
 ### Authentication Flow
 
@@ -135,12 +138,12 @@ def authenticate(self, request):
     request.has_portability_scope = False
     
     try:
-        # Try Authorization header first
+        # 1. Normative path: Authorization: Bearer header
         result = super().authenticate(request)
         
-        # Fallback to URL parameter for testing
+        # 2. Demo fallback: session-stored token (cookie-bound, demo-scoped)
         if result is None:
-            result = self._authenticate_with_url_token(request)
+            result = self._try_session_auth(request)
         
         if result is not None:
             user, token = result
@@ -282,7 +285,7 @@ The public response exposes the `endpoints` discovery object but omits the priva
 
 Our implementation includes comprehensive testing features:
 
-- **URL Parameter Authentication:** `?auth_token=<token>` for easy browser-based testing
+- **Session-stored token:** the demo token exchange stores the token in the session, so browser-based testing needs no header (cookie-bound, never in a URL)
 - **Side-by-side Comparison:** Same endpoint with/without authentication shows data differences
 - **Scope Validation Testing:** Tokens without portability scope behave like unauthenticated requests
 - **DRF Browsable API:** Web interface for testing with proper content-type handling

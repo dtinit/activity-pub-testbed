@@ -174,7 +174,7 @@ def authenticate(self, request):
 ### Key Features
 
 - **Optional Authentication**: Unlike standard OAuth2Authentication, this doesn't fail requests without tokens
-- **Scope Validation**: Checks for `activitypub_account_portability` scope
+- **Scope Validation**: Checks for `activitypub_account_portability` via `scope_grants_portability()` in `oauth/scopes.py` — the same helper the OAuth validator uses at authorization time, so the two cannot drift
 - **Two Auth Paths**: the normative `Authorization` header plus a demo-scoped session path
 - **Request Flag Setting**: Adds authentication status flags to request objects
 - **Graceful Error Handling**: Invalid/expired tokens fall back to unauthenticated behavior
@@ -182,9 +182,9 @@ def authenticate(self, request):
 ### Implementation Details
 
 ```python
+from .scopes import scope_grants_portability
+
 class OptionalOAuth2Authentication(OAuth2Authentication):
-    LOLA_PORTABILITY_SCOPE = 'activitypub_account_portability'
-    
     def authenticate(self, request):
         # Initialize flags
         request.is_oauth_authenticated = False
@@ -193,6 +193,11 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         # Try authentication, gracefully handle failures
         # Set flags based on results
         return result_or_none
+
+    def _has_portability_scope(self, token):
+        # Delegates to the shared helper so this request-time check cannot
+        # drift from the authorization-time one in validate_scopes.
+        return scope_grants_portability(getattr(token, "scope", None))
 ```
 
 ### Request Flags

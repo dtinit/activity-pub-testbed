@@ -91,8 +91,7 @@ Our implementation uses a custom OptionalOAuth2Authentication class that enabl
 - **Graceful Degradation:** Invalid or missing tokens don't cause failures; requests continue as unauthenticated
 - **Scope-Based Enhancement:** Only tokens with `activitypub_account_portability` scope unlock LOLA-specific data
 - **Request Flags:** Adds `is_oauth_authenticated` and `has_portability_scope` flags to request objects
-- **URL Parameter Authentication:** Supports `auth_token` URL parameter for testing convenience
-- **Flexible Authentication:** Supports both Authorization header and URL parameter authentication
+- **Two Credential Paths:** the normative `Authorization: Bearer` header, plus a demo-only session-stored token (cookie-bound, never in a URL).
 
 ### **Benefits**
 
