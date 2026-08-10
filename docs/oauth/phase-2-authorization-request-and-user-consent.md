@@ -96,11 +96,22 @@ Custom validation is implemented in ActivityPubOAuth2Validator:
     - Ensures the activitypub_account_portability scope is present.
     - Logs warnings for invalid or missing scopes.
     - Enforces adherence to LOLA-specific security constraints.
-- **Redirect URI Validation:**
-    - Delegates to Django OAuth Toolkit for standard matching.
-    - Logs invalid URIs and allows for future enhancements (e.g., HTTPS enforcement).
+- **Redirect URI Validation:** two gates, both fail-closed.
+    1. **Registered** — delegates to Django OAuth Toolkit, which matches the URI against the Application's `redirect_uris` allow-list.
+    2. **Allowed scheme** — the URI's scheme must appear in `OAUTH2_PROVIDER["ALLOWED_REDIRECT_URI_SCHEMES"]`. Being registered is *not* sufficient on its own.
 
 This ensures that only valid, registered redirect URIs and scopes can proceed through the authorization process.
+
+#### Redirect URI scheme policy, per environment
+
+| Environment | Allowed schemes | Why |
+|---|---|---|
+| development, test, CI | `http`, `https` | Local callbacks are `http://localhost`; the test factories register one by default |
+| production, staging | `https` only | An authorization code is the credential a destination trades for an access token; delivering one over plaintext undermines LOLA §6.1 |
+
+Why the second gate exists even though DOT owns the setting: DOT enforces it in `Application.clean()`, which only runs under `full_clean()` — and Django's `Model.save()` never calls it, so code paths that write `redirect_uris` directly bypass the check. DOT's remaining backstop fires when the redirect response is built, raising `DisallowedRedirect` (a bare `400`) only *after* the user has already approved. Checking in `validate_redirect_uri` rejects early, with a proper OAuth error, regardless of how the URI was stored.
+
+**When it runs:** the authorization request only. Token exchange uses a different hook (`confirm_redirect_uri`, an exact match against the stored `Grant`), so a refusal here means no authorization code is ever issued for a disallowed URI.
 
 ## Interaction Flow
 
@@ -129,7 +140,7 @@ This ensures that only valid, registered redirect URIs and scopes can proceed th
 ## Security Considerations
 
 - **State Parameter** – Prevents CSRF and replay attacks.
-- **Redirect URI Validation** – Defends against open redirect and code interception attacks.
+- **Redirect URI Validation** – Defends against open redirect and code interception attacks. Requires both registration *and* an allowed scheme; a rejection raises a fatal client error, so the browser is never redirected to a URI we refused.
 - **Scope Enforcement** – Limits granted permissions strictly to account portability.
 - **Explicit User Consent** – Ensures the user has control over data transfer.
 - **Logging** – Records key events for auditability (invalid scopes, URIs, approvals).
