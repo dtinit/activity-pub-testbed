@@ -1,5 +1,8 @@
+from urllib.parse import urlparse
+
 from django import forms
 from oauth2_provider.models import get_application_model
+from oauth2_provider.settings import oauth2_settings
 
 Application = get_application_model()
 
@@ -28,25 +31,39 @@ class OAuthApplicationForm(forms.ModelForm):
             }),
             'redirect_uris': forms.TextInput(attrs={
                 'class': 'form-control', 
-                'placeholder': 'Enter a valid URL (e.g., http://localhost:8000/callback). Add multiples separated by spaces'
+                # https is valid in every environment; production and staging reject http.
+                'placeholder': 'Enter a valid URL (e.g., https://your-service.example/callback). Add multiples separated by spaces'
             }),
         }
     
-    # Ensure redirect URIs are properly formatted
     def clean_redirect_uris(self):
+        """
+        Validate the redirect URLs registered for this OAuth application.
+
+        Accepted schemes come from OAUTH2_PROVIDER["ALLOWED_REDIRECT_URI_SCHEMES"] which is
+        the same setting ActivityPubOAuth2Validator.validate_redirect_uri enforces at
+        authorization time, and that django-oauth-toolkit enforces in Application.clean().
+
+        Production and staging allow https only.
+
+        Returns:
+            str: the space-separated redirect URIs, unchanged, when every one of
+            them uses an allowed scheme.
+        """
         uris = self.cleaned_data.get('redirect_uris', '')
         if not uris:
             raise forms.ValidationError("Redirect URL is required")
-        
-        # Simple validation - could be expanded for more strict checks
+
+        allowed_schemes = [s.lower() for s in oauth2_settings.ALLOWED_REDIRECT_URI_SCHEMES]
+        # Rendered into the error message, e.g. "https://" or "http:// or https://"
+        expected_prefixes = " or ".join(f"{scheme}://" for scheme in allowed_schemes)
+
         for uri in uris.split():
-            if not uri.startswith(('http://', 'https://')):
+            # urlparse lowercases the scheme, so HTTPS:// is accepted as https.
+            if urlparse(uri).scheme not in allowed_schemes:
                 raise forms.ValidationError(
-                    "Each URI must start with http:// or https://"
+                    f"Each URL must start with {expected_prefixes}"
                 )
-        
-        if hasattr(self, 'instance') and self.instance and self.instance.authorization_grant_type == 'authorization-code' and not uris:
-            raise forms.ValidationError("Redirect URL is required for authorization code grant type")
         
         return uris
     
