@@ -176,8 +176,8 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         """
         Check whether an authenticated token carries LOLA portability scope.
         
-        Delegates to oauth/scopes.py so this request-time check cannot drift
-        from the authorization-time one in ActivityPubOAuth2Validator.validate_scopes.
+        Delegates to oauth/scopes.py so this check cannot drift from our
+        authorization-time one in ActivityPubOAuth2Validator.validate_scopes.
 
         `getattr(token, "scope", None)` covers tokens with no `scope` attribute
         at all, and scope_grants_portability() treats None/empty as "no scope", so

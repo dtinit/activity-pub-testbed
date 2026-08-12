@@ -76,8 +76,9 @@ class ActivityPubOAuth2Validator(OAuth2Validator):
 
         Returns:
             bool: True only when both gates pass. Returning False makes oauthlib
-            raise `InvalidRedirectURIError`, a fatal client error, so DOT renders
-            an error page instead of redirecting.
+            raise `MismatchingRedirectURIError`, a FatalClientError, and DOT
+            answers 400 by re-rendering `oauth2_provider/authorize.html` with the
+            error in context.
         """
         # Gate 1: is it registered?
         valid = super().validate_redirect_uri(client_id, redirect_uri, request, *args, **kwargs)
