@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from django.conf import settings
+from django.test import override_settings
 
 from testbed.core.factories import ApplicationFactory
 from testbed.core.oauth.scopes import LOLA_PORTABILITY_SCOPE, scope_grants_portability
@@ -164,3 +165,44 @@ def test_validate_scopes_rejects_lookalike_scope(oauth_validator, oauth_applicat
             mock_request
         )
     assert not result, "A scope that merely contains the portability scope must not be accepted"
+
+# Redirect URI scheme policy
+
+HTTPS_ONLY = {**settings.OAUTH2_PROVIDER, "ALLOWED_REDIRECT_URI_SCHEMES": ["https"]}
+
+# A registered redirect URI whose scheme is not allowed must still be  refused
+@override_settings(OAUTH2_PROVIDER=HTTPS_ONLY)
+@pytest.mark.django_db
+def test_validate_redirect_uri_rejects_disallowed_scheme(oauth_validator, oauth_application, mock_request):
+    with patch.object(oauth_validator.__class__.__bases__[0], 'validate_redirect_uri', return_value=True):
+        result = oauth_validator.validate_redirect_uri(
+            oauth_application.client_id,
+            'http://example.com/callback',
+            mock_request
+        )
+    assert not result, "A registered redirect URI with a disallowed scheme must be rejected"
+
+
+# Without this, a bug rejecting every URI would still satisfy the test above
+@override_settings(OAUTH2_PROVIDER=HTTPS_ONLY)
+@pytest.mark.django_db
+def test_validate_redirect_uri_allows_configured_scheme(oauth_validator, oauth_application, mock_request):
+    with patch.object(oauth_validator.__class__.__bases__[0], 'validate_redirect_uri', return_value=True):
+        result = oauth_validator.validate_redirect_uri(
+            oauth_application.client_id,
+            'https://example.com/callback',
+            mock_request
+        )
+    assert result, "A registered redirect URI using an allowed scheme must be accepted"
+
+
+# Default policy in settings/base.py must keep accepting http://localhost
+@pytest.mark.django_db
+def test_validate_redirect_uri_allows_http_under_default_policy(oauth_validator, oauth_application, mock_request):
+    with patch.object(oauth_validator.__class__.__bases__[0], 'validate_redirect_uri', return_value=True):
+        result = oauth_validator.validate_redirect_uri(
+            oauth_application.client_id,
+            'http://localhost:8000/callback/',
+            mock_request
+        )
+    assert result, "base.py must keep allowing http so local development and tests work"

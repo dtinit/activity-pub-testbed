@@ -1,8 +1,10 @@
 import logging
+from urllib.parse import urlparse
 
 from oauthlib.oauth2.rfc6749.errors import InvalidRequestFatalError
 from oauth2_provider.models import get_access_token_model
 from oauth2_provider.oauth2_validators import OAuth2Validator
+from oauth2_provider.settings import oauth2_settings
 
 from .scopes import LOLA_PORTABILITY_SCOPE, scope_grants_portability
 
@@ -53,18 +55,52 @@ class ActivityPubOAuth2Validator(OAuth2Validator):
         logger.info("Client %s requested valid scopes: %s", client_id, scopes)
         return super().validate_scopes(client_id, scopes, client, request, *args, **kwargs)
 
-    # Additional validation for redirect URIs in ActivityPub context
     def validate_redirect_uri(self, client_id, redirect_uri, request, *args, **kwargs):
+        """
+        Approve a redirect URI only if it is BOTH registered AND uses an allowed scheme.
 
-        # Standard validation first
+        Two gates, both fail-closed:
+
+        1. Registration: `super()` matches the URI against the Application's
+           `redirect_uris` allow-list (django-oauth-toolkit's own check).
+        2. Scheme -- the URI's scheme must appear in
+           OAUTH2_PROVIDER["ALLOWED_REDIRECT_URI_SCHEMES"].
+
+        Gate 2 exists because DOT's enforces it in `Application.clean()`, which only
+        runs under `full_clean()`, and Django's `Model.save()` never calls it.
+
+        Args:
+            client_id: OAuth client identifier
+            redirect_uri: the callback URI the client asked us to redirect to
+            request: the oauthlib Request object
+
+        Returns:
+            bool: True only when both gates pass. Returning False makes oauthlib
+            raise `InvalidRedirectURIError`, a fatal client error, so DOT renders
+            an error page instead of redirecting.
+        """
+        # Gate 1: is it registered?
         valid = super().validate_redirect_uri(client_id, redirect_uri, request, *args, **kwargs)
 
         if not valid:
             logger.warning("Client %s requested invalid redirect URI: %s", client_id, redirect_uri)
             return False
 
-        # We could add additional validation here if needed later on
-        # For example, checking for HTTPS in production
+        # Gate 2: is the scheme allowed in this environment?
+        # lowercases the scheme, the allowed list is lowercased to match, as DOT's own validator does.
+        allowed_schemes = [scheme.lower() for scheme in oauth2_settings.ALLOWED_REDIRECT_URI_SCHEMES]
+        scheme = urlparse(redirect_uri).scheme
+
+        if scheme not in allowed_schemes:
+            logger.warning(
+                "Client %s requested redirect URI with disallowed scheme %r "
+                "(allowed: %s): %s",
+                client_id,
+                scheme,
+                allowed_schemes,
+                redirect_uri,
+            )
+            return False
 
         logger.info("Client %s requested valid redirect URI: %s", client_id, redirect_uri)
 
