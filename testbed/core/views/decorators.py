@@ -18,6 +18,7 @@ from functools import wraps
 from django.core.exceptions import ObjectDoesNotExist
 
 from ..models import Actor
+from ..oauth.scopes import LOLA_PORTABILITY_SCOPE
 from ..utils.errors import (
     build_actor_mismatch_error,
     build_actor_not_found_error,
@@ -69,7 +70,7 @@ def lola_access_error(request, required_scope, url_pk):
     if required_scope and not has_scope:
         logger.warning("LOLA access denied: insufficient_scope for %s", request.path)
         return build_insufficient_scope_error(
-            required_scope="activitypub_account_portability",
+            required_scope=LOLA_PORTABILITY_SCOPE,
             endpoint_path=request.path,
             request=request,
         )
@@ -104,7 +105,8 @@ def lola_access_error(request, required_scope, url_pk):
         return error
 
     logger.info(
-        "LOLA access granted: scope=activitypub_account_portability endpoint=%s actor_pk=%s",
+        "LOLA access granted: scope=%s endpoint=%s actor_pk=%s",
+        LOLA_PORTABILITY_SCOPE,
         request.path,
         url_pk,
     )

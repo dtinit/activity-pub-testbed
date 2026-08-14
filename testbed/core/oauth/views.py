@@ -20,11 +20,11 @@ from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
 from oauth2_provider.views import AuthorizationView
 
 from ..json_ld_utils import build_actor_id
+from .scopes import scope_grants_portability
 
 logger = logging.getLogger(__name__)
 
 
-LOLA_PORTABILITY_SCOPE = "activitypub_account_portability"
 ACTIVITYPUB_ACTOR_PARAM = "activitypub_actor" # Query parameter name defined by LOLA §5.3 for the granted source Actor URL.
 
 
@@ -73,7 +73,7 @@ class PortabilityAuthorizationView(AuthorizationView):
         untouched). Non-LOLA authorizations always return None so regular OAuth
         flows are unaffected.
         """
-        if LOLA_PORTABILITY_SCOPE not in scope_string.split():
+        if not scope_grants_portability(scope_string):
             return None
 
         actor = self._resolve_source_actor()
