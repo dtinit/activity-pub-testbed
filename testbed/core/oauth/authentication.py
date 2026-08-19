@@ -128,7 +128,8 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
             logger.debug("public_only set - skipping session authentication")
             return None
 
-        # read_demo_session_token handles session-side expiry checking.
+        # The string returned here is UNVALIDATED.
+        # _resolve_valid_access_token below is what decides whether it is usable.
         token_string = read_demo_session_token(request)
         if not token_string:
             return None
@@ -166,10 +167,13 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
                 "user", "application"
             ).get(token=token_string)
         except AccessToken.DoesNotExist:
+            logger.debug("Session access token not found in database - rejecting")
             return None
 
         if access_token.is_valid():
             return access_token.user, access_token
+
+        logger.debug("Session access token found but expired - rejecting")
         return None
     
     def _has_portability_scope(self, token):

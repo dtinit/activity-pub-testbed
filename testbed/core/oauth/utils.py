@@ -260,42 +260,32 @@ def store_demo_session_token(request, token_data):
 
 def read_demo_session_token(request):
     """
-    Get valid OAuth token from session, None if expired or missing.
-    
-    This function handles token expiration automatically by validating against
-    the OAuth database rather than trusting session timestamps. This prevents
-    clients from manipulating session data to extend token lifetimes.
-    
+    Read the demo access token string out of the session.
+
+    Returns whatever string the session holds WITHOUT checking that
+    it is still a usable token, and without touching the database.
+
+    Validation deliberately does not happen here.
+    OptionalOAuth2Authentication._resolve_valid_access_token() is the
+    single owner of "is this token still usable".
+
+    Returning an unvalidated string is safe because the only caller is
+    _try_session_auth and resolves and validates it before granting any access, and
+    clears the session when it fails to resolve.
+
     Args:
         request: The HTTP request object with session
-        
+
     Returns:
-        String containing access token if valid, None if expired/missing
+        The stored token string, or None if the session holds no token.
     """
-    from oauth2_provider.models import AccessToken
-    
     token_string = request.session.get(DEMO_ACCESS_TOKEN_SESSION_KEY)
+
     if not token_string:
-        logger.debug("No OAuth token found in session")
+        logger.debug("No demo session token found in session")
         return None
-        
-    # Validate token against OAuth database (server-side validation)
-    # This prevents clients from manipulating session expiry timestamps
-    try:
-        access_token = AccessToken.objects.get(token=token_string)
-        if access_token.is_valid():
-            logger.debug("Valid OAuth token retrieved from session")
-            return token_string
-        else:
-            # Token is expired or invalid, clean up session
-            clear_demo_session_token(request)
-            logger.debug("Session OAuth token expired (server-validated), cleared from session")
-            return None
-    except AccessToken.DoesNotExist:
-        # Token doesn't exist in database, clean up session
-        clear_demo_session_token(request)
-        logger.debug("Session OAuth token not found in database, cleared from session")
-        return None
+
+    return token_string
 
 def clear_demo_session_token(request):
     """
