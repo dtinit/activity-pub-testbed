@@ -15,7 +15,7 @@ OAUTH_STATE_SESSION_KEY = 'oauth_state'
 CLIENT_SECRET_SESSION_KEY = 'oauth_client_secret'
 
 # Session key for the demo-only access token
-ACCESS_TOKEN_SESSION_KEY = 'lola_access_token'
+DEMO_ACCESS_TOKEN_SESSION_KEY = 'lola_access_token'
 
 
 def random_client_id(length=10):
@@ -221,13 +221,15 @@ def validate_state_from_session(request, state):
     return is_valid
 
 # ============================================================================
-# Session Token Management for Demo Enhancement
+# Demo session token storage - NON-NORMATIVE
+# This is NOT part of the LOLA source-server contract.
 # ============================================================================
-# These functions enable seamless authentication after OAuth token exchange
-# by storing tokens in session storage. This solves the "Token Exchange Failed"
-# issue and provides a smooth demo experience.
+# Backs the session authentication path in OptionalOAuth2Authentication, which
+# exists so the testbed's own demo browser can follow a LOLA collection link
+# without re-sending an Authorization header.
+# ?public_only suppresses it entirely.
 
-def store_token_in_session(request, token_data):
+def store_demo_session_token(request, token_data):
     """
     Store the demo access token in the session after a successful exchange.
     
@@ -250,13 +252,13 @@ def store_token_in_session(request, token_data):
         logger.warning("No access_token in token response, nothing stored in session")
         return
 
-    request.session[ACCESS_TOKEN_SESSION_KEY] = access_token
+    request.session[DEMO_ACCESS_TOKEN_SESSION_KEY] = access_token
 
     logger.info(
         "Demo session authentication enabled: access token stored in session"
     )
 
-def get_token_from_session(request):
+def read_demo_session_token(request):
     """
     Get valid OAuth token from session, None if expired or missing.
     
@@ -272,7 +274,7 @@ def get_token_from_session(request):
     """
     from oauth2_provider.models import AccessToken
     
-    token_string = request.session.get(ACCESS_TOKEN_SESSION_KEY)
+    token_string = request.session.get(DEMO_ACCESS_TOKEN_SESSION_KEY)
     if not token_string:
         logger.debug("No OAuth token found in session")
         return None
@@ -286,16 +288,16 @@ def get_token_from_session(request):
             return token_string
         else:
             # Token is expired or invalid, clean up session
-            clear_token_from_session(request)
+            clear_demo_session_token(request)
             logger.debug("Session OAuth token expired (server-validated), cleared from session")
             return None
     except AccessToken.DoesNotExist:
         # Token doesn't exist in database, clean up session
-        clear_token_from_session(request)
+        clear_demo_session_token(request)
         logger.debug("Session OAuth token not found in database, cleared from session")
         return None
 
-def clear_token_from_session(request):
+def clear_demo_session_token(request):
     """
     Remove the demo access token from the session.
 
@@ -306,7 +308,7 @@ def clear_token_from_session(request):
         request: The HTTP request object with session
     """
     
-    removed = request.session.pop(ACCESS_TOKEN_SESSION_KEY, None)
+    removed = request.session.pop(DEMO_ACCESS_TOKEN_SESSION_KEY, None)
 
     if removed is not None:
         logger.info("Demo session access token cleared from session")
