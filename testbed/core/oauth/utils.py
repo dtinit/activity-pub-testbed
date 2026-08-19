@@ -14,11 +14,8 @@ OAUTH_STATE_SESSION_KEY = 'oauth_state'
 # Session key for storing raw client secret
 CLIENT_SECRET_SESSION_KEY = 'oauth_client_secret'
 
-# Session keys for OAuth token storage (demo enhancement)
-# These enable seamless authentication after successful token exchange
+# Session key for the demo-only access token
 ACCESS_TOKEN_SESSION_KEY = 'lola_access_token'
-TOKEN_EXPIRY_SESSION_KEY = 'lola_token_expiry'
-TOKEN_SCOPE_SESSION_KEY = 'lola_token_scope'
 
 
 def random_client_id(length=10):
@@ -232,33 +229,32 @@ def validate_state_from_session(request, state):
 
 def store_token_in_session(request, token_data):
     """
-    Store OAuth token in session after successful exchange.
+    Store the demo access token in the session after a successful exchange.
     
     This enables seamless authentication for demo workflows by maintaining
     authentication state after token exchange. Users can now click collection
     test links without manual token handling.
     
-    Token expiry is validated server-side against the OAuth database rather 
-    than using session timestamps to prevent client manipulation.
+    Only the opaque token string is stored. Scope and expiry are deliberately not persisted here.
+    Both are read from the AccessToken row on every request, so a client that tampered with its
+    session could not widen its own scope or extend its own token lifetime.
     
     Args:
         request: The HTTP request object with session
-        token_data: Dictionary containing token response data
-                   Expected keys: access_token, scope
+        token_data: The parsed token-endpoint response. Only `access_token` is read.
+                    Thee whole dict is accepted because that is the shape the caller has.
     """
-    # Store the access token
     access_token = token_data.get('access_token')
     if not access_token:
-        logger.warning("No access_token in token_data, cannot store in session")
+        # Returning without writing leaves any previously stored token untouched
+        logger.warning("No access_token in token response, nothing stored in session")
         return
-    
+
     request.session[ACCESS_TOKEN_SESSION_KEY] = access_token
-    
-    # Store scope for validation
-    scope = token_data.get('scope', '')
-    request.session[TOKEN_SCOPE_SESSION_KEY] = scope
-    
-    logger.info("OAuth token stored in session for demo authentication (server will validate expiry)")
+
+    logger.info(
+        "Demo session authentication enabled: access token stored in session"
+    )
 
 def get_token_from_session(request):
     """
@@ -299,52 +295,23 @@ def get_token_from_session(request):
         logger.debug("Session OAuth token not found in database, cleared from session")
         return None
 
-def get_token_scope_from_session(request):
-    """
-    Get OAuth token scope from session.
-    
-    This enables scope validation for session-based authentication,
-    ensuring LOLA portability scope requirements are met.
-    
-    Args:
-        request: The HTTP request object with session
-        
-    Returns:
-        String containing token scope, empty string if not found
-    """
-    scope = request.session.get(TOKEN_SCOPE_SESSION_KEY, '')
-    logger.debug(f"Retrieved token scope from session: '{scope}'")
-    return scope
-
 def clear_token_from_session(request):
     """
-    Clear OAuth token data from session.
-    
-    This function provides secure cleanup of token data, used when tokens
-    expire, become invalid, or when users explicitly log out of demo sessions.
+    Remove the demo access token from the session.
+
+    Called when the stored token turns out to be unusable - expired, revoked, or missing from
+    the database so a dead token is not re-checked on every later request from the same browser.
     
     Args:
         request: The HTTP request object with session
     """
-    # Remove all token-related session data
-    keys_removed = []
     
-    if ACCESS_TOKEN_SESSION_KEY in request.session:
-        request.session.pop(ACCESS_TOKEN_SESSION_KEY, None)
-        keys_removed.append('access_token')
-        
-    if TOKEN_EXPIRY_SESSION_KEY in request.session:
-        request.session.pop(TOKEN_EXPIRY_SESSION_KEY, None)
-        keys_removed.append('expiry')
-        
-    if TOKEN_SCOPE_SESSION_KEY in request.session:
-        request.session.pop(TOKEN_SCOPE_SESSION_KEY, None)
-        keys_removed.append('scope')
-    
-    if keys_removed:
-        logger.info(f"OAuth token data cleared from session: {', '.join(keys_removed)}")
+    removed = request.session.pop(ACCESS_TOKEN_SESSION_KEY, None)
+
+    if removed is not None:
+        logger.info("Demo session access token cleared from session")
     else:
-        logger.debug("No OAuth token data found in session to clear")
+        logger.debug("No demo session access token to clear")
 
 
 # Build OAuth authorization endpoint URL for LOLA discovery
