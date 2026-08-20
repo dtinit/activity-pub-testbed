@@ -105,7 +105,7 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         Try to authenticate using a token stored in the Django session.
 
         NON-NORMATIVE demo path. After the demo token-exchange flow stores the access token in the
-        session (store_token_in_session), later requests from that browser session authenticate automatically.
+        session (store_demo_session_token), later requests from that browser session authenticate automatically.
         The token is re-validated against the DB each request (handles revocation) and expired
         tokens are cleared from the session.
 
@@ -119,8 +119,8 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
             A tuple of (user, token) if authentication succeeds, None otherwise.
         """
         from testbed.core.oauth.utils import (
-            clear_token_from_session,
-            get_token_from_session,
+            clear_demo_session_token,
+            read_demo_session_token,
         )
 
         # public_only forces the unauthenticated view for demo comparison.
@@ -128,8 +128,9 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
             logger.debug("public_only set - skipping session authentication")
             return None
 
-        # get_token_from_session handles session-side expiry checking.
-        token_string = get_token_from_session(request)
+        # The string returned here is UNVALIDATED.
+        # _resolve_valid_access_token below is what decides whether it is usable.
+        token_string = read_demo_session_token(request)
         if not token_string:
             return None
 
@@ -137,7 +138,7 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
         if result is None:
             # Token missing/expired/revoked in the DB: clear it from the session
             # so we don't keep retrying a dead token on every request.
-            clear_token_from_session(request)
+            clear_demo_session_token(request)
             logger.debug("Session token invalid - cleared from session")
             return None
 
@@ -166,10 +167,13 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
                 "user", "application"
             ).get(token=token_string)
         except AccessToken.DoesNotExist:
+            logger.debug("Session access token not found in database - rejecting")
             return None
 
         if access_token.is_valid():
             return access_token.user, access_token
+
+        logger.debug("Session access token found but expired - rejecting")
         return None
     
     def _has_portability_scope(self, token):
