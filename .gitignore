@@ -92,3 +92,6 @@ staticfiles/
 
 # Personal development files
 personal-development/
+
+# Documentation - Will be added later on
+docs/

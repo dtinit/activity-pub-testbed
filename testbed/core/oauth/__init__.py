@@ -2,13 +2,12 @@ from .authentication import OptionalOAuth2Authentication
 from .forms import OAuthApplicationForm
 from .scopes import LOLA_PORTABILITY_SCOPE, scope_grants_portability
 from .utils import (
-    clear_token_from_session,
+    clear_demo_session_token,
     generate_secure_state,
-    get_token_from_session,
-    get_token_scope_from_session,
     get_user_application,
+    read_demo_session_token,
+    store_demo_session_token,
     store_state_in_session,
-    store_token_in_session,
     validate_state_from_session,
 )
 from .validators import ActivityPubOAuth2Validator
@@ -21,12 +20,11 @@ __all__ = [
     "PortabilityAuthorizationView",
     "LOLA_PORTABILITY_SCOPE",
     "scope_grants_portability",
-    "clear_token_from_session",
+    "clear_demo_session_token",
     "generate_secure_state",
-    "get_token_from_session",
-    "get_token_scope_from_session",
     "get_user_application",
+    "read_demo_session_token",
+    "store_demo_session_token",
     "store_state_in_session",
-    "store_token_in_session",
     "validate_state_from_session",
 ]

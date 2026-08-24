@@ -29,8 +29,8 @@ from ..models import Actor
 from ..oauth.utils import (
     generate_secure_state,
     get_user_application,
+    store_demo_session_token,
     store_state_in_session,
-    store_token_in_session,
     validate_state_from_session,
 )
 
@@ -293,7 +293,7 @@ def test_token_exchange_view(request):
             context["token_response"] = token_json
 
             # Store token in session for seamless demo authentication
-            store_token_in_session(request, token_json)
+            store_demo_session_token(request, token_json)
             context["session_auth_enabled"] = True
             logger.info("Token stored in session - demo authentication now active")
         else:

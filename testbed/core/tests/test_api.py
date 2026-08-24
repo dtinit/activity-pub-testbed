@@ -19,7 +19,7 @@ from testbed.core.json_ld_utils import (
     build_outbox_id,
 )
 from testbed.core.oauth.authentication import OptionalOAuth2Authentication
-from testbed.core.oauth.utils import store_token_in_session
+from testbed.core.oauth.utils import store_demo_session_token
 
 User = get_user_model()
 
@@ -470,7 +470,7 @@ class TestOptionalAuthenticationSessionPath:
         token = AccessTokenFactory(lola_scope=True)
         request = RequestFactory().get("/api/actors/1/")
         request.session = {}
-        store_token_in_session(
+        store_demo_session_token(
             request, {"access_token": token.token, "scope": token.scope}
         )
 
