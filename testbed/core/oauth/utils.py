@@ -244,7 +244,7 @@ def store_demo_session_token(request, token_data):
     Args:
         request: The HTTP request object with session
         token_data: The parsed token-endpoint response. Only `access_token` is read.
-                    Thee whole dict is accepted because that is the shape the caller has.
+                    The whole dict is accepted because that is the shape the caller has.
     """
     access_token = token_data.get('access_token')
     if not access_token:
