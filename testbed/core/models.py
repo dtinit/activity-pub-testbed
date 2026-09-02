@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.conf import settings
-from datetime import timezone
+from django.utils import timezone
 from cryptography.fernet import Fernet
 
 logger = logging.getLogger(__name__)
@@ -197,7 +197,13 @@ class FollowActivity(Activity):
 class Note(models.Model):
     actor = models.ForeignKey(Actor, on_delete=models.CASCADE, related_name="notes")
     content = models.TextField()
-    published = models.DateTimeField(auto_now_add=True)
+    published = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+        help_text=(
+            "When the object was originally published."
+        ),
+    )
     visibility = models.CharField(
         max_length=20,
         default="public",
@@ -206,6 +212,49 @@ class Note(models.Model):
             ("private", "Private"),
             ("followers-only", "Followers Only"),
         ],
+    )
+
+    # Empty for source-authored notes; populated by the destination transform when an object is copied in
+    summary = models.TextField(
+        blank=True,
+        default="",
+        help_text="Short human-readable summary précis of the object. LOLA §6.3.",
+    )
+    to = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Descriptive only: a historical record of where the object was distributed. LOLA §7.1.6."
+        ),
+    )
+    cc = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Same rule as `to`: descriptive, never an access decision.",
+    )
+    in_reply_to = models.URLField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="The object this one replies to. LOLA §7.1.5.",
+    )
+    url = models.URLField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="Canonical human-facing URL of the object at its origin. LOLA §6.3.",
+    )
+    source = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Original markup as authored. LOLA §6.3.",
+    )
+    previously = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Object breadcrumbs: [{actor, id}], newest first (LOLA §7.1.8)."
+        ),
     )
 
     def __str__(self):

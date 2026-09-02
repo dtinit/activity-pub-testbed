@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timedelta
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from testbed.core.models import Actor, Note, CreateActivity, LikeActivity, FollowActivity, PortabilityOutbox, Following, Followers
@@ -59,10 +60,89 @@ def test_actor_move_history(actor):
     assert actor.previously[0]["object"] == "https://old-server.com/users/old_username"
     assert actor.previously[0]["published"] == test_date.isoformat()
 
+# Test that record_move stamps the current time when no date is supplied
+def test_actor_move_history_defaults_to_now(actor):
+    before = timezone.now()
+    actor.record_move("old-server.com", "old_username")
+    after = timezone.now()
+
+    assert len(actor.previously) == 1
+    recorded = datetime.fromisoformat(actor.previously[0]["published"])
+    assert before <= recorded <= after
+
 # Test basic note creation
 def test_note_creation(note):
     assert note.content is not None
     assert note.visibility in ["public", "private", "followers-only"]
+
+# Test that an explicitly supplied `published` survives to the database
+def test_note_published_is_settable(actor):
+    original = timezone.now() - timedelta(days=400)
+
+    note = Note.objects.create(actor=actor, content="historical", published=original)
+    note.refresh_from_db()
+
+    assert note.published == original
+
+# Test that omitting `published` still stamps the current time, so making the field
+# settable did not quietly make it required.
+def test_note_published_defaults_to_now(actor):
+    before = timezone.now()
+    note = Note.objects.create(actor=actor, content="fresh")
+    after = timezone.now()
+
+    note.refresh_from_db()
+    assert before <= note.published <= after
+
+# Test that every migration metadata field survives a round trip to the database
+def test_note_metadata_fields_round_trip(actor):
+    breadcrumbs = [
+        {"actor": "https://newsite.example/aurora/", "id": "https://newsite.example/items/02751cab"},
+        {"actor": "https://lemongrove.example/", "id": "https://lemongrove.example/2016/05/minimal"},
+    ]
+    note = Note.objects.create(
+        actor=actor,
+        content="<p>copied</p>",
+        summary="A copied article",
+        to=["https://lemongrove.example/followers"],
+        cc=["https://oakfrost.example/brock"],
+        in_reply_to="https://lemongrove.example/2016/05/parent",
+        url="https://lemongrove.example/2016/05/minimal",
+        source={"content": "A copied article", "mediaType": "text/markdown"},
+        previously=breadcrumbs,
+    )
+    note.refresh_from_db()
+
+    assert note.summary == "A copied article"
+    assert note.to == ["https://lemongrove.example/followers"]
+    assert note.cc == ["https://oakfrost.example/brock"]
+    assert note.in_reply_to == "https://lemongrove.example/2016/05/parent"
+    assert note.url == "https://lemongrove.example/2016/05/minimal"
+    assert note.source == {"content": "A copied article", "mediaType": "text/markdown"}
+    assert note.previously == breadcrumbs
+
+# Test that unset list fields default to [] rather than None
+def test_note_metadata_defaults_are_empty_not_null(actor):
+    note = Note.objects.create(actor=actor, content="bare")
+    note.refresh_from_db()
+
+    assert note.to == []
+    assert note.cc == []
+    assert note.previously == []
+    assert note.summary == ""
+    assert note.source is None
+    assert note.in_reply_to is None
+    assert note.url is None
+
+# Test that the list defaults are per-instance
+def test_note_list_defaults_are_not_shared(actor):
+    first = Note.objects.create(actor=actor, content="first")
+    second = Note.objects.create(actor=actor, content="second")
+
+    first.to.append("https://example.test/followers")
+
+    assert second.to == []
+    assert Note.objects.get(pk=second.pk).to == []
 
 # Test note string representation
 def test_note_str_representation(note):
