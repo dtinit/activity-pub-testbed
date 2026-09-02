@@ -22,7 +22,7 @@ from testbed.core.factories import (
     CreateActivityFactory,
     NoteFactory
 )
-from testbed.core.tests.conftest import create_isolated_actor
+from testbed.core.tests.helpers import create_isolated_actor
 from testbed.core.models import Actor, CreateActivity, LikeActivity, FollowActivity
 
 # Test building JSON-LD for an actor

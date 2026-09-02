@@ -9,7 +9,8 @@ from oauth2_provider.models import Application, get_access_token_model
 
 from testbed.core.factories import AccessTokenFactory, UserWithActorsFactory
 from testbed.core.json_ld_utils import build_actor_id
-from testbed.core.models import Actor, TokenActorBinding
+from testbed.core.models import TokenActorBinding
+from testbed.core.tests.helpers import source_actor_for
 from testbed.core.oauth.views import ACTIVITYPUB_ACTOR_PARAM
 
 LOLA_SCOPE = "activitypub_account_portability"
@@ -62,7 +63,7 @@ def _expected_actor_url(actor):
 def test_form_valid_redirect_includes_activitypub_actor():
     # POST approval redirect carries code, state, and activitypub_actor
     user = UserWithActorsFactory()
-    source_actor = user.actors.get(role=Actor.ROLE_SOURCE)
+    source_actor = source_actor_for(user)
     application = _make_application(user)
 
     client = Client()
@@ -110,7 +111,7 @@ def test_form_valid_denied_authorization_has_no_actor():
 def test_skip_authorization_redirect_includes_activitypub_actor():
     # GET with skip_authorization app redirects with activitypub_actor
     user = UserWithActorsFactory()
-    source_actor = user.actors.get(role=Actor.ROLE_SOURCE)
+    source_actor = source_actor_for(user)
     application = _make_application(user, skip_authorization=True)
 
     client = Client()
@@ -135,7 +136,7 @@ def test_auto_approval_redirect_includes_activitypub_actor():
     # GET with approval_prompt=auto reuses a prior matching access token and redirects without a form, still carrying activitypub_actor
     
     user = UserWithActorsFactory()
-    source_actor = user.actors.get(role=Actor.ROLE_SOURCE)
+    source_actor = source_actor_for(user)
     application = _make_application(user)
 
     client = Client()
@@ -191,8 +192,8 @@ def test_actor_is_resolved_from_approving_user_not_app_owner():
     """
     app_owner = UserWithActorsFactory()
     approving_user = UserWithActorsFactory()
-    approving_source = approving_user.actors.get(role=Actor.ROLE_SOURCE)
-    app_owner_source = app_owner.actors.get(role=Actor.ROLE_SOURCE)
+    approving_source = source_actor_for(approving_user)
+    app_owner_source = source_actor_for(app_owner)
 
     application = _make_application(app_owner)
 
@@ -221,7 +222,7 @@ def test_redirect_actor_matches_token_bound_actor():
     same Actor the issued token is bound to via TokenActorBinding (LOLA §5).
     """
     user = UserWithActorsFactory()
-    source_actor = user.actors.get(role=Actor.ROLE_SOURCE)
+    source_actor = source_actor_for(user)
     client_secret = "exchange-secret"
     application = _make_application(user, client_secret=client_secret)
 

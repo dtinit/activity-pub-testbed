@@ -12,7 +12,7 @@ from testbed.core.factories import (
     FollowingFactory,
     FollowersFactory,
 )
-from testbed.core.tests.conftest import (
+from testbed.core.tests.helpers import (
     create_isolated_actor,
     create_isolated_remote_like,
     create_isolated_remote_follow,

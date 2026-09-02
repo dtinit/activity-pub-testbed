@@ -1,11 +1,7 @@
 from rest_framework.test import APIClient
 from rest_framework import status
-from testbed.core.models import Actor
-from testbed.core.factories import (
-    UserWithActorsFactory,
-    AccessTokenFactory,
-)
-from testbed.core.tests.conftest import bind_portability_token
+from testbed.core.factories import AccessTokenFactory
+from testbed.core.tests.helpers import lola_client, source_actor_for
 
 """
 LOLA Compliance Tests for Actor Endpoint
@@ -24,12 +20,10 @@ Actor.migration.* (Authenticated Feature Discovery)
 
 # Verify Actor without token includes OAuth migration endpoint but NO migration object
 def test_actor_without_token_includes_oauth_endpoint_but_no_migration():
-    client = APIClient()
-    user = UserWithActorsFactory()
-    actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
-    
+    actor = source_actor_for()
+
     # Make unauthenticated request
-    response = client.get(f'/api/actors/{actor.id}/')
+    response = APIClient().get(f'/api/actors/{actor.id}/')
     
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
@@ -69,11 +63,9 @@ def test_actor_without_token_includes_oauth_endpoint_but_no_migration():
 
 # Verify OAuth migration endpoint URL is absolute and correctly formatted
 def test_oauth_migration_endpoint_url_is_absolute_and_valid():
-    client = APIClient()
-    user = UserWithActorsFactory()
-    actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
+    actor = source_actor_for()
     
-    response = client.get(f'/api/actors/{actor.id}/')
+    response = APIClient().get(f'/api/actors/{actor.id}/')
     data = response.json()
     
     oauth_url = data['endpoints']['oauthMigrationEndpoint']
@@ -89,15 +81,10 @@ def test_oauth_migration_endpoint_url_is_absolute_and_valid():
 
 # Verify Actor with portability token includes corrected migration object
 def test_actor_with_portability_token_includes_migration():
-    client = APIClient()
-    user = UserWithActorsFactory()
-    actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
-    
-    token = bind_portability_token(actor, user=user)
+    actor = source_actor_for()
     
     # Make authenticated request
-    client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
-    response = client.get(f'/api/actors/{actor.id}/')
+    response = lola_client(actor, user=actor.user).get(f'/api/actors/{actor.id}/')
     
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
@@ -105,7 +92,7 @@ def test_actor_with_portability_token_includes_migration():
     # OAuth discovery endpoints still present (always public)
     assert 'endpoints' in data, \
         "endpoints object must always be present"
-    
+
     # Migration object must be present with authentication
     assert 'migration' in data, \
         "migration object required with portability token"
@@ -132,13 +119,13 @@ def test_actor_with_portability_token_includes_migration():
 
 # Verify wrong OAuth scope does not grant access to migration data
 def test_actor_with_wrong_scope_returns_public_response():
-    client = APIClient()
-    user = UserWithActorsFactory()
-    actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
+    actor = source_actor_for()
     
-    # Create token WITHOUT portability scope
+    # Credential stays hand-rolled: a token WITHOUT the portability scope is the subject of this
+    # test, and lola_client() only ever issues a scoped, bound one.
     token = AccessTokenFactory(scope='read write')
     
+    client = APIClient()
     client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
     response = client.get(f'/api/actors/{actor.id}/')
     
@@ -156,14 +143,9 @@ def test_actor_with_wrong_scope_returns_public_response():
 
 # Verify migration URLs point to the dedicated migration routes
 def test_migration_urls_point_to_dedicated_migration_routes():
-    client = APIClient()
-    user = UserWithActorsFactory()
-    actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
+    actor = source_actor_for()
     
-    token = bind_portability_token(actor, user=user)
-    
-    client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
-    response = client.get(f'/api/actors/{actor.id}/')
+    response = lola_client(actor, user=actor.user).get(f'/api/actors/{actor.id}/')
     data = response.json()
     
     migration = data['migration']
@@ -178,14 +160,12 @@ def test_migration_urls_point_to_dedicated_migration_routes():
 
 # Verify every advertised dedicated migration route is real and resolves
 def test_dedicated_migration_routes_resolve():
-    client = APIClient()
-    user = UserWithActorsFactory()
-    actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
+    actor = source_actor_for()
 
-    # The migration routes enforce token-to-actor binding, so bind a portability
-    # token to this actor (an unbound token would be rejected with actor_mismatch).
-    token = bind_portability_token(actor, user=user)
-    client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
+    # The migration routes enforce token-to-actor binding, so the client must carry a token bound
+    # to this actor (an unbound token would be rejected with actor_mismatch). lola_client() binds
+    # by construction, which is the property being relied on here.
+    client = lola_client(actor, user=actor.user)
 
     # All four advertised migration URLs must resolve (routed and implemented)
     for surface in ['outbox', 'content', 'following', 'blocked']:
@@ -196,18 +176,13 @@ def test_dedicated_migration_routes_resolve():
 
 # Compare public and authenticated responses side-by-side
 def test_public_vs_authenticated_response_comparison():
-    client = APIClient()
-    user = UserWithActorsFactory()
-    actor = Actor.objects.get(user=user, role=Actor.ROLE_SOURCE)
+    actor = source_actor_for()
     
     # Get public response
-    public_response = client.get(f'/api/actors/{actor.id}/')
+    public_response = APIClient().get(f'/api/actors/{actor.id}/')
     public_data = public_response.json()
     
-    token = bind_portability_token(actor, user=user)
-
-    client.credentials(HTTP_AUTHORIZATION=f'Bearer {token.token}')
-    auth_response = client.get(f'/api/actors/{actor.id}/')
+    auth_response = lola_client(actor, user=actor.user).get(f'/api/actors/{actor.id}/')
     auth_data = auth_response.json()
     
     # Both should succeed

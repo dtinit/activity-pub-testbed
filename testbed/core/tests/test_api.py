@@ -11,7 +11,7 @@ from testbed.core.factories import (
     ApplicationFactory,
     AccessTokenFactory,
 )
-from testbed.core.tests.conftest import bind_portability_token, create_isolated_actor
+from testbed.core.tests.helpers import create_isolated_actor, lola_client
 from testbed.core.json_ld_utils import (
     build_basic_context,
     build_actor_context,
@@ -90,19 +90,16 @@ class TestLOLAAuthenticationAPI:
     @pytest.mark.django_db
     def test_outbox_content_filtering_by_authentication(self, mock_request):
         actor = create_isolated_actor("outbox_filtering_test")
-        lola_token = bind_portability_token(actor)
-        client = APIClient()
         
         # Test unauthenticated outbox (public activities only)
-        public_response = client.get(reverse("actor-outbox", kwargs={"pk": actor.id}))
+        public_response = APIClient().get(reverse("actor-outbox", kwargs={"pk": actor.id}))
         assert public_response.status_code == status.HTTP_200_OK
         
         public_data = public_response.data
         public_count = public_data["totalItems"]
         
         # Test LOLA-authenticated outbox (all activities)
-        client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
-        lola_response = client.get(reverse("actor-outbox", kwargs={"pk": actor.id}))
+        lola_response = lola_client(actor).get(reverse("actor-outbox", kwargs={"pk": actor.id}))
         assert lola_response.status_code == status.HTTP_200_OK
         
         lola_data = lola_response.data
@@ -161,12 +158,11 @@ class TestLOLAAuthenticationAPI:
     @pytest.mark.django_db
     def test_content_type_headers_set_correctly(self):
         actor = create_isolated_actor("content_type_test")
-        lola_token = bind_portability_token(actor)
-        client = APIClient()
-        client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
         
-        # Request with format=json 
-        response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}), {"format": "json"})
+        # Request with format=json
+        response = lola_client(actor).get(
+            reverse("actor-detail", kwargs={"pk": actor.id}), {"format": "json"}
+        )
         
         assert response.status_code == status.HTTP_200_OK
         # Should have JSON content type (DRF default for format=json)
@@ -333,12 +329,10 @@ class TestFollowersCollectionEndpoint:
     @pytest.mark.django_db
     def test_followers_collection_with_lola_token(self):
         target_actor, follower1, follower2 = self.setup_followers_data()
-        lola_token = bind_portability_token(target_actor)
 
-        client = APIClient()
-        client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
-
-        response = client.get(reverse("followers-collection", kwargs={"pk": target_actor.id}))
+        response = lola_client(target_actor).get(
+            reverse("followers-collection", kwargs={"pk": target_actor.id})
+        )
         
         assert response.status_code == status.HTTP_200_OK
         
@@ -371,12 +365,10 @@ class TestFollowersCollectionEndpoint:
     @pytest.mark.django_db
     def test_followers_collection_includes_complete_actor_data(self):
         target_actor, follower1, follower2 = self.setup_followers_data()
-        lola_token = bind_portability_token(target_actor)
 
-        client = APIClient()
-        client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
-
-        response = client.get(reverse("followers-collection", kwargs={"pk": target_actor.id}))
+        response = lola_client(target_actor).get(
+            reverse("followers-collection", kwargs={"pk": target_actor.id})
+        )
         data = response.data
         
         # Each follower should be represented as a complete Actor object
@@ -399,20 +391,16 @@ class TestLOLACollectionDiscovery:
     @pytest.mark.django_db
     def test_collection_urls_appear_only_with_lola_auth(self):
         actor = create_isolated_actor("discovery_test")
-        lola_token = bind_portability_token(actor)
         
         # Public request should not show collection URLs
-        public_client = APIClient()
-        public_response = public_client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
+        public_response = APIClient().get(reverse("actor-detail", kwargs={"pk": actor.id}))
         public_data = public_response.data
         
         assert "following" not in public_data
         assert "followers" not in public_data
         
         # LOLA-authenticated request should show collection URLs
-        lola_client = APIClient()
-        lola_client.credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
-        lola_response = lola_client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
+        lola_response = lola_client(actor).get(reverse("actor-detail", kwargs={"pk": actor.id}))
         lola_data = lola_response.data
         
         assert "following" in lola_data
@@ -424,19 +412,20 @@ class TestLOLACollectionDiscovery:
     @pytest.mark.django_db
     def test_collection_discovery_demonstrates_lola_privacy_model(self):
         actor = create_isolated_actor("privacy_demo")
-        lola_token = bind_portability_token(actor)
+        
+        # The basic-OAuth credential stays hand-rolled: a token WITHOUT the portability scope is
+        # precisely what this test asserts is refused, so it cannot come from lola_client(), which
+        # only ever produces a scoped, bound token.
         basic_token = AccessTokenFactory(scope='read write')
+        basic_client = APIClient()
+        basic_client.credentials(HTTP_AUTHORIZATION=f'Bearer {basic_token.token}')
         
         # Test three authentication states
         clients = [
             ("public", APIClient()),
-            ("basic_oauth", APIClient()),
-            ("lola_oauth", APIClient())
+            ("basic_oauth", basic_client),
+            ("lola_oauth", lola_client(actor)),
         ]
-        
-        # Set up authentication
-        clients[1][1].credentials(HTTP_AUTHORIZATION=f'Bearer {basic_token.token}')
-        clients[2][1].credentials(HTTP_AUTHORIZATION=f'Bearer {lola_token.token}')
         
         # Test each authentication level
         for auth_type, client in clients:
