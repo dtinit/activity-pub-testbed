@@ -26,6 +26,18 @@ class NoteAdmin(admin.ModelAdmin):
     list_display = ("actor", "content", "published", "visibility")
     list_filter = ("visibility", "published")
     search_fields = ("content", "actor__username")
+    # `published` is editable now that it is `default=` rather than `auto_now_add=`.
+    # Migration metadata is collapsed: it is empty on every source-authored note.
+    fieldsets = (
+        (None, {"fields": ("actor", "content", "published", "visibility")}),
+        (
+            "Migration metadata",
+            {
+                "classes": ("collapse",),
+                "fields": ("summary", "to", "cc", "in_reply_to", "url", "source", "previously"),
+            },
+        ),
+    )
 
 
 @admin.register(CreateActivity)

@@ -57,6 +57,8 @@ class NoteFactory(DjangoModelFactory):
     actor = factory.SubFactory(ActorFactory)
     content = factory.Faker("text", max_nb_chars=200)
     visibility = factory.Iterator(["public", "private", "followers-only"])
+    # One day older per note, so a batch is distinct and strictly descending by `published`
+    published = factory.Sequence(lambda n: datetime.now(timezone.utc) - timedelta(days=n))
 
 class CreateActivityFactory(DjangoModelFactory):
     # Can create activities for notes or actor creation announcements

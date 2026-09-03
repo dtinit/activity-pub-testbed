@@ -144,6 +144,14 @@ def test_note_list_defaults_are_not_shared(actor):
     assert second.to == []
     assert Note.objects.get(pk=second.pk).to == []
 
+# Test that the factory spreads timestamps, so `-published` is a total order with no ties.
+def test_note_factory_spreads_published(actor):
+    notes = NoteFactory.create_batch(5, actor=actor)
+    stamps = [n.published for n in notes]
+
+    assert len(set(stamps)) == 5
+    assert stamps == sorted(stamps, reverse=True)
+
 # Test note string representation
 def test_note_str_representation(note):
     expected = f"Note by {note.actor.user.username}: {note.content[:30]}"
