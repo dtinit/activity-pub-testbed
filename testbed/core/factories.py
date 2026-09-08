@@ -13,6 +13,8 @@ from testbed.core.models import (
     Following,
     Followers,
     TokenActorBinding,
+    TransferJob,
+    TransferredItem,
 )
 
 # Base factory for creating Users without associated actors
@@ -263,3 +265,45 @@ class TokenActorBindingFactory(DjangoModelFactory):
     actor = factory.LazyAttribute(
         lambda o: o.token.user.actors.get(role=Actor.ROLE_SOURCE)
     )
+
+
+class TransferJobFactory(DjangoModelFactory):
+    """
+    A destination-side transfer job.
+
+    The destination Actor is the job's only owner link (`TransferJob.user` reads through it), so
+    there is no user to pass and no way to build a job whose owner disagrees with its actor's.
+
+    Reuses the destination Actor the post_save signal already created, for the same reason
+    TokenActorBindingFactory reuses the source one: creating a second would collide on the unique
+    username constraint and on the one-actor-per-role invariant.
+    """
+
+    class Meta:
+        model = TransferJob
+
+    destination_actor = factory.LazyFunction(
+        lambda: UserWithActorsFactory().actors.get(role=Actor.ROLE_DESTINATION)
+    )
+
+    source_base_url = "https://source.example"
+    policy = factory.LazyFunction(lambda: {"dry_run": True})
+
+
+class TransferredItemFactory(DjangoModelFactory):
+    """
+    One row of a job's ledger, defaulting to a content Note that was imported.
+
+    Every Outcome is terminal, so the default is a finished one rather than a placeholder: the
+    source_id/destination_id pair is what evidences LOLA §7.1.1, and a row without both proves nothing.
+    """
+
+    class Meta:
+        model = TransferredItem
+
+    job = factory.SubFactory(TransferJobFactory)
+    collection = TransferredItem.Collection.CONTENT
+    source_id = factory.Sequence(lambda n: f"https://source.example/notes/{n}")
+    destination_id = factory.Sequence(lambda n: f"https://destination.example/notes/{n}")
+    object_type = "Note"
+    outcome = TransferredItem.Outcome.IMPORTED

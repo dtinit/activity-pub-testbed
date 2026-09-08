@@ -6,6 +6,8 @@ from .models import (
     LikeActivity,
     FollowActivity,
     PortabilityOutbox,
+    TransferJob,
+    TransferredItem,
 )
 
 
@@ -119,6 +121,82 @@ class PortabilityOutboxAdmin(admin.ModelAdmin):
     get_follow_activities.short_description = "Follow Activities"
 
     def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class TransferredItemInline(admin.TabularInline):
+    model = TransferredItem
+    extra = 0
+    can_delete = False
+    fields = (
+        "collection",
+        "object_type",
+        "source_id",
+        "destination_id",
+        "outcome",
+        "created_at",
+    )
+    readonly_fields = fields
+    ordering = ("collection", "id")
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(TransferJob)
+class TransferJobAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "user",
+        "destination_actor",
+        "state",
+        "retry_when",
+        "created_at",
+        "updated_at",
+    )
+    list_filter = ("state", "retry_when", "created_at")
+    search_fields = (
+        "destination_actor__user__username",
+        "source_base_url",
+        "source_actor_url",
+        "authorized_actor_url",
+    )
+    readonly_fields = ("policy", "progress", "artifacts", "created_at", "updated_at")
+    inlines = [TransferredItemInline]
+
+    list_select_related = ("destination_actor", "destination_actor__user")
+
+    @admin.display(ordering="destination_actor__user__username", description="User")
+    def user(self, obj):
+        return obj.user
+
+
+@admin.register(TransferredItem)
+class TransferredItemAdmin(admin.ModelAdmin):
+
+    list_display = ("id", "job", "collection", "object_type", "outcome", "created_at")
+    list_filter = ("collection", "outcome", "created_at")
+    search_fields = ("source_id", "destination_id", "job__id")
+
+    list_select_related = ("job", "job__destination_actor__user")
+    readonly_fields = (
+        "job",
+        "collection",
+        "source_id",
+        "destination_id",
+        "object_type",
+        "outcome",
+        "detail",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
         return False
 
     def has_delete_permission(self, request, obj=None):
