@@ -574,6 +574,224 @@ class TokenActorBinding(models.Model):
         return f"TokenActorBinding(token_id={self.token_id}, actor_id={self.actor_id})"
 
 
+def default_transfer_policy():
+    return {"dry_run": True}
+
+
+class TransferJob(models.Model):
+    """
+    One attempted account copy, from the destination server's point of view.
+
+    A LOLA transfer cannot complete inside one HTTP request. The OAuth approval is a human click, so
+    the callback arrives on a different request than the one that started the transfer; and per
+    decision a single request may never walk a whole collection, because the container runs
+    `--workers 1 --threads 8` and a Mode C self-call would occupy one thread while waiting on
+    another. So a transfer is many requests, and this row is what carries state between them.
+
+    LOLA §6.7: "The destination server has more state to maintain to keep track of what has been already
+    copied and what remains to be fetched."
+    """
+
+    class State(models.TextChoices):
+        ACTIVE = "active", "Active"
+        FINISHED = "finished", "Finished"
+        FAILED = "failed", "Failed"
+
+    destination_actor = models.ForeignKey(
+        "Actor",
+        on_delete=models.CASCADE,
+        related_name="inbound_transfers",
+        help_text="The destination Actor imported content is written to.",
+    )
+
+    source_base_url = models.URLField(
+        max_length=500,
+        help_text="Base URL of the source server. Everything else about the source is discovered from it.",
+    )
+    source_actor_url = models.URLField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="Source Actor URL as supplied or resolved by discovery. Advisory, not authoritative.",
+    )
+    authorized_actor_url = models.URLField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text=(
+            "The Actor URL the source returned in `activitypub_actor` on the callback (LOLA §5.3)."
+        ),
+    )
+
+    state = models.CharField(
+        max_length=16,
+        choices=State.choices,
+        default=State.ACTIVE,
+        help_text="The working phase is derived from the data, not stored.",
+    )
+    retry_when = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Set from a 429's Retry-After. A job is paused."
+        ),
+    )
+
+    policy = models.JSONField(
+        default=default_transfer_policy,
+        blank=True,
+        help_text=(
+            "Chosen when the job is created. Changing the decision means a new job rather than an edit."
+        ),
+    )
+    progress = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Per-collection resume state. Read and written only."
+        ),
+    )
+    artifacts = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "References to captured raw payloads, never the payload bodies."
+        ),
+    )
+    error = models.TextField(
+        blank=True,
+        default="",
+        help_text=(
+            "The single terminal reason this job failed: source unreachable, authorization revoked, etc."
+        ),
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            # This user's jobs
+            models.Index(
+                fields=["destination_actor", "state"],
+                name="transferjob_actor_state_idx",
+            ),
+            # Which jobs are ready to resume?
+            models.Index(
+                fields=["state", "retry_when"], name="transferjob_state_retry_idx"
+            ),
+        ]
+        constraints = [
+            # A failed job must say why. Nothing else ties `state` to `error`
+            models.CheckConstraint(
+                condition=~models.Q(state="failed", error=""),
+                name="transferjob_failed_has_reason",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Transfer {self.pk} for {self.user.username}: {self.state}"
+
+    @property
+    def user(self):
+        # The owner of this job, read through the destination Actor
+        return self.destination_actor.user
+
+
+class TransferredItem(models.Model):
+    """
+    One object a transfer touched, and what happened to it.
+
+    Why a per-object row has to outlive the run:
+
+      - LOLA §7.1.1 (MUST): the destination "MUST create or choose a new context-appropriate
+        Object ID for each object".
+      - LOLA §8.1: "it is the destination's responsibility to use its own UI and notification
+        channels to notify the user of success/failure and provide error/warning detail if any."
+    """
+
+    class Collection(models.TextChoices):
+        """
+        `followers` is deliberately absent. LOLA §6.6 Not Fetched: the Followers collection
+        "will be reconstructed to the extent that followers, if notified of the account move,
+        choose to follow the account at its new location.". Fetching it for inspection is fine
+        and its pages still land in artifacts; recording an imported follower is not, so the schema cannot express it.
+        """
+        CONTENT = "content", "Content"
+        OUTBOX = "outbox", "Outbox"
+        FOLLOWING = "following", "Following"
+        BLOCKED = "blocked", "Blocked"
+        LIKED = "liked", "Liked"
+
+    class Outcome(models.TextChoices):
+        # Every value here is terminal, a row is written at its outcome, once
+        IMPORTED = "imported", "Imported"
+        SKIPPED = "skipped", "Skipped"
+        DUPLICATE = "duplicate", "Duplicate"
+        FAILED = "failed", "Failed"
+
+    job = models.ForeignKey(
+        TransferJob,
+        on_delete=models.CASCADE,
+        related_name="items",
+        help_text="The run this item belongs to.",
+    )
+
+    collection = models.CharField(
+        max_length=32,
+        choices=Collection.choices,
+        help_text="Which LOLA collection this object was fetched from.",
+    )
+    source_id = models.URLField(
+        max_length=500,
+        help_text=(
+            "The object's ID on the source server. Also the duplicate-detection key."
+        ),
+    )
+    destination_id = models.URLField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text=(
+            "The new ID created for the copy. Null for dry-run (writes no objects), and for skipped or failed items."
+        ),
+    )
+    object_type = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="The type as received: Note, Create, Like, Follow, Block.",
+    )
+    outcome = models.CharField(
+        max_length=32,
+        choices=Outcome.choices,
+        help_text="What happened to this object. No default: a row is written at its outcome.",
+    )
+    detail = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Why this outcome: the skip reason, the validation error, the earlier job that already "
+            "imported it, or a flag that an unmappable visibility was defaulted to private."
+        ),
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["job", "collection", "id"]
+        indexes = [
+            models.Index(
+                fields=["job", "collection"], name="transferitem_job_coll_idx"
+            ),
+            models.Index(fields=["source_id"], name="transferitem_source_id_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.collection}/{self.object_type or 'object'} {self.source_id} -> {self.outcome}"
+
+
 class PortabilityOutbox(models.Model):
     actor = models.OneToOneField(
         Actor, on_delete=models.CASCADE, related_name="portability_outbox"
