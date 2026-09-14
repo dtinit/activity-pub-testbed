@@ -14,7 +14,6 @@ from testbed.core.models import (
     Followers,
     TokenActorBinding,
     TransferJob,
-    TransferredItem,
 )
 
 # Base factory for creating Users without associated actors
@@ -290,20 +289,3 @@ class TransferJobFactory(DjangoModelFactory):
     policy = factory.LazyFunction(lambda: {"dry_run": True})
 
 
-class TransferredItemFactory(DjangoModelFactory):
-    """
-    One row of a job's ledger, defaulting to a content Note that was imported.
-
-    Every Outcome is terminal, so the default is a finished one rather than a placeholder: the
-    source_id/destination_id pair is what evidences LOLA §7.1.1, and a row without both proves nothing.
-    """
-
-    class Meta:
-        model = TransferredItem
-
-    job = factory.SubFactory(TransferJobFactory)
-    collection = TransferredItem.Collection.CONTENT
-    source_id = factory.Sequence(lambda n: f"https://source.example/notes/{n}")
-    destination_id = factory.Sequence(lambda n: f"https://destination.example/notes/{n}")
-    object_type = "Note"
-    outcome = TransferredItem.Outcome.IMPORTED

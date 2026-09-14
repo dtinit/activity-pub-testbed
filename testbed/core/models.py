@@ -698,98 +698,15 @@ class TransferJob(models.Model):
         # The owner of this job, read through the destination Actor
         return self.destination_actor.user
 
+    def get_collection_progress(self, collection):
+        from testbed.core.transfer import jobs
 
-class TransferredItem(models.Model):
-    """
-    One object a transfer touched, and what happened to it.
+        return jobs.get_collection_progress(self, collection)
 
-    Why a per-object row has to outlive the run:
+    def set_collection_progress(self, collection, **values):
+        from testbed.core.transfer import jobs
 
-      - LOLA §7.1.1 (MUST): the destination "MUST create or choose a new context-appropriate
-        Object ID for each object".
-      - LOLA §8.1: "it is the destination's responsibility to use its own UI and notification
-        channels to notify the user of success/failure and provide error/warning detail if any."
-    """
-
-    class Collection(models.TextChoices):
-        """
-        `followers` is deliberately absent. LOLA §6.6 Not Fetched: the Followers collection
-        "will be reconstructed to the extent that followers, if notified of the account move,
-        choose to follow the account at its new location.". Fetching it for inspection is fine
-        and its pages still land in artifacts; recording an imported follower is not, so the schema cannot express it.
-        """
-        CONTENT = "content", "Content"
-        OUTBOX = "outbox", "Outbox"
-        FOLLOWING = "following", "Following"
-        BLOCKED = "blocked", "Blocked"
-        LIKED = "liked", "Liked"
-
-    class Outcome(models.TextChoices):
-        # Every value here is terminal, a row is written at its outcome, once
-        IMPORTED = "imported", "Imported"
-        SKIPPED = "skipped", "Skipped"
-        DUPLICATE = "duplicate", "Duplicate"
-        FAILED = "failed", "Failed"
-
-    job = models.ForeignKey(
-        TransferJob,
-        on_delete=models.CASCADE,
-        related_name="items",
-        help_text="The run this item belongs to.",
-    )
-
-    collection = models.CharField(
-        max_length=32,
-        choices=Collection.choices,
-        help_text="Which LOLA collection this object was fetched from.",
-    )
-    source_id = models.URLField(
-        max_length=500,
-        help_text=(
-            "The object's ID on the source server. Also the duplicate-detection key."
-        ),
-    )
-    destination_id = models.URLField(
-        max_length=500,
-        null=True,
-        blank=True,
-        help_text=(
-            "The new ID created for the copy. Null for dry-run (writes no objects), and for skipped or failed items."
-        ),
-    )
-    object_type = models.CharField(
-        max_length=64,
-        blank=True,
-        default="",
-        help_text="The type as received: Note, Create, Like, Follow, Block.",
-    )
-    outcome = models.CharField(
-        max_length=32,
-        choices=Outcome.choices,
-        help_text="What happened to this object. No default: a row is written at its outcome.",
-    )
-    detail = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text=(
-            "Why this outcome: the skip reason, the validation error, the earlier job that already "
-            "imported it, or a flag that an unmappable visibility was defaulted to private."
-        ),
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["job", "collection", "id"]
-        indexes = [
-            models.Index(
-                fields=["job", "collection"], name="transferitem_job_coll_idx"
-            ),
-            models.Index(fields=["source_id"], name="transferitem_source_id_idx"),
-        ]
-
-    def __str__(self):
-        return f"{self.collection}/{self.object_type or 'object'} {self.source_id} -> {self.outcome}"
+        return jobs.set_collection_progress(self, collection, **values)
 
 
 class PortabilityOutbox(models.Model):
