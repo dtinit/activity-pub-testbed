@@ -13,6 +13,7 @@ from testbed.core.models import (
     Following,
     Followers,
     TokenActorBinding,
+    TransferJob,
 )
 
 # Base factory for creating Users without associated actors
@@ -263,3 +264,28 @@ class TokenActorBindingFactory(DjangoModelFactory):
     actor = factory.LazyAttribute(
         lambda o: o.token.user.actors.get(role=Actor.ROLE_SOURCE)
     )
+
+
+class TransferJobFactory(DjangoModelFactory):
+    """
+    A destination-side transfer job.
+
+    The destination Actor is the job's only owner link (`TransferJob.user` reads through it), so
+    there is no user to pass and no way to build a job whose owner disagrees with its actor's.
+
+    Reuses the destination Actor the post_save signal already created, for the same reason
+    TokenActorBindingFactory reuses the source one: creating a second would collide on the unique
+    username constraint and on the one-actor-per-role invariant.
+    """
+
+    class Meta:
+        model = TransferJob
+
+    destination_actor = factory.LazyFunction(
+        lambda: UserWithActorsFactory().actors.get(role=Actor.ROLE_DESTINATION)
+    )
+
+    source_base_url = "https://source.example"
+    policy = factory.LazyFunction(lambda: {"dry_run": True})
+
+

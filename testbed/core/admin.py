@@ -6,6 +6,7 @@ from .models import (
     LikeActivity,
     FollowActivity,
     PortabilityOutbox,
+    TransferJob,
 )
 
 
@@ -123,3 +124,30 @@ class PortabilityOutboxAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(TransferJob)
+class TransferJobAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "user",
+        "destination_actor",
+        "state",
+        "retry_when",
+        "created_at",
+        "updated_at",
+    )
+    list_filter = ("state", "retry_when", "created_at")
+    search_fields = (
+        "destination_actor__user__username",
+        "source_base_url",
+        "source_actor_url",
+        "authorized_actor_url",
+    )
+    readonly_fields = ("policy", "progress", "artifacts", "created_at", "updated_at")
+
+    list_select_related = ("destination_actor", "destination_actor__user")
+
+    @admin.display(ordering="destination_actor__user__username", description="User")
+    def user(self, obj):
+        return obj.user
