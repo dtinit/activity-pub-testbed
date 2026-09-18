@@ -4,13 +4,9 @@ import pytest
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from testbed.core.factories import TransferJobFactory, UserWithActorsFactory
-from testbed.core.models import Actor, TransferJob
-
-
-def destination_actor():
-    # The signal already made one per user; a second would collide on the role invariant
-    return UserWithActorsFactory().actors.get(role=Actor.ROLE_DESTINATION)
+from testbed.core.factories import TransferJobFactory
+from testbed.core.models import TransferJob
+from testbed.core.tests.helpers import destination_actor_for
 
 
 # Vocabulary
@@ -28,7 +24,7 @@ def test_the_jobs_owner_follows_its_destination_actor():
     job = TransferJobFactory()
     assert job.user == job.destination_actor.user
 
-    someone_else = destination_actor()
+    someone_else = destination_actor_for()
     job.destination_actor = someone_else
 
     assert job.user == someone_else.user
@@ -53,7 +49,7 @@ def test_a_job_starts_active_with_empty_state():
 
 def test_a_job_created_without_a_policy_defaults_to_dry_run():
     job = TransferJob.objects.create(
-        destination_actor=destination_actor(),
+        destination_actor=destination_actor_for(),
         source_base_url="https://source.example",
     )
 
@@ -96,7 +92,7 @@ def test_failing_a_job_with_a_reason_is_allowed():
 
 
 def test_jobs_ready_to_resume_is_a_single_queryset():
-    actor = destination_actor()
+    actor = destination_actor_for()
     elapsed = TransferJobFactory(
         destination_actor=actor, retry_when=timezone.now() - timedelta(minutes=1)
     )

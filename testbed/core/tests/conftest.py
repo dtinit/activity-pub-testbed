@@ -3,67 +3,14 @@ import random
 from testbed.core.factories import (
     UserOnlyFactory,
     UserWithActorsFactory,
-    ActorFactory,
     NoteFactory,
     CreateActivityFactory,
     LikeActivityFactory,
     FollowActivityFactory,
-    AccessTokenFactory,
-    TokenActorBindingFactory,
 )
 from testbed.core.models import Actor, User
+from testbed.core.tests.helpers import create_isolated_actor
 from testbed.core.utils.actor_utils import populate_source_actor_outbox
-
-# Helper function to create an isolated actor (no signals triggered)
-def create_isolated_actor(username_prefix, role=None):
-    # Creates an actor without triggering signals for additional objects
-    role = role or Actor.ROLE_SOURCE  # Default to source
-    user = UserOnlyFactory(username=f"{username_prefix}_user")
-    return Actor.objects.create(
-        user=user,
-        username=f"{username_prefix}_actor",
-        role=role
-    )
-
-"""
-Create a portability token bound to an actor.
-Both the strict and the dual-mode LOLA endpoints enforce token-to-actor binding
-
-When `user` is given, the token is issued for that user so token.user matches actor.user;
-otherwise the factory creates a fresh token user. Only the token<->actor binding is what
-lola_access_error() (behind the @lola_scope_* gate decorators) checks, so both shapes
-satisfy the gate.
-"""
-def bind_portability_token(actor, user=None):
-    if user is not None:
-        token = AccessTokenFactory(lola_scope=True, user=user)
-        TokenActorBindingFactory(token=token, actor=actor)
-        return token
-    return TokenActorBindingFactory(actor=actor).token
-
-# Helper function to create an isolated LikeActivity with remote object
-def create_isolated_remote_like(username_prefix="remote_like_test"):
-    # Creates a LikeActivity for a remote object with an isolated actor
-    actor = create_isolated_actor(username_prefix)
-    return LikeActivityFactory(
-        actor=actor,
-        note=None,
-        object_url=f"https://remote.example/notes/{random.randint(1000, 9999)}",
-        object_data={"content": "Remote note content"},
-        visibility="public"
-    )
-
-# Helper function to create an isolated FollowActivity with remote target
-def create_isolated_remote_follow(username_prefix="remote_follow_test"):
-    # Creates a FollowActivity for a remote actor with an isolated actor
-    actor = create_isolated_actor(username_prefix)
-    return FollowActivityFactory(
-        actor=actor,
-        target_actor=None,
-        target_actor_url=f"https://remote.example/users/user_{random.randint(1000, 9999)}",
-        target_actor_data={"preferredUsername": f"remote_user_{random.randint(1000, 9999)}"},
-        visibility="public"
-    )
 
 # Creates an isolated actor with note for validation tests
 @pytest.fixture
