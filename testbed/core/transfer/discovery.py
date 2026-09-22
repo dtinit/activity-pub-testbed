@@ -10,7 +10,7 @@ Owns
     - Also owns starting from either a base URL or an Actor URL, since a user may supply either
 
 Must not
-    - Read `setttings` for an URL that should have been discovered.
+    - Read `settings` for a URL that should have been discovered.
       In Mode C, this server already knows its own endpoints, so constructing one instead of fetching it
       silently deletes the discovery half of the protocol.
 """
