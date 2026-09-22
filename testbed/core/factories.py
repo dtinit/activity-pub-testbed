@@ -275,7 +275,7 @@ class TokenActorBindingFactory(DjangoModelFactory):
         binding = TokenActorBindingFactory(actor=my_actor, token=my_token)
 
         # Portability token already bound to an existing source actor.
-        actor = create_isolated_actor("test")
+        actor = IsolatedActorFactory(prefix="test")
         token = AccessTokenFactory(lola_scope=True, user=actor.user)
         binding = TokenActorBindingFactory(token=token, actor=actor)
 
