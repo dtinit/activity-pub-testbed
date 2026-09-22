@@ -3,19 +3,19 @@ import random
 from testbed.core.factories import (
     UserOnlyFactory,
     UserWithActorsFactory,
+    IsolatedActorFactory,
     NoteFactory,
     CreateActivityFactory,
     LikeActivityFactory,
     FollowActivityFactory,
 )
 from testbed.core.models import Actor, User
-from testbed.core.tests.helpers import create_isolated_actor
 from testbed.core.utils.actor_utils import populate_source_actor_outbox
 
 # Creates an isolated actor with note for validation tests
 @pytest.fixture
 def isolated_actor_with_note():
-    actor = create_isolated_actor("isolated_note_test")
+    actor = IsolatedActorFactory(prefix="isolated_note_test")
     note = NoteFactory(actor=actor)
     return {"actor": actor, "note": note}
 

@@ -17,12 +17,12 @@ from testbed.core.json_ld_utils import (
 )
 from testbed.core.factories import (
     ActorFactory,
+    IsolatedActorFactory,
     LikeActivityFactory,
     FollowActivityFactory,
     CreateActivityFactory,
     NoteFactory
 )
-from testbed.core.tests.helpers import create_isolated_actor
 from testbed.core.models import Actor, CreateActivity, LikeActivity, FollowActivity
 
 # Test building JSON-LD for an actor
@@ -150,8 +150,8 @@ def test_build_follow_activity_json_ld_remote(actor, basic_auth_context, mock_re
 @pytest.mark.django_db
 def test_build_outbox_json_ld(lola_auth_context, mock_request):
     # Create actors with the helper function that ensures unique usernames
-    actor = create_isolated_actor("json_ld_outbox_test")
-    target_actor = create_isolated_actor("json_ld_target_test")
+    actor = IsolatedActorFactory(prefix="json_ld_outbox_test")
+    target_actor = IsolatedActorFactory(prefix="json_ld_target_test")
     outbox = actor.portability_outbox
     
     # Create a note for our tests
