@@ -104,7 +104,12 @@ class Activity(models.Model):
     actor = models.ForeignKey(
         Actor, on_delete=models.CASCADE, related_name="%(class)s_activities"
     )  # This makes each subclass have its own related_name
-    timestamp = models.DateTimeField(auto_now_add=True)
+    # Settable so a copied Create or Like can keep its original date (LOLA §7.1.7).
+    # New Follow activities must NOT: §3.3.1 says they carry no older timestamp.
+    timestamp = models.DateTimeField(
+        default=timezone.now,
+        help_text="When the activity originally happened.",
+    )
     visibility = models.CharField(
         max_length=20,
         default="public",
@@ -113,6 +118,13 @@ class Activity(models.Model):
             ("private", "Private"),
             ("followers-only", "Followers only"),
         ],
+    )
+    # Same rule as the timestamp above: copied Create and Like activities carry breadcrumbs,
+    # new Follow activities do not.
+    previously = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Activity breadcrumbs: [{actor, id}], newest first (LOLA §7.1.8).",
     )
 
     class Meta:
