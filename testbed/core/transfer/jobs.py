@@ -67,9 +67,9 @@ def get_collection_progress(job, collection):
     """
     Return one collection's resume state, or an empty dict if it has none yet.
 
-    The return value is a copy. Callers that mutate what they read would otherwise change the
-    job in memory without persisting it, which produces a resume position that exists in the
-    process and not in the database.
+    The return value is a shallow copy, which is enough while entries hold immutable values.
+    Mutating what you read would otherwise change the job in memory without persisting it,
+    leaving a resume position that exists in the process and not in the database.
     """
     collection = Collection(collection)
 
@@ -89,7 +89,7 @@ def set_collection_progress(job, collection, **values):
     If the save fails, the job in memory keeps progress its row does not have.
     The request ends, and the next one loads the job fresh from the database.
 
-    Returns a copy of the collection's state after the merge.
+    Returns a shallow copy of the collection's state after the merge.
     """
     collection = Collection(collection)
 
