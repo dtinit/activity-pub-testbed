@@ -1,4 +1,5 @@
 import pytest
+from testbed.core.factories import IsolatedActorFactory
 from testbed.core.models import Actor
 from django.contrib.auth.models import User
 
@@ -29,6 +30,22 @@ def test_user_creation_creates_actors():
     
     assert source_actor.username == f"{user.username}_source"
     assert dest_actor.username == f"{user.username}_dest"
+
+@pytest.mark.django_db
+def test_isolated_actor_factory_mutes_the_actor_signal():
+    actor = IsolatedActorFactory(prefix="isolation_test")
+
+    assert list(actor.user.actors.all()) == [actor]
+    assert actor.role == Actor.ROLE_SOURCE
+    assert actor.notes.count() == 0
+
+# An isolated actor still gets its outbox with exactly one actor-creation activity, nothing seeded.
+@pytest.mark.django_db
+def test_isolated_actor_still_builds_its_outbox():
+    actor = IsolatedActorFactory(prefix="outbox_test")
+
+    assert hasattr(actor, "portability_outbox")
+    assert actor.portability_outbox.activities_create.count() == 1
 
 # Test that the source actor's outbox is populated when a user is created
 @pytest.mark.django_db

@@ -5,25 +5,15 @@ from rest_framework.test import APIClient
 from testbed.core.factories import (
     AccessTokenFactory,
     FollowActivityFactory,
+    IsolatedActorFactory,
     LikeActivityFactory,
     TokenActorBindingFactory,
-    UserOnlyFactory,
     UserWithActorsFactory,
 )
 from testbed.core.models import Actor
 
 
 # Actor construction
-
-
-def create_isolated_actor(username_prefix, role=None):
-    role = role or Actor.ROLE_SOURCE
-    user = UserOnlyFactory(username=f"{username_prefix}_user")
-    return Actor.objects.create(
-        user=user,
-        username=f"{username_prefix}_actor",
-        role=role
-    )
 
 
 def _actor_for(user, role):
@@ -79,7 +69,7 @@ def lola_client(actor, user=None):
 
 def create_isolated_remote_like(username_prefix="remote_like_test"):
     # Creates a LikeActivity for a remote object with an isolated actor
-    actor = create_isolated_actor(username_prefix)
+    actor = IsolatedActorFactory(prefix=username_prefix)
     return LikeActivityFactory(
         actor=actor,
         note=None,
@@ -91,7 +81,7 @@ def create_isolated_remote_like(username_prefix="remote_like_test"):
 
 def create_isolated_remote_follow(username_prefix="remote_follow_test"):
     # Creates a FollowActivity for a remote actor with an isolated actor
-    actor = create_isolated_actor(username_prefix)
+    actor = IsolatedActorFactory(prefix=username_prefix)
     return FollowActivityFactory(
         actor=actor,
         target_actor=None,

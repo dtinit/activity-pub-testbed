@@ -8,10 +8,11 @@ from oauth2_provider.models import Application, AccessToken
 from testbed.core.models import Actor, Following, Followers
 from testbed.core.factories import (
     ActorFactory,
+    IsolatedActorFactory,
     ApplicationFactory,
     AccessTokenFactory,
 )
-from testbed.core.tests.helpers import create_isolated_actor, lola_client
+from testbed.core.tests.helpers import lola_client
 from testbed.core.json_ld_utils import (
     build_basic_context,
     build_actor_context,
@@ -44,7 +45,7 @@ def test_actor_detail_api(actor, mock_request):
 @pytest.mark.django_db
 def test_outbox_api_for_source_actor(mock_request):
     # Create an actor with the helper function that ensures unique usernames
-    actor = create_isolated_actor("api_test")
+    actor = IsolatedActorFactory(prefix="api_test")
     response = APIClient().get(reverse("actor-outbox", kwargs={"pk": actor.id}))
 
     assert response.status_code == status.HTTP_200_OK
@@ -89,7 +90,7 @@ class TestLOLAAuthenticationAPI:
     # Test that outbox shows different content based on authentication
     @pytest.mark.django_db
     def test_outbox_content_filtering_by_authentication(self, mock_request):
-        actor = create_isolated_actor("outbox_filtering_test")
+        actor = IsolatedActorFactory(prefix="outbox_filtering_test")
         
         # Test unauthenticated outbox (public activities only)
         public_response = APIClient().get(reverse("actor-outbox", kwargs={"pk": actor.id}))
@@ -122,7 +123,7 @@ class TestLOLAAuthenticationAPI:
     # Test that invalid tokens gracefully degrade to unauthenticated behavior
     @pytest.mark.django_db
     def test_invalid_token_graceful_degradation(self):
-        actor = create_isolated_actor("invalid_token_test")
+        actor = IsolatedActorFactory(prefix="invalid_token_test")
         client = APIClient()
         
         # Use completely invalid token
@@ -143,7 +144,7 @@ class TestLOLAAuthenticationAPI:
     ])
     @pytest.mark.django_db
     def test_malformed_authorization_header_handling(self, malformed_header):
-        actor = create_isolated_actor("malformed_header_test")
+        actor = IsolatedActorFactory(prefix="malformed_header_test")
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION=malformed_header)
         
@@ -157,7 +158,7 @@ class TestLOLAAuthenticationAPI:
     # Test that content-type headers are set correctly for API responses
     @pytest.mark.django_db
     def test_content_type_headers_set_correctly(self):
-        actor = create_isolated_actor("content_type_test")
+        actor = IsolatedActorFactory(prefix="content_type_test")
         
         # Request with format=json
         response = lola_client(actor).get(
@@ -183,9 +184,9 @@ class TestFollowingCollectionEndpoint:
 
     # Create test actors and following relationships
     def setup_following_data(self):
-        source_actor = create_isolated_actor("following_source")
-        target_actor1 = create_isolated_actor("following_target1") 
-        target_actor2 = create_isolated_actor("following_target2")
+        source_actor = IsolatedActorFactory(prefix="following_source")
+        target_actor1 = IsolatedActorFactory(prefix="following_target1") 
+        target_actor2 = IsolatedActorFactory(prefix="following_target2")
         
         # Create active following relationships
         Following.objects.create(
@@ -203,7 +204,7 @@ class TestFollowingCollectionEndpoint:
         # Create inactive following (should be excluded from collection)
         Following.objects.create(
             actor=source_actor,
-            target_actor=create_isolated_actor("inactive_target"),
+            target_actor=IsolatedActorFactory(prefix="inactive_target"),
             status=Following.STATUS_INACTIVE
         )
         
@@ -251,7 +252,7 @@ class TestFollowingCollectionEndpoint:
     # Test Following collection handles empty state properly
     @pytest.mark.django_db
     def test_following_collection_empty_when_no_follows(self):        
-        actor_with_no_follows = create_isolated_actor("no_follows")
+        actor_with_no_follows = IsolatedActorFactory(prefix="no_follows")
         client = APIClient()
         
         response = client.get(reverse("following-collection", kwargs={"pk": actor_with_no_follows.id}))
@@ -265,7 +266,7 @@ class TestFollowingCollectionEndpoint:
     # Verify proper ActivityPub headers for federation compatibility
     @pytest.mark.django_db
     def test_following_collection_federation_headers(self):
-        source_actor = create_isolated_actor("federation_test")
+        source_actor = IsolatedActorFactory(prefix="federation_test")
         client = APIClient()
         
         response = client.get(reverse("following-collection", kwargs={"pk": source_actor.id}), {"format": "json"})
@@ -286,9 +287,9 @@ class TestFollowersCollectionEndpoint:
 
     # Create test actors and follower relationships
     def setup_followers_data(self):
-        target_actor = create_isolated_actor("followers_target")
-        follower1 = create_isolated_actor("follower1")
-        follower2 = create_isolated_actor("follower2")
+        target_actor = IsolatedActorFactory(prefix="followers_target")
+        follower1 = IsolatedActorFactory(prefix="follower1")
+        follower2 = IsolatedActorFactory(prefix="follower2")
         
         # Create active follower relationships
         Followers.objects.create(
@@ -306,7 +307,7 @@ class TestFollowersCollectionEndpoint:
         # Create inactive follower (should be excluded)
         Followers.objects.create(
             actor=target_actor,
-            follower_actor=create_isolated_actor("inactive_follower"),
+            follower_actor=IsolatedActorFactory(prefix="inactive_follower"),
             status=Followers.STATUS_INACTIVE
         )
         
@@ -390,7 +391,7 @@ class TestLOLACollectionDiscovery:
     # Verify Following/Followers URLs only appear in LOLA-authenticated Actor responses
     @pytest.mark.django_db
     def test_collection_urls_appear_only_with_lola_auth(self):
-        actor = create_isolated_actor("discovery_test")
+        actor = IsolatedActorFactory(prefix="discovery_test")
         
         # Public request should not show collection URLs
         public_response = APIClient().get(reverse("actor-detail", kwargs={"pk": actor.id}))
@@ -411,7 +412,7 @@ class TestLOLACollectionDiscovery:
     # Validate that collection discovery demonstrates LOLA's privacy-first approach
     @pytest.mark.django_db
     def test_collection_discovery_demonstrates_lola_privacy_model(self):
-        actor = create_isolated_actor("privacy_demo")
+        actor = IsolatedActorFactory(prefix="privacy_demo")
         
         # The basic-OAuth credential stays hand-rolled: a token WITHOUT the portability scope is
         # precisely what this test asserts is refused, so it cannot come from lola_client(), which

@@ -1,6 +1,7 @@
 import factory
-from factory.django import DjangoModelFactory
+from factory.django import DjangoModelFactory, mute_signals
 from django.contrib.auth.models import User
+from django.db.models.signals import post_save
 from datetime import datetime, timezone, timedelta
 from oauth2_provider.models import Application, AccessToken
 from testbed.core.models import (
@@ -49,6 +50,34 @@ class ActorFactory(DjangoModelFactory):
     username = factory.LazyAttribute(lambda o: f"{o.user.username}_{o.role}")
     role = factory.Iterator([Actor.ROLE_SOURCE, Actor.ROLE_DESTINATION])
     previously = factory.List([])
+
+# A User the actor signal never sees. `post_save` is muted for the duration of this factory only,
+# so does not fire and no source/destination pair is created.
+@mute_signals(post_save)
+class IsolatedUserFactory(UserOnlyFactory):
+    pass
+
+class IsolatedActorFactory(DjangoModelFactory):
+    """
+    A single Actor whose User owns nothing else.
+
+    The Actor's outbox is still built, because that comes from Actor.save() calling
+    initialize_actor() rather than from a signal.
+    """
+
+    class Meta:
+        model = Actor
+        skip_postgeneration_save = True
+
+    class Params:
+        prefix = factory.Sequence(lambda n: f"isolated_{n}")
+
+    user = factory.SubFactory(
+        IsolatedUserFactory,
+        username=factory.LazyAttribute(lambda o: f"{o.factory_parent.prefix}_user"),
+    )
+    username = factory.LazyAttribute(lambda o: f"{o.prefix}_actor")
+    role = Actor.ROLE_SOURCE
 
 class NoteFactory(DjangoModelFactory):
     class Meta:
@@ -246,7 +275,7 @@ class TokenActorBindingFactory(DjangoModelFactory):
         binding = TokenActorBindingFactory(actor=my_actor, token=my_token)
 
         # Portability token already bound to an existing source actor.
-        actor = create_isolated_actor("test")
+        actor = IsolatedActorFactory(prefix="test")
         token = AccessTokenFactory(lola_scope=True, user=actor.user)
         binding = TokenActorBindingFactory(token=token, actor=actor)
 

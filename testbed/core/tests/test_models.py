@@ -6,6 +6,7 @@ from testbed.core.models import Actor, Note, CreateActivity, LikeActivity, Follo
 from testbed.core.factories import (
     UserOnlyFactory,
     ActorFactory,
+    IsolatedActorFactory,
     NoteFactory,
     CreateActivityFactory,
     LikeActivityFactory,
@@ -14,7 +15,6 @@ from testbed.core.factories import (
     FollowersFactory,
 )
 from testbed.core.tests.helpers import (
-    create_isolated_actor,
     create_isolated_remote_like,
     create_isolated_remote_follow,
 )
@@ -170,7 +170,7 @@ def test_create_activity_str_for_actor_creation(actor_create_activity):
 # Test that Like activity requires either note or remote object data
 def test_like_activity_validation():
     # Create isolated actor using helper function
-    actor = create_isolated_actor("like_validation_test")
+    actor = IsolatedActorFactory(prefix="like_validation_test")
     
     # Create invalid activity (no note and no remote object data)
     activity = LikeActivity(
@@ -195,7 +195,7 @@ def test_like_activity_remote_object_validation():
 # Test that Follow activity requires either target_actor or remote actor data
 def test_follow_activity_validation():
     # Create isolated actor using helper function
-    actor = create_isolated_actor("follow_validation_test")
+    actor = IsolatedActorFactory(prefix="follow_validation_test")
     
     # Create invalid activity (no target_actor and no remote actor data)
     activity = FollowActivity(
@@ -224,7 +224,7 @@ def test_portability_outbox_creation():
     from testbed.core.models import Note, CreateActivity
     
     # Create an isolated actor for testing
-    actor = create_isolated_actor("outbox_test")
+    actor = IsolatedActorFactory(prefix="outbox_test")
     
     # Actor should have an outbox created automatically
     assert actor.portability_outbox is not None
@@ -250,8 +250,8 @@ def test_portability_outbox_creation():
 # Test adding different types of activities to outbox
 def test_outbox_activity_types():
     # Create isolated actors using helper functions
-    actor = create_isolated_actor("types_test")
-    target_actor = create_isolated_actor("target_test")
+    actor = IsolatedActorFactory(prefix="types_test")
+    target_actor = IsolatedActorFactory(prefix="target_test")
     
     # Create a note for the like activity
     note = NoteFactory(actor=actor, content="Test note for liking")
@@ -278,8 +278,8 @@ def test_outbox_activity_types():
 # Test adding multiple activities to outbox
 def test_outbox_activity_addition():
     # Create isolated actors using helper functions
-    actor = create_isolated_actor("addition_test")
-    target_actor = create_isolated_actor("target_addition_test")
+    actor = IsolatedActorFactory(prefix="addition_test")
+    target_actor = IsolatedActorFactory(prefix="target_addition_test")
     
     # Create a note for the like activity
     note = NoteFactory(actor=actor, content="Test note for addition")
@@ -305,8 +305,8 @@ def test_outbox_activity_addition():
 # Test basic Following relationship creation (local)
 def test_following_creation_local():
     # Create isolated actors using helper functions
-    actor = create_isolated_actor("following_test")
-    target_actor = create_isolated_actor("target_test")
+    actor = IsolatedActorFactory(prefix="following_test")
+    target_actor = IsolatedActorFactory(prefix="target_test")
     
     # Create local following relationship using factory
     following = FollowingFactory(actor=actor, target_actor=target_actor)
@@ -320,7 +320,7 @@ def test_following_creation_local():
 # Test Following relationship creation (remote)
 def test_following_creation_remote():
     # Create isolated actor using helper function
-    actor = create_isolated_actor("following_remote_test")
+    actor = IsolatedActorFactory(prefix="following_remote_test")
     
     # Create remote following relationship using factory trait
     following = FollowingFactory.build(actor=actor, remote=True)
@@ -335,7 +335,7 @@ def test_following_creation_remote():
 # Test Following model validation - requires exactly one target
 def test_following_validation_no_target():
     # Create isolated actor using helper function
-    actor = create_isolated_actor("following_validation_test")
+    actor = IsolatedActorFactory(prefix="following_validation_test")
     
     # Create invalid following (no target_actor and no remote data)
     following = Following(
@@ -352,8 +352,8 @@ def test_following_validation_no_target():
 # Test Following model validation - cannot have both local and remote targets
 def test_following_validation_both_targets():
     # Create isolated actors using helper functions
-    actor = create_isolated_actor("following_both_test")
-    target_actor = create_isolated_actor("target_both_test")
+    actor = IsolatedActorFactory(prefix="following_both_test")
+    target_actor = IsolatedActorFactory(prefix="target_both_test")
     
     # Create invalid following (both local and remote targets)
     following = Following(
@@ -370,8 +370,8 @@ def test_following_validation_both_targets():
 # Test Following string representation (local)
 def test_following_str_representation_local():
     # Create isolated actors using helper functions
-    actor = create_isolated_actor("following_str_test")
-    target_actor = create_isolated_actor("target_str_test")
+    actor = IsolatedActorFactory(prefix="following_str_test")
+    target_actor = IsolatedActorFactory(prefix="target_str_test")
     
     following = FollowingFactory(actor=actor, target_actor=target_actor)
     expected = f'{actor.username} follows {target_actor.username} (local)'
@@ -380,7 +380,7 @@ def test_following_str_representation_local():
 # Test Following string representation (remote)
 def test_following_str_representation_remote():
     # Create isolated actor using helper function
-    actor = create_isolated_actor("following_str_remote_test")
+    actor = IsolatedActorFactory(prefix="following_str_remote_test")
     
     following = FollowingFactory.build(actor=actor, remote=True)
     following.save()
@@ -391,8 +391,8 @@ def test_following_str_representation_remote():
 # Test Following unique constraint for local relationships
 def test_following_unique_constraint_local():
     # Create isolated actors using helper functions
-    actor = create_isolated_actor("following_unique_test")
-    target_actor = create_isolated_actor("target_unique_test")
+    actor = IsolatedActorFactory(prefix="following_unique_test")
+    target_actor = IsolatedActorFactory(prefix="target_unique_test")
     
     # Create first following relationship
     first_following = FollowingFactory(actor=actor, target_actor=target_actor)
@@ -405,7 +405,7 @@ def test_following_unique_constraint_local():
 # Test Following unique constraint for remote relationships  
 def test_following_unique_constraint_remote():
     # Create isolated actor using helper function
-    actor = create_isolated_actor("following_unique_remote_test")
+    actor = IsolatedActorFactory(prefix="following_unique_remote_test")
     remote_url = "https://remote.example/users/unique_test"
     
     # Create first remote following relationship
@@ -426,8 +426,8 @@ def test_following_unique_constraint_remote():
 # Test basic Followers relationship creation (local)
 def test_followers_creation_local():
     # Create isolated actors using helper functions
-    actor = create_isolated_actor("followers_test")
-    follower_actor = create_isolated_actor("follower_test")
+    actor = IsolatedActorFactory(prefix="followers_test")
+    follower_actor = IsolatedActorFactory(prefix="follower_test")
     
     # Create local followers relationship using factory
     followers = FollowersFactory(actor=actor, follower_actor=follower_actor)
@@ -441,7 +441,7 @@ def test_followers_creation_local():
 # Test Followers relationship creation (remote)
 def test_followers_creation_remote():
     # Create isolated actor using helper function
-    actor = create_isolated_actor("followers_remote_test")
+    actor = IsolatedActorFactory(prefix="followers_remote_test")
     
     # Create remote followers relationship using factory trait
     followers = FollowersFactory.build(actor=actor, remote=True)
@@ -456,7 +456,7 @@ def test_followers_creation_remote():
 # Test Followers model validation - requires exactly one follower
 def test_followers_validation_no_follower():
     # Create isolated actor using helper function
-    actor = create_isolated_actor("followers_validation_test")
+    actor = IsolatedActorFactory(prefix="followers_validation_test")
     
     # Create invalid followers (no follower_actor and no remote data)
     followers = Followers(
@@ -473,8 +473,8 @@ def test_followers_validation_no_follower():
 # Test Followers model validation - cannot have both local and remote followers
 def test_followers_validation_both_followers():
     # Create isolated actors using helper functions
-    actor = create_isolated_actor("followers_both_test")
-    follower_actor = create_isolated_actor("follower_both_test")
+    actor = IsolatedActorFactory(prefix="followers_both_test")
+    follower_actor = IsolatedActorFactory(prefix="follower_both_test")
     
     # Create invalid followers (both local and remote followers)
     followers = Followers(
@@ -491,8 +491,8 @@ def test_followers_validation_both_followers():
 # Test Followers string representation (local)
 def test_followers_str_representation_local():
     # Create isolated actors using helper functions
-    actor = create_isolated_actor("followers_str_test")
-    follower_actor = create_isolated_actor("follower_str_test")
+    actor = IsolatedActorFactory(prefix="followers_str_test")
+    follower_actor = IsolatedActorFactory(prefix="follower_str_test")
     
     followers = FollowersFactory(actor=actor, follower_actor=follower_actor)
     expected = f'{follower_actor.username} follows {actor.username} (local)'
@@ -501,7 +501,7 @@ def test_followers_str_representation_local():
 # Test Followers string representation (remote)
 def test_followers_str_representation_remote():
     # Create isolated actor using helper function
-    actor = create_isolated_actor("followers_str_remote_test")
+    actor = IsolatedActorFactory(prefix="followers_str_remote_test")
     
     followers = FollowersFactory.build(actor=actor, remote=True)
     followers.save()
@@ -512,8 +512,8 @@ def test_followers_str_representation_remote():
 # Test Followers unique constraint for local relationships
 def test_followers_unique_constraint_local():
     # Create isolated actors using helper functions
-    actor = create_isolated_actor("followers_unique_test")
-    follower_actor = create_isolated_actor("follower_unique_test")
+    actor = IsolatedActorFactory(prefix="followers_unique_test")
+    follower_actor = IsolatedActorFactory(prefix="follower_unique_test")
     
     # Create first followers relationship
     first_followers = FollowersFactory(actor=actor, follower_actor=follower_actor)
@@ -526,7 +526,7 @@ def test_followers_unique_constraint_local():
 # Test Followers unique constraint for remote relationships  
 def test_followers_unique_constraint_remote():
     # Create isolated actor using helper function
-    actor = create_isolated_actor("followers_unique_remote_test")
+    actor = IsolatedActorFactory(prefix="followers_unique_remote_test")
     remote_url = "https://remote.example/users/unique_follower_test"
     
     # Create first remote followers relationship
@@ -544,8 +544,8 @@ def test_followers_unique_constraint_remote():
 # Test Following status field functionality
 def test_following_status_field():
     # Create isolated actors using helper functions
-    actor = create_isolated_actor("following_status_test")
-    target_actor = create_isolated_actor("target_status_test")
+    actor = IsolatedActorFactory(prefix="following_status_test")
+    target_actor = IsolatedActorFactory(prefix="target_status_test")
     
     # Test with inactive trait
     following = FollowingFactory(actor=actor, target_actor=target_actor, inactive=True)
@@ -560,8 +560,8 @@ def test_following_status_field():
 # Test Followers status field functionality
 def test_followers_status_field():
     # Create isolated actors using helper functions
-    actor = create_isolated_actor("followers_status_test")
-    follower_actor = create_isolated_actor("follower_status_test")
+    actor = IsolatedActorFactory(prefix="followers_status_test")
+    follower_actor = IsolatedActorFactory(prefix="follower_status_test")
     
     # Test with inactive trait
     followers = FollowersFactory(actor=actor, follower_actor=follower_actor, inactive=True)
