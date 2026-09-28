@@ -1,5 +1,6 @@
 import pytest
 import random
+import requests
 from testbed.core.factories import (
     UserOnlyFactory,
     UserWithActorsFactory,
@@ -10,6 +11,7 @@ from testbed.core.factories import (
     FollowActivityFactory,
 )
 from testbed.core.models import Actor, User
+from testbed.core.tests.helpers import FakeSource
 from testbed.core.utils.actor_utils import populate_source_actor_outbox
 
 # Creates an isolated actor with note for validation tests
@@ -213,3 +215,21 @@ def oauth_auth_context(mock_request):
         'has_portability_scope': False,
         'request': mock_request
     }
+
+# The network under transfer/transport.py, and the deployed policy it enforces
+# A scripted source server in place of the network, for anything that calls `transport.get`
+@pytest.fixture
+def fake_source(monkeypatch):
+    source = FakeSource()
+    # Where requests hands a prepared request to the network, which is where the `responses` library patches too
+    monkeypatch.setattr(
+        requests.adapters.HTTPAdapter,
+        "send",
+        lambda adapter, request, **kwargs: source.send(request, **kwargs),
+    )
+    return source
+
+
+@pytest.fixture
+def https_only(settings):
+    settings.OAUTH2_PROVIDER = {**settings.OAUTH2_PROVIDER, "ALLOWED_REDIRECT_URI_SCHEMES": ["https"]}
