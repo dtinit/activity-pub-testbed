@@ -4,11 +4,10 @@ The one HTTP client every destination module uses to reach a source server.
 Owns
     - The URL policy, checked before any socket opens: `https` always; `http` only to a loopback
       host, and only where the environment permits it
-    - The `Authorization: Bearer` header, on a session nothing in the environment can rewrite it from
+    - The `Authorization: Bearer` header
     - `Accept` negotiation for ActivityPub content types, with an `application/json` fallback
     - A fixed timeout on every call, and a cap on the decoded size of every body
     - The descriptive `User-Agent` that lets a source operator see who is fetching
-    - Capture of every exchange as an artifact, with credentials redacted as it is built
 
 Must not be bypassed. LOLA §6.1 makes two MUST claims:
     - "The destination MUST fetch data using HTTPS, not HTTP"
@@ -20,17 +19,15 @@ Both are auditable only while there is exactly one exit point, which is why this
 Must not
     - Relax the scheme policy beyond loopback. HTTPS is required unless the host resolves to
       loopback and the environment permits it (true in development, test and CI; false in staging and production).
-    - Store anything. Artifacts go back to the caller, which decides where they live.
+    - Store anything. The caller decides what to keep from a Fetched, and where.
 """
 
-import ipaddress
 import json
 import logging
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 import requests
-from django.utils import timezone
 from oauth2_provider.settings import oauth2_settings
 
 logger = logging.getLogger(__name__)
@@ -52,11 +49,8 @@ ACCEPT = (
     "application/json; q=0.5"
 )
 USER_AGENT = "activitypub-testbed-lola-destination (+https://github.com/dtinit/activity-pub-testbed)"
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
-# Keep secrets out of the artifacts. Applies to both the headers we send and the headers the source sends back.
-# Serves as evidence for LOLA §6.1 ("MUST provide the token"), without revealing the token.
-_REDACTED_HEADERS = frozenset({"authorization", "proxy-authorization", "cookie", "set-cookie"})
-_REDACTED = "[redacted]"
 
 class TransportError(Exception):
     """
@@ -73,10 +67,8 @@ class Fetched:
     """
     url: str            # where the response came from
     status: int         # status code
-    headers: object     # source headers
     body: object        # the parsed JSON (or None when the body isn't)
     text: str           # the body as text whether or not it parsed
-    artifact: dict      # the exchange as a JSON-serialisable dict with the headers already redacted
 
 
 def get(url, *, token):
@@ -96,9 +88,14 @@ def get(url, *, token):
 
     try:
         _check_url(url)
-        with _new_session() as session:
-            with _send(session, url, headers) as response:
+        try:
+            with requests.get(
+                url, headers=headers, timeout=TIMEOUT, allow_redirects=False, stream=True
+            ) as response:
                 content = _read_body(response)
+        except requests.RequestException as exc:
+            # Connecting, timing out or failing mid-body
+            raise TransportError(f"could not fetch {url} ({type(exc).__name__})") from exc
     except TransportError as exc:
         logger.warning("Transport GET did not complete: %s", exc)
         raise
@@ -106,7 +103,7 @@ def get(url, *, token):
     text = content.decode("utf-8", errors="replace")
     logger.info(
         "Transport GET %s -> %s (%d bytes, %d ms)",
-        _describe(response.url),
+        response.url,
         response.status_code,
         len(content),
         response.elapsed.total_seconds() * 1000,
@@ -114,10 +111,8 @@ def get(url, *, token):
     return Fetched(
         url=response.url,
         status=response.status_code,
-        headers=response.headers,
         body=_parse_json(text),
         text=text,
-        artifact=_artifact(url, response, text),
     )
 
 def _check_url(url):
@@ -129,74 +124,42 @@ def _check_url(url):
     """
     try:
         parts = urlsplit(url)
-        parts.port  # malformed or out of range port gets caught
     except ValueError:
         raise TransportError("refused a malformed URL") from None
 
     if parts.username is not None or parts.password is not None:
-        raise TransportError(f"refused {_describe(url)}: credentials in the URL")
+        raise TransportError("refused a URL with credentials in it")
     if not parts.hostname:
-        raise TransportError(f"refused {_describe(url)}: no host")
+        raise TransportError(f"refused {url}: no host")
 
     if parts.scheme == "http":
-        if not _is_loopback(parts.hostname):
-            raise TransportError(f"refused {_describe(url)}: plaintext is allowed to loopback only (LOLA §6.1)")
+        if parts.hostname not in _LOOPBACK_HOSTS:
+            raise TransportError(f"refused {url}: plaintext is allowed to loopback only (LOLA §6.1)")
         
         allowed = {scheme.lower() for scheme in oauth2_settings.ALLOWED_REDIRECT_URI_SCHEMES}
 
         if "http" not in allowed:
-            raise TransportError(f"refused {_describe(url)}: plaintext is not allowed in this environment")
+            raise TransportError(f"refused {url}: plaintext is not allowed in this environment")
     
     elif parts.scheme != "https":
-        raise TransportError(f"refused {_describe(url)}: scheme {parts.scheme!r} is not https")
-
-def _is_loopback(host):
-    if host == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        return False
-    
-# The URL as it may appear in a log line or an error (no userinfo, no query string or fragment)
-def _describe(url):
-    try:
-        parts = urlsplit(url)
-        host, port = parts.hostname or "", parts.port
-    except ValueError:
-        return "a malformed URL"
-    if ":" in host:
-        host = f"[{host}]"  # an IPv6 literal
-    netloc = f"{host}:{port}" if port else host
-    return f"{parts.scheme}://{netloc}{parts.path}"
-
-def _new_session():
-    session = requests.Session()
-    session.trust_env = False
-    return session
-
-# One GET with status and headers only, the body stays unread
-def _send(session, url, headers):
-    try:
-        return session.get(url, headers=headers, timeout=TIMEOUT, allow_redirects=False, stream=True)
-    except requests.Timeout as exc:
-        raise TransportError(f"timed out reaching {_describe(url)}") from exc
-    except requests.RequestException as exc:
-        raise TransportError(f"could not reach {_describe(url)} ({type(exc).__name__})") from exc
+        raise TransportError(f"refused {url}: scheme {parts.scheme!r} is not https")
 
 def _read_body(response):
-    content = bytearray()
+    # A declared length over the cap is refused before anything is read
     try:
-        for chunk in response.iter_content(chunk_size=_CHUNK_BYTES):
-            content += chunk
-            if len(content) > MAX_BODY_BYTES:
-                raise TransportError(
-                    f"the response from {_describe(response.url)} is larger than {MAX_BODY_BYTES} bytes"
-                )
-    except requests.RequestException as exc:
+        declared = int(response.headers.get("Content-Length", ""))
+    except ValueError:
+        declared = None 
+    if declared is not None and declared > MAX_BODY_BYTES:
         raise TransportError(
-            f"failed reading the response from {_describe(response.url)} ({type(exc).__name__})"
-        ) from exc
+            f"the response from {response.url} declares more than {MAX_BODY_BYTES} bytes"
+        )
+
+    content = bytearray()
+    for chunk in response.iter_content(chunk_size=_CHUNK_BYTES):
+        content += chunk
+        if len(content) > MAX_BODY_BYTES:
+            raise TransportError(f"the response from {response.url} is larger than {MAX_BODY_BYTES} bytes")
     return bytes(content)
 
 def _parse_json(text):
@@ -204,21 +167,3 @@ def _parse_json(text):
         return json.loads(text)
     except (ValueError, RecursionError):
         return None
-
-def _artifact(requested_url, response, text):
-    return {
-        "method": "GET",
-        "requested_url": requested_url,
-        "url": response.url,
-        "fetched_at": timezone.now().isoformat(),
-        "request_headers": _redacted(response.request.headers),
-        "status": response.status_code,
-        "response_headers": _redacted(response.headers),
-        "body": text,
-    }
-
-def _redacted(headers):
-    return {
-        name: _REDACTED if name.lower() in _REDACTED_HEADERS else value
-        for name, value in headers.items()
-    }
