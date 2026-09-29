@@ -7,6 +7,7 @@ Owns
     - The `Authorization: Bearer` header
     - `Accept` negotiation for ActivityPub content types, with an `application/json` fallback
     - A fixed timeout on every call, and a cap on the decoded size of every body
+    - Detection of `429`, with `Retry-After` turned into when the source asked us to come back
     - The descriptive `User-Agent` that lets a source operator see who is fetching
 
 Must not be bypassed. LOLA §6.1 makes two MUST claims:
@@ -25,9 +26,12 @@ Must not
 import json
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
 
 import requests
+from django.utils import timezone
+from django.utils.http import parse_http_date_safe
 from oauth2_provider.settings import oauth2_settings
 
 logger = logging.getLogger(__name__)
@@ -51,13 +55,21 @@ ACCEPT = (
 USER_AGENT = "activitypub-testbed-lola-destination (+https://github.com/dtinit/activity-pub-testbed)"
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
+DEFAULT_RETRY_AFTER = timedelta(seconds=60)
+MAX_RETRY_AFTER = timedelta(hours=24)
+
 
 class TransportError(Exception):
     """
     A request that produced no usable response due to refused by the URL policy, unreachable, timed out or too large.
-    
     It is not a 4xx or 5xx status, which are returned as Fetched for the caller to deal with.
     """
+
+
+class RateLimited(TransportError):
+    def __init__(self, message, retry_when):
+        super().__init__(message)
+        self.retry_when = retry_when
 
 @dataclass(frozen=True)
 class Fetched:
@@ -80,7 +92,8 @@ def get(url, *, token):
     LOLA §6.1 wants the token on every request after that, "even when it believes the requests are for public
     content", so leaving it out has to be a visible decision at the call site.
 
-    Returns a Fetched whatever the status. Raises TransportError when no usable response arrived.
+    Returns a Fetched whatever the status, except a 429, which raises RateLimited.
+    Raises TransportError when no usable response arrived.
     """
     headers = {"Accept": ACCEPT, "User-Agent": USER_AGENT}
     if token is not None:
@@ -92,6 +105,9 @@ def get(url, *, token):
             with requests.get(
                 url, headers=headers, timeout=TIMEOUT, allow_redirects=False, stream=True
             ) as response:
+                if response.status_code == 429:
+                    retry_when = retry_when_from(response.headers.get("Retry-After"), now=timezone.now())
+                    raise RateLimited(f"{url} answered 429, asking us to wait until {retry_when.isoformat()}", retry_when)
                 content = _read_body(response)
         except requests.RequestException as exc:
             # Connecting, timing out or failing mid-body
@@ -114,6 +130,25 @@ def get(url, *, token):
         body=_parse_json(text),
         text=text,
     )
+
+def retry_when_from(value, *, now):
+    """
+    Retry-After is delay-seconds or an HTTP-date.
+    Absent or unparseable gives DEFAULT_RETRY_AFTER.
+    """
+    value = (value or "").strip()
+    latest = now + MAX_RETRY_AFTER
+
+    if value.isascii() and value.isdigit():
+        try:
+            return min(now + timedelta(seconds=int(value)), latest)
+        except (ValueError, OverflowError):
+            return latest
+
+    timestamp = parse_http_date_safe(value) if value else None
+    if timestamp is None:
+        return now + DEFAULT_RETRY_AFTER
+    return min(max(datetime.fromtimestamp(timestamp, tz=UTC), now), latest)
 
 def _check_url(url):
     """

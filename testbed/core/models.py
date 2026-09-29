@@ -769,6 +769,11 @@ class TransferJob(models.Model):
 
         return jobs.set_collection_progress(self, collection, **values)
 
+    def pause_until(self, retry_when):
+        from testbed.core.transfer import jobs
+
+        return jobs.pause_until(self, retry_when)
+
 
 class PortabilityOutbox(models.Model):
     actor = models.OneToOneField(
