@@ -173,6 +173,8 @@ def test_every_url_the_actor_advertises_answers_without_a_redirect():
     for url in advertised:
         response = client.get(url)
         assert response.status_code == status.HTTP_200_OK, f"{url} answered {response.status_code}"
+        if url not in data['migration'].values():  # migration routes still serve the public collection
+            assert response.json()['id'] == url, f"{url} names itself {response.json()['id']}"
 
 
 # Compare public and authenticated responses side-by-side
