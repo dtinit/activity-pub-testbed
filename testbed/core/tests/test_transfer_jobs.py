@@ -1,8 +1,13 @@
+from datetime import timedelta
+
 import pytest
+from django.utils import timezone
 
 from testbed.core.factories import TransferJobFactory
 from testbed.core.models import TransferJob
+from testbed.core.transfer import transport
 from testbed.core.transfer.jobs import Collection
+from testbed.core.transfer.transport import RateLimited
 
 
 # The collection vocabulary
@@ -125,3 +130,20 @@ def test_set_refreshes_updated_at():
     job.set_collection_progress("content", cursor="page-1")
 
     assert TransferJob.objects.get(pk=job.pk).updated_at > before
+
+
+# A 429 pauses the job
+
+def test_a_429_from_the_source_pauses_the_job(fake_source):
+    # Transport raises. Whoever owns the job records the pause. A pause is not a failure
+    job = TransferJobFactory()
+    fake_source.respond(429, headers={"Retry-After": "120"})
+
+    with pytest.raises(RateLimited) as limited:
+        transport.get(f"{job.source_base_url}/outbox", token="tok")
+    job.pause_until(limited.value.retry_when)
+
+    job.refresh_from_db()
+    assert job.retry_when > timezone.now() + timedelta(seconds=100)  # the source's 120 s, not the default
+    assert job.state == TransferJob.State.ACTIVE
+    assert job.error == ""

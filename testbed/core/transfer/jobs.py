@@ -112,3 +112,13 @@ def set_collection_progress(job, collection, **values):
     )
 
     return dict(entry)
+
+
+def pause_until(job, retry_when):
+    """
+    429. Record that the source asked us to wait, leaving the job active.
+    A pause is not a failure, so `state` and `error` are left alone.
+    """
+    job.retry_when = retry_when
+    job.save(update_fields=["retry_when", "updated_at"])
+    logger.info("Transfer job %s: paused until %s", job.pk, retry_when.isoformat())
