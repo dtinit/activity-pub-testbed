@@ -11,7 +11,7 @@ djangorestframework==3.18.1
 factory_boy==3.3.3
 html-sanitizer==2.4.4
 libsass==0.23.0
-Markdown==3.7
+Markdown==3.11
 pip-tools==7.4.1
 pre_commit==4.2.0
 psycopg2-binary==2.9.13
