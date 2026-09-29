@@ -1,5 +1,6 @@
 import gzip
 import io
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import requests
@@ -125,3 +126,24 @@ def test_every_status_comes_back_for_the_caller_to_judge(fake_source):
     assert fetched.status == 404
     assert fetched.body is None
     assert fetched.text == "<html>Not Found</html>"
+
+
+# A 429
+
+NOW = datetime(2026, 9, 25, 12, 0, tzinfo=UTC)
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("120", NOW + timedelta(seconds=120)),  # delay-seconds
+        ("Fri, 25 Sep 2026 12:05:00 GMT", NOW + timedelta(minutes=5)),  # an HTTP-date
+        ("Thu, 24 Sep 2026 12:00:00 GMT", NOW),  # a date already past: now, never earlier
+        (None, NOW + transport.DEFAULT_RETRY_AFTER),  # absent: RFC 6585 lets a 429 leave it out
+        ("soon", NOW + transport.DEFAULT_RETRY_AFTER),  # unparseable: the default, never 1970
+        ("172800", NOW + transport.MAX_RETRY_AFTER),  # 48 hours asked for, 24 given
+        ("9" * 12, NOW + transport.MAX_RETRY_AFTER),  # unclamped, this overflows a datetime
+        ("9" * 5000, NOW + transport.MAX_RETRY_AFTER),  # past Python's 4,300-digit int() limit
+    ],
+)
+def test_retry_after_becomes_a_bounded_retry_when(value, expected):
+    assert transport.retry_when_from(value, now=NOW) == expected
