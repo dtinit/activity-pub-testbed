@@ -1,0 +1,32 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    ignore:
+      # Stay on the Django 5.2 LTS line
+      - dependency-name: "django"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "django-allauth"
+        versions: [">=65.14.2"]
+      - dependency-name: "django-oauth-toolkit"
+      - dependency-name: "ruff"
+    groups:
+      patch-updates:
+        applies-to: version-updates
+        patterns: ["*"]
+        exclude-patterns:
+          - "django"
+          - "django-oauth-toolkit"
+          - "django-allauth"
+          - "djangorestframework"
+        update-types: ["patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns: ["*"]
