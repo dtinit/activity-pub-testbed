@@ -5,7 +5,7 @@ Everything under `testbed/core/` outside this package is the source server. This
 
 Module ownership:
 
-    transport.py   HTTP client, scheme policy, retry and backoff, 429 handling
+    transport.py   HTTP client, URL policy, same-origin redirects, 429 detection (no retry, no backoff)
     discovery.py   RFC8414 metadata, public Actor, authenticated Actor, migration URL resolution
     auth.py        Authorization URL construction, state, callback parsing, token exchange
     fetch.py       Collection walking, pagination traversal, raw artifact capture
