@@ -176,7 +176,7 @@ LOGGING = {
         "plain_console": {
             "()": structlog.stdlib.ProcessorFormatter,
             "processor": structlog.dev.ConsoleRenderer(
-                pad_event=0,
+                pad_event_to=0,
             ),
         },
         "key_value": {
