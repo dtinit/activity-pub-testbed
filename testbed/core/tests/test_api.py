@@ -157,17 +157,20 @@ class TestLOLAAuthenticationAPI:
     
     # Test that content-type headers are set correctly for API responses
     @pytest.mark.django_db
-    def test_content_type_headers_set_correctly(self):
+    @pytest.mark.parametrize(
+        "accept",
+        ["application/activity+json", 'application/ld+json; profile="https://www.w3.org/ns/activitystreams"'],
+    )
+    def test_content_type_headers_set_correctly(self, accept):
+        # ActivityPub §3.2: both media types are answered, each with its own type, never a 406
         actor = IsolatedActorFactory(prefix="content_type_test")
         
-        # Request with format=json
         response = lola_client(actor).get(
-            reverse("actor-detail", kwargs={"pk": actor.id}), {"format": "json"}
+            reverse("actor-detail", kwargs={"pk": actor.id}), HTTP_ACCEPT=accept
         )
         
         assert response.status_code == status.HTTP_200_OK
-        # Should have JSON content type (DRF default for format=json)
-        assert response["Content-Type"] == "application/json"
+        assert response["Content-Type"] == accept
         # Should have CORS header for federation
         assert response["Access-Control-Allow-Origin"] == "*"
         # Should have migration field (authenticated)
@@ -273,7 +276,7 @@ class TestFollowingCollectionEndpoint:
         
         assert response.status_code == status.HTTP_200_OK
         # Should have proper ActivityPub content type and CORS for federation
-        assert response["Content-Type"] == "application/json"
+        assert response["Content-Type"] == "application/activity+json"
         assert response["Access-Control-Allow-Origin"] == "*"
 
 
