@@ -228,7 +228,7 @@ class TestFollowingCollectionEndpoint:
         # Validate ActivityPub OrderedCollection structure
         assert data["@context"] == "https://www.w3.org/ns/activitystreams"
         assert data["type"] == "OrderedCollection"
-        assert data["id"].endswith(f"/actors/{source_actor.id}/following")
+        assert data["id"].endswith(f"/actors/{source_actor.id}/following/")
         assert "totalItems" in data
         assert "orderedItems" in data
         
@@ -345,7 +345,7 @@ class TestFollowersCollectionEndpoint:
         # Validate ActivityPub OrderedCollection structure
         assert data["@context"] == "https://www.w3.org/ns/activitystreams"
         assert data["type"] == "OrderedCollection"
-        assert data["id"].endswith(f"/actors/{target_actor.id}/followers")
+        assert data["id"].endswith(f"/actors/{target_actor.id}/followers/")
         
         # Should show active followers only
         assert data["totalItems"] == 2
@@ -409,8 +409,8 @@ class TestLOLACollectionDiscovery:
         
         assert "following" in lola_data
         assert "followers" in lola_data
-        assert lola_data["following"].endswith(f"/actors/{actor.id}/following")
-        assert lola_data["followers"].endswith(f"/actors/{actor.id}/followers")
+        assert lola_data["following"].endswith(f"/actors/{actor.id}/following/")
+        assert lola_data["followers"].endswith(f"/actors/{actor.id}/followers/")
 
     # Validate that collection discovery demonstrates LOLA's privacy-first approach
     @pytest.mark.django_db
