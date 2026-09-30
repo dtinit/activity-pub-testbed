@@ -220,7 +220,7 @@ def test_follow_activity_remote_actor_validation():
 
 # Test outbox is created automatically for actors
 def test_portability_outbox_creation():
-    from testbed.core.utils.actor_utils import populate_source_actor_outbox
+    from testbed.core.utils.provisioning import provision_actor_content
     from testbed.core.models import Note, CreateActivity
     
     # Create an isolated actor for testing
@@ -237,7 +237,7 @@ def test_portability_outbox_creation():
     assert actor_create_activities.count() >= 1
     
     # Manually populate the outbox with additional content for testing
-    populate_source_actor_outbox(actor, num_notes=2)
+    provision_actor_content(actor)
     
     # Now verify we have notes
     note_activities = actor.portability_outbox.activities_create.filter(note__isnull=False)

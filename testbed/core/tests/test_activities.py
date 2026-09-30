@@ -9,7 +9,7 @@ from testbed.core.factories import (
     LikeActivityFactory,
     FollowActivityFactory,
 )
-from testbed.core.utils.actor_utils import create_remote_follow
+from testbed.core.utils.provisioning import provision_actor_content
 
 # Test Create activity for note creation
 @pytest.mark.django_db
@@ -183,12 +183,15 @@ def test_activity_previously_round_trip(actor, note):
 
 # LOLA §3.3.1: "New Follow activities from the new Actor are optional and not linked to old Follow activities.
 # New Follow activities should not have older timestamps or breadcrumbs."
+# Provisioning backdates Notes, Creates and Likes, so it is where a backdated Follow would come from
 @pytest.mark.django_db
 def test_new_follow_carries_no_history(actor):
     before = timezone.now()
-    follow = create_remote_follow(actor)
+    provision_actor_content(actor)
     after = timezone.now()
 
-    follow.refresh_from_db()
-    assert before <= follow.timestamp <= after
-    assert follow.previously == []
+    follows = FollowActivity.objects.filter(actor=actor)
+    assert follows.exists()
+    for follow in follows:
+        assert before <= follow.timestamp <= after
+        assert follow.previously == []

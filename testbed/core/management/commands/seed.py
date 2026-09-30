@@ -2,19 +2,12 @@ import random
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.conf import settings
-from testbed.core.models import Actor, Following, Followers
+from testbed.core.models import Actor, Following, Followers, Note
 from testbed.core.factories import UserWithActorsFactory
-from testbed.core.utils.actor_utils import populate_source_actor_outbox
+from testbed.core.utils.provisioning import REMOTE_SERVERS
 
 
 User = get_user_model()
-
-# sample remote servers for federation testing
-REMOTE_SERVERS = [
-    ("mastodon.social", ["mastodon_user1", "mastodon_user2", "mastodon_user3"]),
-    ("pixelfed.social", ["pixel_user1", "pixel_user2", "pixel_user3"]),
-    ("pleroma.instance", ["pleroma_user1", "pleroma_user2", "pleroma_user3"]),
-]
 
 
 class Command(BaseCommand):
@@ -30,23 +23,22 @@ class Command(BaseCommand):
     def generate_social_relationships(self, source_actors):
         """
         Generate realistic social relationships for LOLA collections testing.
-        
-        Creates varied popularity patterns with both local and remote relationships
-        to simulate real-world ActivityPub social networks.
-        
+
+        Creates varied popularity patterns of local relationships between the seeded actors.
+        Remote relationships are not made here, provisioning gives every actor its own.
+
         Args:
             source_actors: List of source Actor objects
-            
+
         Returns:
-            tuple: (following_count, followers_count, remote_relationships_count)
+            tuple: (following_count, followers_count)
         """
         following_count = 0
         followers_count = 0
-        remote_relationships_count = 0
-        
+
         if len(source_actors) < 2:
             self.stdout.write(self.style.WARNING("Not enough actors for social relationships"))
-            return 0, 0, 0
+            return 0, 0
         
         # Create personas with different popularity levels
         actors_list = list(source_actors)
@@ -98,92 +90,7 @@ class Command(BaseCommand):
                 if created:
                     followers_count += 1
         
-        # Generate remote relationships for federation testing
-        for i, actor in enumerate(actors_list[:5]):  # First 5 actors get remote relationships
-            # Create 1-2 remote following relationships per actor
-            remote_follow_count = random.randint(1, 2)
-            
-            for _ in range(remote_follow_count):
-                # Select random remote server and user
-                server, usernames = random.choice(REMOTE_SERVERS)
-                username = random.choice(usernames)
-                
-                # Create remote actor data
-                remote_actor_url = f"https://{server}/users/{username}"
-                remote_actor_data = {
-                    "type": "Person",
-                    "id": remote_actor_url,
-                    "preferredUsername": username,
-                    "name": f"{username.replace('_', ' ').title()}",
-                    "summary": f"ActivityPub user from {server}",
-                    "inbox": f"https://{server}/users/{username}/inbox",
-                    "outbox": f"https://{server}/users/{username}/outbox",
-                    "followers": f"https://{server}/users/{username}/followers",
-                    "following": f"https://{server}/users/{username}/following"
-                }
-                
-                # Create remote Following relationship
-                following, created = Following.objects.get_or_create(
-                    actor=actor,
-                    target_actor_url=remote_actor_url,
-                    defaults={
-                        'target_actor_data': remote_actor_data,
-                        'status': Following.STATUS_ACTIVE
-                    }
-                )
-                if created:
-                    following_count += 1
-                    remote_relationships_count += 1
-                    
-                    # Create corresponding remote Follow activity in outbox for consistency
-                    from testbed.core.factories import FollowActivityFactory
-                    remote_follow_activity = FollowActivityFactory.create(
-                        remote=True,  # Uses remote trait
-                        actor=actor,
-                        target_actor_url=remote_actor_url,
-                        target_actor_data=remote_actor_data,
-                        visibility="public"
-                    )
-                    actor.portability_outbox.add_activity(remote_follow_activity)
-        
-        # Create some remote followers for popular actors (federation incoming)
-        for actor in popular_actors:
-            # Popular actors get 1-3 remote followers
-            remote_follower_count = random.randint(1, 3)
-            
-            for _ in range(remote_follower_count):
-                # Select random remote server and user
-                server, usernames = random.choice(REMOTE_SERVERS)
-                username = random.choice(usernames)
-                
-                # Ensure unique remote follower
-                remote_follower_url = f"https://{server}/users/{username}_follower_{_}"
-                
-                # Create remote follower data
-                remote_follower_data = {
-                    "type": "Person", 
-                    "id": remote_follower_url,
-                    "preferredUsername": f"{username}_follower_{_}",
-                    "name": f"Remote Follower {username.replace('_', ' ').title()}",
-                    "summary": f"Remote follower from {server}",
-                    "inbox": f"https://{server}/users/{username}_follower_{_}/inbox",
-                    "outbox": f"https://{server}/users/{username}_follower_{_}/outbox"
-                }
-                
-                # Create remote Followers relationship
-                follower, created = Followers.objects.get_or_create(
-                    actor=actor,
-                    follower_actor_url=remote_follower_url,
-                    defaults={
-                        'follower_actor_data': remote_follower_data,
-                        'status': Followers.STATUS_ACTIVE
-                    }
-                )
-                if created:
-                    followers_count += 1
-                    remote_relationships_count += 1
-        
-        return following_count, followers_count, remote_relationships_count
+        return following_count, followers_count
 
 
     def handle(self, *args, **kwargs):
@@ -316,14 +223,13 @@ class Command(BaseCommand):
             # Generate realistic social relationships for LOLA collections
             # This ensures consistency between outbox Follow activities and Following collection state
             self.stdout.write(self.style.WARNING("Generating realistic social relationships..."))
-            following_count, followers_count, remote_relationships_count = self.generate_social_relationships(source_actors)
+            following_count, followers_count = self.generate_social_relationships(source_actors)
             
             self.stdout.write(
                 self.style.SUCCESS(
                     f'Social graph generated:\n'
-                    f'- {following_count} Following relationships\n'
-                    f'- {followers_count} Followers relationships\n'
-                    f'- {remote_relationships_count} Remote actor relationships\n'
+                    f'- {following_count} local Following relationships\n'
+                    f'- {followers_count} local Followers relationships\n'
                 )
             )
 
@@ -350,7 +256,7 @@ class Command(BaseCommand):
             # Count all activities
             total_actors = len(actors)
             total_users = len(regular_users) + len(login_users)
-            total_notes = len(source_actors) * 3 # Only source actors have notes
+            total_notes = Note.objects.filter(actor__in=source_actors).count() # Only source actors have notes
             total_creates = total_notes + total_actors # Notes + Actor creates (both source and destination actors)
 
             self.stdout.write(
@@ -365,7 +271,7 @@ class Command(BaseCommand):
                     f'- {remote_like_count} Remote Like activities\n'
                     f'- {local_follow_count} Local Follow activities\n'
                     f'- {remote_follow_count} Remote Follow activities\n\n'
-                    f'Federation seeding created with servers: {", ".join(server for server, _ in REMOTE_SERVERS)}' 
+                    f'Federation seeding created with servers: {", ".join(REMOTE_SERVERS)}' 
                 )
             )
 
