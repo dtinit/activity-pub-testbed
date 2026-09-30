@@ -90,3 +90,8 @@ class OAuthApplicationForm(forms.ModelForm):
             self.instance.authorization_grant_type = 'authorization-code'
         
         self.fields['redirect_uris'].help_text = ''
+        
+        client_secret = getattr(self.instance, 'raw_client_secret', None)
+        self.initial['client_secret'] = client_secret or ''
+        if not client_secret:
+            self.fields['client_secret'].widget.attrs['placeholder'] = 'Not available for this account'

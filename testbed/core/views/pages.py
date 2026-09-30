@@ -18,6 +18,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
+from django.views.decorators.cache import never_cache
+from django.views.decorators.debug import sensitive_post_parameters
 
 from ..models import Actor
 from ..oauth.forms import OAuthApplicationForm
@@ -50,6 +52,10 @@ def report_activity(request):
     return render(request, "report_activity_form.html")
 
 
+# The OAuth form shows the owner's client secret in plaintext so never cache the page, and keep the
+# secret out of error reports, since the read-only field is still submitted with the form
+@never_cache
+@sensitive_post_parameters("client_secret")
 def index(request):
     if not request.user.is_authenticated:
         return render(request, "index.html")
