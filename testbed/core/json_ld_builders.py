@@ -200,33 +200,27 @@ def build_outbox_json_ld(outbox, auth_context=None):
         elif isinstance(activity, FollowActivity):
             return build_follow_activity_json_ld(activity, auth_context)
 
-    return {
-        "@context": build_basic_context(),
-        "type": "OrderedCollection",
-        "id": build_outbox_id(outbox.actor.id, request),
-        "totalItems": len(all_activities),
-        "items": [build_activity_json_ld(activity) for activity in all_activities],
-    }
+    items = [build_activity_json_ld(activity) for activity in all_activities]
+    return build_collection_json_ld(build_outbox_id(outbox.actor.id, request), items)
 
 
-def build_collection_json_ld(collection_id, items, total_items=None):
+def build_collection_json_ld(collection_id, items):
     """
-    Build ActivityPub OrderedCollection JSON-LD.
-    
+    The one envelope every LOLA collection is served in, the outbox included.
+
     Args:
         collection_id: The full URL/ID for the collection
-        items: List of collection items (actors, activities, etc.)
-        total_items: Optional total count override (defaults to len(items))
-    
+        items: The collection's items, already in its documented order
+
     Returns:
         Dict containing ActivityPub OrderedCollection
     """
     return {
-        "@context": "https://www.w3.org/ns/activitystreams",
+        "@context": build_basic_context(),
         "type": "OrderedCollection",
         "id": collection_id,
-        "totalItems": total_items if total_items is not None else len(items),
-        "orderedItems": items
+        "totalItems": len(items),
+        "orderedItems": items,
     }
 
 
