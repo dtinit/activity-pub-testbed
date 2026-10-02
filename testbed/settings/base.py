@@ -259,4 +259,12 @@ REST_FRAMEWORK = {
         'oauth2_provider.contrib.rest_framework.OAuth2Authentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
+    # ActivityPub's two media types first, so an ActivityPub client, or one that sends no Accept
+    # header, gets application/activity+json. Plain JSON and the browsable API stay for the rest
+    'DEFAULT_RENDERER_CLASSES': [
+        'testbed.core.renderers.ActivityJSONRenderer',
+        'testbed.core.renderers.ActivityStreamsJSONLDRenderer',
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ],
 }

@@ -51,7 +51,7 @@ def test_actor_without_token_includes_oauth_endpoint_but_no_migration():
     
     # Basic Actor fields must be present
     assert data['type'] == 'Person'
-    assert data['id'] == f'http://testserver/api/actors/{actor.id}'
+    assert data['id'] == f'http://testserver/api/actors/{actor.id}/'
     assert 'inbox' in data
     assert 'preferredUsername' in data
     
@@ -114,7 +114,7 @@ def test_actor_with_portability_token_includes_migration():
     
     # Basic fields must still be present
     assert data['type'] == 'Person'
-    assert data['id'] == f'http://testserver/api/actors/{actor.id}'
+    assert data['id'] == f'http://testserver/api/actors/{actor.id}/'
 
 
 # Verify wrong OAuth scope does not grant access to migration data
@@ -149,29 +149,32 @@ def test_migration_urls_point_to_dedicated_migration_routes():
     data = response.json()
     
     migration = data['migration']
-    actor_url = f'http://testserver/api/actors/{actor.id}'
-    
+    actor_url = f'http://testserver/api/actors/{actor.id}/'
+
     # Each migration URL points to its dedicated /migration/... route
-    assert migration['outbox'] == f'{actor_url}/migration/outbox'
-    assert migration['content'] == f'{actor_url}/migration/content'
-    assert migration['following'] == f'{actor_url}/migration/following'
-    assert migration['blocked'] == f'{actor_url}/migration/blocked'
+    assert migration['outbox'] == f'{actor_url}migration/outbox/'
+    assert migration['content'] == f'{actor_url}migration/content/'
+    assert migration['following'] == f'{actor_url}migration/following/'
+    assert migration['blocked'] == f'{actor_url}migration/blocked/'
 
 
-# Verify every advertised dedicated migration route is real and resolves
-def test_dedicated_migration_routes_resolve():
+# Verify every URL the actor advertises answers directly, not with a 301 to another form
+def test_every_url_the_actor_advertises_answers_without_a_redirect():
     actor = source_actor_for()
 
-    # The migration routes enforce token-to-actor binding, so the client must carry a token bound
-    # to this actor (an unbound token would be rejected with actor_mismatch). lola_client() binds
-    # by construction, which is the property being relied on here.
     client = lola_client(actor, user=actor.user)
+    data = client.get(f'/api/actors/{actor.id}/').json()
 
-    # All four advertised migration URLs must resolve (routed and implemented)
-    for surface in ['outbox', 'content', 'following', 'blocked']:
-        response = client.get(f'/api/actors/{actor.id}/migration/{surface}/')
-        assert response.status_code == status.HTTP_200_OK, \
-            f"migration/{surface} route must resolve for a bound portability token"
+    advertised = [data['id']]
+    advertised += [data[name] for name in ('outbox', 'following', 'followers', 'liked', 'blocked')]
+    advertised += list(data['migration'].values())
+
+    # Requested exactly as advertised: a 301 means the ID and its route disagree
+    for url in advertised:
+        response = client.get(url)
+        assert response.status_code == status.HTTP_200_OK, f"{url} answered {response.status_code}"
+        if url not in data['migration'].values():  # migration routes still serve the public collection
+            assert response.json()['id'] == url, f"{url} names itself {response.json()['id']}"
 
 
 # Compare public and authenticated responses side-by-side

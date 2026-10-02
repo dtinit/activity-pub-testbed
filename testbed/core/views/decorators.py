@@ -227,21 +227,16 @@ def build_auth_context(request):
 
 
 def activitypub_content(view_func):
-    """
-    Decorator that adds the required ActivityPub content-type
-    and CORS headers to views that return ActivityPub JSON-LD content.
-    """
-
+    # Decorator that adds the CORS header to views that return ActivityPub JSON-LD content.
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         response = view_func(request, *args, **kwargs)
 
-        # Add ActivityPub headers for JSON responses (preserves DRF browsable API)
+        # JSON responses only; the browsable API is HTML
         if (
             hasattr(request, "accepted_renderer")
             and request.accepted_renderer.format == "json"
         ):
-            response["Content-Type"] = "application/activity+json"
             response["Access-Control-Allow-Origin"] = "*"
 
         return response

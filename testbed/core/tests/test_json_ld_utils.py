@@ -40,7 +40,7 @@ def test_build_id_url(mock_request):
 
 def test_build_actor_id(mock_request):
     actor_id = build_actor_id(123, mock_request)
-    assert actor_id == "http://testserver/api/actors/123"
+    assert actor_id == "http://testserver/api/actors/123/"
 
 def test_build_activity_id(mock_request):
     activity_id = build_activity_id(123, mock_request)
@@ -52,4 +52,4 @@ def test_build_note_id(mock_request):
 
 def test_build_outbox_id(mock_request):
     outbox_id = build_outbox_id(123, mock_request)
-    assert outbox_id == "http://testserver/api/actors/123/outbox"
+    assert outbox_id == "http://testserver/api/actors/123/outbox/"
