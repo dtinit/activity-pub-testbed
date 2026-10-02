@@ -1,5 +1,4 @@
 import pytest
-import random
 import requests
 from testbed.core.factories import (
     UserOnlyFactory,
@@ -12,7 +11,6 @@ from testbed.core.factories import (
 )
 from testbed.core.models import Actor, User
 from testbed.core.tests.helpers import FakeSource
-from testbed.core.utils.actor_utils import populate_source_actor_outbox
 
 # Creates an isolated actor with note for validation tests
 @pytest.fixture
@@ -106,31 +104,6 @@ def user_created_via_signal():
         password="testpass123"
     )
     return user
-
-# Creates a source actor with populated outbox for testing
-@pytest.fixture
-def populated_source_actor():
-    # Get an existing source actor
-    source_actor = User.objects.create_user(
-        username=f"populate_test_user_{random.randint(1000, 9999)}",
-        email="populate_test@example.com",
-        password="testpass123"
-    ).actors.get(role=Actor.ROLE_SOURCE)
-    
-    # Now manually repopulate the outbox with our controlled content for testing
-    # First clear the existing content
-    source_actor.portability_outbox.activities_create.all().delete()
-    source_actor.portability_outbox.activities_like.all().delete()
-    source_actor.portability_outbox.activities_follow.all().delete()
-    
-    # Now populate with known content
-    populate_source_actor_outbox(
-        source_actor=source_actor,
-        num_notes=3,
-        include_local_interactions=True
-    )
-    
-    return source_actor
 
 
 # Provide consistent request objects and authentication contexts for JSON-LD builder testing
