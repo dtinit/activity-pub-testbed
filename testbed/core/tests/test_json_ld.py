@@ -57,13 +57,13 @@ def test_activity_types_in_outbox(outbox, create_activity, like_activity, follow
     json_ld = build_outbox_json_ld(outbox, lola_auth_context)
     
     # Check that we have all activity types
-    activity_types = {item["type"] for item in json_ld["items"]}
+    activity_types = {item["type"] for item in json_ld["orderedItems"]}
     assert "Create" in activity_types
     assert "Like" in activity_types
     assert "Follow" in activity_types
     
     # Check specific activities
-    for item in json_ld["items"]:
+    for item in json_ld["orderedItems"]:
         if item["type"] == "Create":
             assert "object" in item
         elif item["type"] == "Like":
