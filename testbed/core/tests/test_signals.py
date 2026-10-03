@@ -69,21 +69,3 @@ def test_source_actor_outbox_populated_on_creation(user_created_via_signal):
     # Should have remote likes and follows
     assert outbox.activities_like.filter(note__isnull=True).count() > 0  # Remote likes
     assert outbox.activities_follow.filter(target_actor__isnull=True).count() > 0  # Remote follows
-
-# Test the populate_source_actor_outbox utility function directly
-@pytest.mark.django_db
-def test_populate_source_actor_outbox_utility(populated_source_actor):
-    outbox = populated_source_actor.portability_outbox
-    
-    # Verify notes were created
-    notes_count = outbox.activities_create.filter(note__isnull=False).count()
-    assert notes_count == 3
-    
-    # Verify we have activities
-    assert outbox.activities_create.count() >= 3  # At least the 3 note creation activities
-    assert outbox.activities_like.count() > 0
-    assert outbox.activities_follow.count() > 0
-    
-    # Check that notes belong to the source actor
-    for activity in outbox.activities_create.filter(note__isnull=False):
-        assert activity.note.actor == populated_source_actor

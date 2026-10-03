@@ -176,7 +176,7 @@ LOGGING = {
         "plain_console": {
             "()": structlog.stdlib.ProcessorFormatter,
             "processor": structlog.dev.ConsoleRenderer(
-                pad_event=0,
+                pad_event_to=0,
             ),
         },
         "key_value": {
@@ -258,5 +258,13 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'oauth2_provider.contrib.rest_framework.OAuth2Authentication',
         'rest_framework.authentication.SessionAuthentication',
+    ],
+    # ActivityPub's two media types first, so an ActivityPub client, or one that sends no Accept
+    # header, gets application/activity+json. Plain JSON and the browsable API stay for the rest
+    'DEFAULT_RENDERER_CLASSES': [
+        'testbed.core.renderers.ActivityJSONRenderer',
+        'testbed.core.renderers.ActivityStreamsJSONLDRenderer',
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
     ],
 }

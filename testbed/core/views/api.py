@@ -46,7 +46,7 @@ from ..json_ld_builders import (
     build_outbox_json_ld,
     build_relationship_items,
 )
-from ..json_ld_utils import build_actor_id, build_note_id
+from ..json_ld_utils import build_actor_id, build_note_id, build_url
 from ..models import (
     Blocked,
     Followers,
@@ -126,7 +126,7 @@ def following_collection(request, pk, actor):
     )
 
     # Build ActivityPub OrderedCollection
-    collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/following"
+    collection_id = build_url(request, "following-collection", pk=pk)
     collection_data = build_collection_json_ld(collection_id, items)
 
     return Response(collection_data)
@@ -156,7 +156,7 @@ def followers_collection(request, pk, actor):
     )
 
     # Build ActivityPub OrderedCollection
-    collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/followers"
+    collection_id = build_url(request, "followers-collection", pk=pk)
     collection_data = build_collection_json_ld(collection_id, items)
 
     return Response(collection_data)
@@ -187,7 +187,7 @@ def content_collection(request, pk, actor):
     items = [build_note_json_ld(note, auth_context) for note in notes_qs]
 
     # Build ActivityPub OrderedCollection
-    collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/content"
+    collection_id = build_url(request, "content-collection", pk=pk)
     collection_data = build_collection_json_ld(collection_id, items)
 
     return Response(collection_data)
@@ -265,7 +265,7 @@ def liked_collection(request, pk, actor):
         items.append(liked_object)
 
     # Build ActivityPub OrderedCollection
-    collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/liked"
+    collection_id = build_url(request, "liked-collection", pk=pk)
     collection_data = build_collection_json_ld(collection_id, items)
 
     return Response(collection_data)
@@ -306,7 +306,7 @@ def blocked_collection(request, pk, actor):
     )
 
     # Build ActivityPub OrderedCollection in FEP-c648 format
-    collection_id = f"{request.scheme}://{request.get_host()}/api/actors/{pk}/blocked"
+    collection_id = build_url(request, "blocked-collection", pk=pk)
     collection_data = build_collection_json_ld(collection_id, items)
 
     logger.info(f"Blocked collection accessed: actor_id={pk}, items_count={len(items)}")

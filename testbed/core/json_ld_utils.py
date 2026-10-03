@@ -1,3 +1,5 @@
+from django.urls import reverse
+
 ACTIVITY_STREAM_CONTEXT = "https://www.w3.org/ns/activitystreams"
 LOLA_CONTEXT = "https://swicg.github.io/activitypub-data-portability/lola"
 BLOCKED_CONTEXT = "https://purl.archive.org/socialweb/blocked"
@@ -15,6 +17,9 @@ def build_actor_context():
         LOLA_CONTEXT
     ]
 
+def build_url(request, name, **kwargs):
+    return request.build_absolute_uri(reverse(name, kwargs=kwargs))
+
 def build_id_url(type_name, obj_id, request):
     """
     Build dynamic URLs based on the current request.
@@ -24,8 +29,7 @@ def build_id_url(type_name, obj_id, request):
     return f"{base_url}/api/{type_name}/{obj_id}"
 
 def build_actor_id(actor_id, request):
-    base_url = f"{request.scheme}://{request.get_host()}"
-    return f"{base_url}/api/actors/{actor_id}"
+    return build_url(request, "actor-detail", pk=actor_id)
 
 def build_activity_id(activity_id, request):
     base_url = f"{request.scheme}://{request.get_host()}"
@@ -36,6 +40,4 @@ def build_note_id(note_id, request):
     return f"{base_url}/api/notes/{note_id}"
 
 def build_outbox_id(actor_id, request):
-    # Build outbox URL with dynamic base URL.
-    base_url = f"{request.scheme}://{request.get_host()}"
-    return f"{base_url}/api/actors/{actor_id}/outbox"
+    return build_url(request, "actor-outbox", pk=actor_id)

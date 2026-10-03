@@ -3,7 +3,8 @@ from .json_ld_utils import (build_basic_context,
                             build_actor_id,
                             build_activity_id,
                             build_note_id,
-                            build_outbox_id)
+                            build_outbox_id,
+                            build_url)
 from .oauth.utils import build_oauth_endpoint_url
 from .models import CreateActivity, LikeActivity, FollowActivity
 
@@ -47,7 +48,7 @@ def build_actor_json_ld(actor, auth_context=None):
         "id": actor_id,
         "preferredUsername": actor.username,
         "name": actor.username,
-        "inbox": f"{actor_id}/inbox",
+        "inbox": f"{actor_id}inbox",  # no route serves the inbox yet, so reverse() cannot build it
         "previously": actor.previously or [],
         "endpoints": {
             "oauthAuthorizationEndpoint": oauth_authorize_url,
@@ -57,18 +58,18 @@ def build_actor_json_ld(actor, auth_context=None):
 
     # Privacy-sensitive fields ONLY with portability scope
     if auth_context and auth_context.get('has_portability_scope'):
-        actor_data["outbox"] = f"{actor_id}/outbox"
-        actor_data["following"] = f"{actor_id}/following"
-        actor_data["followers"] = f"{actor_id}/followers"
-        actor_data["liked"] = f"{actor_id}/liked"
-        actor_data["blocked"] = f"{actor_id}/blocked"
-        
+        actor_data["outbox"] = build_url(request, "actor-outbox", pk=actor.id)
+        actor_data["following"] = build_url(request, "following-collection", pk=actor.id)
+        actor_data["followers"] = build_url(request, "followers-collection", pk=actor.id)
+        actor_data["liked"] = build_url(request, "liked-collection", pk=actor.id)
+        actor_data["blocked"] = build_url(request, "blocked-collection", pk=actor.id)
+
         # LOLA migration feature discovery
         actor_data["migration"] = {
-            "outbox": f"{actor_id}/migration/outbox",
-            "content": f"{actor_id}/migration/content",
-            "following": f"{actor_id}/migration/following",
-            "blocked": f"{actor_id}/migration/blocked",
+            "outbox": build_url(request, "migration-outbox", pk=actor.id),
+            "content": build_url(request, "migration-content", pk=actor.id),
+            "following": build_url(request, "migration-following", pk=actor.id),
+            "blocked": build_url(request, "migration-blocked", pk=actor.id),
         }
 
     return actor_data
