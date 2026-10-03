@@ -188,7 +188,7 @@ def build_outbox_json_ld(outbox, auth_context=None):
         all_activities = [activity for activity in all_activities if activity.visibility == 'public']
     # LOLA authenticated requests with portability scope get ALL activities (public + private)
     
-    all_activities.sort(key=lambda x: x.timestamp, reverse=True)
+    all_activities.sort(key=lambda activity: (activity.timestamp, activity.pk), reverse=True)
 
     # Extract request for dynamic URL generation
     request = auth_context.get('request') if auth_context else None

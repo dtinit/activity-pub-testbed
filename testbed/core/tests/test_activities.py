@@ -10,6 +10,8 @@ from testbed.core.factories import (
     FollowActivityFactory,
 )
 from testbed.core.utils.provisioning import provision_actor_content
+from testbed.core.json_ld_builders import build_outbox_json_ld
+from testbed.core.json_ld_utils import build_activity_id
 
 # Test Create activity for note creation
 @pytest.mark.django_db
@@ -127,20 +129,33 @@ def test_activity_outbox_integration(outbox, create_activity, like_activity, fol
     assert like_activity in outbox.activities_like.all()
     assert follow_activity in outbox.activities_follow.all()
 
-# Ordering follows the stored timestamp, not insertion order - build_outbox_json_ld sorts on it
+# ActivityPub §5: an OrderedCollection MUST be presented consistently in reverse chronological order
 @pytest.mark.django_db
-def test_activity_timestamp_ordering(actor, other_actor, note):
+def test_outbox_newest_first_ties_by_pk(actor, other_actor, note, lola_auth_context, mock_request):
+    outbox = actor.portability_outbox
+    announce = outbox.activities_create.get()
     base = timezone.now() - timedelta(days=30)
 
-    # Created newest first, so insertion order is the reverse of chronological order
-    newest = CreateActivityFactory(actor=actor, note=note, timestamp=base + timedelta(days=2))
-    oldest = LikeActivityFactory(actor=actor, note=note, timestamp=base)
-    middle = FollowActivityFactory(actor=actor, target_actor=other_actor, timestamp=base + timedelta(days=1))
+    # Added out of order, so neither insertion order nor the Create, Like, Follow concatenation is the answer
+    oldest = CreateActivityFactory(actor=actor, note=note, timestamp=base)
+    newest = FollowActivityFactory(actor=actor, target_actor=other_actor, timestamp=base + timedelta(days=2))
+    tie_lower_pk = LikeActivityFactory(actor=actor, remote=True, timestamp=base + timedelta(days=1))
+    tie_higher_pk = LikeActivityFactory(actor=actor, remote=True, timestamp=base + timedelta(days=1))
+    for activity in (oldest, newest, tie_lower_pk, tie_higher_pk):
+        outbox.add_activity(activity)
 
-    for activity in (newest, oldest, middle):
-        activity.refresh_from_db()
+    items = build_outbox_json_ld(outbox, lola_auth_context)["orderedItems"]
 
-    assert sorted([newest, oldest, middle], key=lambda a: a.timestamp) == [oldest, middle, newest]
+    expected = [
+        ("Create", announce),
+        ("Follow", newest),
+        ("Like", tie_higher_pk),
+        ("Like", tie_lower_pk),
+        ("Create", oldest),
+    ]
+    assert [(item["type"], item["id"]) for item in items] == [
+        (kind, build_activity_id(activity.pk, mock_request)) for kind, activity in expected
+    ]
 
 # Test that a supplied timestamp survives to the database, so a copied activity can keep its original date (LOLA §7.1.7)
 
