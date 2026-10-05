@@ -50,11 +50,12 @@ from rest_framework.response import Response
 from ..json_ld_builders import (
     build_actor_json_ld,
     build_collection_json_ld,
+    build_like_object_json_ld,
     build_note_json_ld,
     build_outbox_json_ld,
     build_relationship_items,
 )
-from ..json_ld_utils import build_actor_id, build_note_id, build_url
+from ..json_ld_utils import build_url
 from ..models import (
     Blocked,
     Followers,
@@ -208,8 +209,8 @@ def content_collection(request, pk, actor):
 @lola_scope_required
 def liked_collection(request, pk, actor):
     """
-    Returns objects that an actor has liked with migration-ready metadata per LOLA specification.
-    Applies field projection to minimize payload size while retaining sufficient migration context.
+    The objects of the actor's Likes (ActivityPub §5.5), each built by build_like_object_json_ld:
+    the same object the Like activity carries, so a non-public local Note is served as its id only.
     """
     # Get all LikeActivity objects for this actor in reverse chronological order
     likes_qs = LikeActivity.objects.filter(actor=actor).order_by("-timestamp", "-id")
@@ -221,56 +222,7 @@ def liked_collection(request, pk, actor):
     # Build standardized authentication context for JSON-LD building
     auth_context = build_auth_context(request)
 
-    # Build liked objects with required metadata fields
-    items = []
-    for like in likes_qs:
-        # Build the liked object with field projection for performance
-        if like.note:
-            # Local Note object - extract required metadata
-            liked_object = {
-                "id": build_note_id(like.note.id, auth_context.get("request")),
-                "type": "Note",
-                "attributedTo": build_actor_id(
-                    like.note.actor.id, auth_context.get("request")
-                ),
-                "published": like.note.published.isoformat(),
-                "summary": getattr(like.note, "summary", ""),
-                "content": like.note.content[:280]
-                if len(like.note.content) > 280
-                else like.note.content,  # Small content only
-                "inReplyTo": None,  # TODO: Add reply chain support when implemented
-                "audience": {"public": like.note.visibility == "public"},
-                "attachment": [],  # TODO: Add when attachment support is implemented
-                "canonicalUrl": build_note_id(
-                    like.note.id, auth_context.get("request")
-                ),
-                # Optional objectHash for integrity verification
-                "objectHash": None,  # TODO: Implement content hashing if needed
-            }
-        else:
-            # Remote object - use cached object_data with field projection
-            remote_data = like.object_data or {}
-            liked_object = {
-                "id": like.object_url,
-                "type": remote_data.get("type", "Object"),
-                "attributedTo": remote_data.get("attributedTo", ""),
-                "published": remote_data.get("published", like.timestamp.isoformat()),
-                "summary": remote_data.get("summary", ""),
-                "content": remote_data.get("content", "")[:280]
-                if remote_data.get("content")
-                else "",  # Small content only
-                "inReplyTo": remote_data.get("inReplyTo"),
-                "audience": {
-                    "public": True
-                },  # Assume remote objects in likes are public
-                "attachment": remote_data.get("attachment", [])[:3]
-                if remote_data.get("attachment")
-                else [],  # Limit attachments
-                "canonicalUrl": like.object_url,
-                "objectHash": remote_data.get("objectHash"),
-            }
-
-        items.append(liked_object)
+    items = [build_like_object_json_ld(like, auth_context) for like in likes_qs]
 
     # Build ActivityPub OrderedCollection
     collection_id = build_url(request, "liked-collection", pk=pk)
