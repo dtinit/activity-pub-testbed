@@ -7,9 +7,9 @@ from django.core.management import call_command
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from testbed.core.models import Actor, Blocked, Following, Note
+from testbed.core.models import Actor, Blocked, Following, LikeActivity, Note
 from testbed.core.tests.helpers import lola_client, source_actor_for
-from testbed.core.utils.provisioning import provision_actor_content
+from testbed.core.utils.provisioning import LIKE_COUNT, VISIBILITIES, provision_actor_content
 
 
 # production refuses `seed`, so what a signup provisions for itself is all its collections will ever hold
@@ -35,6 +35,17 @@ def test_provisioned_notes_span_months():
     published = source_actor_for().notes.values_list("published", flat=True)
 
     assert max(published) - min(published) > timedelta(days=90)
+
+
+# Provisioned Likes span every visibility. A new account exercises the owner's full liked collection (LOLA §6.4)
+@pytest.mark.django_db
+def test_every_provisioned_like_reaches_its_owner():
+    actor = source_actor_for()
+    visibilities = set(LikeActivity.objects.filter(actor=actor).values_list("visibility", flat=True))
+    liked = lola_client(actor).get(reverse("liked-collection", kwargs={"pk": actor.pk})).data
+
+    assert visibilities == set(VISIBILITIES)
+    assert liked["totalItems"] == LIKE_COUNT
 
 
 @pytest.mark.django_db
