@@ -21,6 +21,7 @@ from testbed.core.json_ld_utils import (
     build_basic_context,
     build_actor_context,
     build_actor_id,
+    build_note_id,
     build_outbox_id,
 )
 from testbed.core.oauth.authentication import OptionalOAuth2Authentication
@@ -527,3 +528,19 @@ def test_every_collection_returns_one_envelope(actor_with_every_collection, rout
     assert set(data) == {"@context", "type", "id", "totalItems", "orderedItems"}
     assert data["type"] == "OrderedCollection"
     assert data["totalItems"] == len(data["orderedItems"]) > 0
+
+
+# LOLA §5: a public Like of another account's private Note carries that Note's id, never the Note
+@pytest.mark.django_db
+def test_like_of_another_accounts_private_note_is_served_as_id_only(mock_request):
+    liker = IsolatedActorFactory(prefix="liker")
+    author = IsolatedActorFactory(prefix="author")
+    note = NoteFactory(actor=author, visibility="private", content="AUTHOR PRIVATE CONTENT", copied=True)
+    liker.portability_outbox.add_activity(LikeActivityFactory(actor=liker, note=note, visibility="public"))
+
+    response = APIClient().get(reverse("actor-outbox", kwargs={"pk": liker.id}))
+
+    likes = [item for item in response.data["orderedItems"] if item["type"] == "Like"]
+    assert [like["object"] for like in likes] == [build_note_id(note.id, mock_request)]
+    assert b"AUTHOR PRIVATE CONTENT" not in response.content
+    assert b"lemongrove.example/followers" not in response.content
