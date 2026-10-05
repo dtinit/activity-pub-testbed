@@ -153,8 +153,8 @@ def test_outbox_newest_first_ties_by_pk(actor, other_actor, note, lola_auth_cont
         ("Like", tie_lower_pk),
         ("Create", oldest),
     ]
-    assert [(item["type"], item["id"]) for item in items] == [
-        (kind, build_activity_id(activity.pk, mock_request)) for kind, activity in expected
+    assert [item["id"] for item in items] == [
+        build_activity_id(kind.lower(), activity.pk, mock_request) for kind, activity in expected
     ]
 
 # Test that a supplied timestamp survives to the database, so a copied activity can keep its original date (LOLA §7.1.7)
