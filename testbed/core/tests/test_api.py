@@ -569,3 +569,18 @@ def test_liked_items_are_the_like_objects(basic_auth_context, mock_request):
         {"@context": [ACTIVITY_STREAM_CONTEXT, PREVIOUSLY_TERM], **remote_data, "id": remote.object_url},
     ]
     assert b"AUTHOR PRIVATE CONTENT" not in response.content
+
+
+# LOLA §6.4: the owner's token reads the owner's whole liked collection, whatever each Like's visibility
+@pytest.mark.django_db
+def test_liked_lists_the_owners_non_public_likes():
+    owner = IsolatedActorFactory(prefix="liked_all")
+    likes = [
+        LikeActivityFactory(actor=owner, remote=True, visibility=visibility)
+        for visibility in ("public", "followers-only", "private")
+    ]
+
+    response = lola_client(owner).get(reverse("liked-collection", kwargs={"pk": owner.id}))
+
+    listed = {item["id"] for item in response.data["orderedItems"]}
+    assert listed == {like.object_url for like in likes}

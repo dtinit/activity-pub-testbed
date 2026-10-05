@@ -212,12 +212,8 @@ def liked_collection(request, pk, actor):
     The objects of the actor's Likes (ActivityPub §5.5), each built by build_like_object_json_ld:
     the same object the Like activity carries, so a non-public local Note is served as its id only.
     """
-    # Get all LikeActivity objects for this actor in reverse chronological order
+    # Every Like the actor made, whatever its visibility. The strict gate above admits only this actor's bound token
     likes_qs = LikeActivity.objects.filter(actor=actor).order_by("-timestamp", "-id")
-
-    # Apply visibility filtering - only include likes of public objects for privacy
-    # TODO: This could be enhanced with trust controls
-    likes_qs = likes_qs.filter(visibility="public")
 
     # Build standardized authentication context for JSON-LD building
     auth_context = build_auth_context(request)
