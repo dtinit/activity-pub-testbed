@@ -45,7 +45,7 @@ def test_build_note_json_ld(note, basic_auth_context, mock_request):
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "Note"
     assert json_ld["id"] == build_note_id(note.id, mock_request)
-    assert json_ld["actor"] == build_actor_id(note.actor.id, mock_request)
+    assert json_ld["attributedTo"] == build_actor_id(note.actor.id, mock_request)
     assert json_ld["content"] == note.content
     assert json_ld["visibility"] == note.visibility
 
