@@ -11,8 +11,10 @@ PREVIOUSLY_TERM = {
     }
 }
 
-# Basic context used in most responses
-def build_basic_context():
+# Basic context used in most responses, extended with the `previously` term only when the object carries breadcrumbs
+def build_basic_context(breadcrumbs=False):
+    if breadcrumbs:
+        return [ACTIVITY_STREAM_CONTEXT, PREVIOUSLY_TERM]
     return ACTIVITY_STREAM_CONTEXT
 
 # Return the extended context used specifically for Actor responses

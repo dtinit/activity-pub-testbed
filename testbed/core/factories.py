@@ -89,6 +89,20 @@ class NoteFactory(DjangoModelFactory):
     # One day older per note, so a batch is distinct and strictly descending by `published`
     published = factory.Sequence(lambda n: datetime.now(timezone.utc) - timedelta(days=n))
 
+    class Params:
+        # A Note copied in from another server: every §6.3 metadata field populated, on reserved .example domains
+        copied = factory.Trait(
+            summary="CW: a copied note",
+            to=factory.List(["https://lemongrove.example/followers"]),
+            cc=factory.List(["https://oakfrost.example/brock"]),
+            in_reply_to="https://lemongrove.example/notes/parent",
+            url="https://lemongrove.example/@aurora/1",
+            source=factory.Dict({"content": "copied", "mediaType": "text/markdown"}),
+            previously=factory.List([
+                factory.Dict({"actor": "https://lemongrove.example/", "id": "https://lemongrove.example/notes/1"}),
+            ]),
+        )
+
 class CreateActivityFactory(DjangoModelFactory):
     # Can create activities for notes or actor creation announcements
     class Meta:
