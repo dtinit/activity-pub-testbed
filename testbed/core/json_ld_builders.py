@@ -82,7 +82,7 @@ def build_note_json_ld(note, auth_context=None):
         "@context": build_basic_context(),
         "type": "Note",
         "id": build_note_id(note.id, request),
-        "actor": build_actor_id(note.actor.id, request),
+        "attributedTo": build_actor_id(note.actor.id, request),
         "content": note.content,
         "published": note.published.isoformat(),
         "visibility": note.visibility,
