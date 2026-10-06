@@ -5,12 +5,16 @@ from django.urls import reverse
 from django.test import RequestFactory
 from django.contrib.auth import get_user_model
 from oauth2_provider.models import Application, AccessToken
-from testbed.core.models import Actor, Following, Followers
+from testbed.core.models import Actor, Blocked, Following, Followers
 from testbed.core.factories import (
     ActorFactory,
     IsolatedActorFactory,
     ApplicationFactory,
     AccessTokenFactory,
+    NoteFactory,
+    LikeActivityFactory,
+    FollowingFactory,
+    FollowersFactory,
 )
 from testbed.core.tests.helpers import lola_client
 from testbed.core.json_ld_utils import (
@@ -57,11 +61,11 @@ def test_outbox_api_for_source_actor(mock_request):
     
     assert json_ld["id"] == build_outbox_id(actor.id, mock_request)
     assert isinstance(json_ld["totalItems"], int)
-    assert isinstance(json_ld["items"], list)
+    assert isinstance(json_ld["orderedItems"], list)
 
     # Check items structure if any exist
-    if json_ld["items"]:
-        for item in json_ld["items"]:
+    if json_ld["orderedItems"]:
+        for item in json_ld["orderedItems"]:
             assert item["@context"] == build_basic_context()
             assert "type" in item
             assert "id" in item
@@ -476,3 +480,50 @@ class TestOptionalAuthenticationSessionPath:
         token = AccessTokenFactory(lola_scope=True, expired=True)
         result = OptionalOAuth2Authentication()._resolve_valid_access_token(token.token)
         assert result is None
+
+
+# One envelope for every LOLA collection
+
+LOLA_COLLECTION_ROUTES = [
+    "actor-outbox",
+    "following-collection",
+    "followers-collection",
+    "content-collection",
+    "liked-collection",
+    "blocked-collection",
+    "migration-outbox",
+    "migration-content",
+    "migration-following",
+    "migration-blocked",
+]
+
+
+# One row in every collection, so no envelope assertion below can pass on an empty list
+@pytest.fixture
+def actor_with_every_collection():
+    actor = IsolatedActorFactory(prefix="envelope")
+    NoteFactory(actor=actor)
+    LikeActivityFactory(actor=actor, remote=True, visibility="public")
+    FollowingFactory(actor=actor, remote=True)
+    FollowersFactory(actor=actor, remote=True)
+    Blocked.objects.create(
+        actor=actor,
+        blocked_actor_url="https://remote.example/users/blocked",
+        blocked_actor_data={"type": "Person", "preferredUsername": "blocked"},
+    )
+    return actor
+
+
+# AS2 Core §4.6: an OrderedCollection carries `orderedItems`. The exact key set is the assertion,
+# so an `items` key, or any second shape, fails it
+@pytest.mark.django_db
+@pytest.mark.parametrize("route", LOLA_COLLECTION_ROUTES)
+def test_every_collection_returns_one_envelope(actor_with_every_collection, route):
+    actor = actor_with_every_collection
+    response = lola_client(actor).get(reverse(route, kwargs={"pk": actor.id}))
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.data
+    assert set(data) == {"@context", "type", "id", "totalItems", "orderedItems"}
+    assert data["type"] == "OrderedCollection"
+    assert data["totalItems"] == len(data["orderedItems"]) > 0

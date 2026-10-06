@@ -29,6 +29,14 @@ The two gate differ only in whether the portability scope is mandatory:
 
 Each view below therefore assumes `actor` exists and the caller is authorized for it, and documents only
 what is endpoint-specific. All views build their payload via json_ld_builders, passing the dict from build_auth_context(request).
+
+Ordering (ActivityPub §5: an OrderedCollection MUST be presented consistently in reverse chronological order):
+newest first by each collection's own time field, ties to the higher primary key, so repeated fetches return the same order.
+- outbox: activity timestamp, then pk, merged across Create, Like and Follow in build_outbox_json_ld
+- content: Note.published, then id
+- liked: LikeActivity.timestamp, then id
+- following, followers, blocked: created_at, then id
+The migration/... routes reuse these views, so they share the same keys.
 """
 
 import logging
@@ -111,7 +119,7 @@ def following_collection(request, pk, actor):
     # Get all active following relationships for this actor
     following_qs = Following.objects.filter(
         actor=actor, status=Following.STATUS_ACTIVE
-    ).order_by("-created_at")
+    ).order_by("-created_at", "-id")
 
     # Build standardized authentication context for nested Actor objects
     auth_context = build_auth_context(request)
@@ -141,7 +149,7 @@ def followers_collection(request, pk, actor):
     # Get all active follower relationships for this actor
     followers_qs = Followers.objects.filter(
         actor=actor, status=Followers.STATUS_ACTIVE
-    ).order_by("-created_at")
+    ).order_by("-created_at", "-id")
 
     # Build standardized authentication context for nested Actor objects
     auth_context = build_auth_context(request)
@@ -173,7 +181,7 @@ def content_collection(request, pk, actor):
     Spec: "MUST provide raw authored objects (no wrapper Activities) for fidelity.
     """
     # Apply content filtering based on authentication and scope
-    notes_qs = Note.objects.filter(actor=actor).order_by("-published")
+    notes_qs = Note.objects.filter(actor=actor).order_by("-published", "-id")
 
     # Filter content based on authentication - public only for non-LOLA requests
     if not getattr(request, "has_portability_scope", False):
@@ -204,7 +212,7 @@ def liked_collection(request, pk, actor):
     Applies field projection to minimize payload size while retaining sufficient migration context.
     """
     # Get all LikeActivity objects for this actor in reverse chronological order
-    likes_qs = LikeActivity.objects.filter(actor=actor).order_by("-timestamp")
+    likes_qs = LikeActivity.objects.filter(actor=actor).order_by("-timestamp", "-id")
 
     # Apply visibility filtering - only include likes of public objects for privacy
     # TODO: This could be enhanced with trust controls
@@ -291,7 +299,7 @@ def blocked_collection(request, pk, actor):
     # Get all active blocking relationships for this actor
     blocked_qs = Blocked.objects.filter(
         actor=actor, status=Blocked.STATUS_ACTIVE
-    ).order_by("-created_at")
+    ).order_by("-created_at", "-id")
 
     # Build standardized authentication context for nested Actor objects
     auth_context = build_auth_context(request)

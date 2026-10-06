@@ -186,10 +186,10 @@ def test_build_outbox_json_ld(lola_auth_context, mock_request):
     assert json_ld["type"] == "OrderedCollection"
     assert json_ld["id"] == build_outbox_id(outbox.actor.id, mock_request)
     assert isinstance(json_ld["totalItems"], int)
-    assert isinstance(json_ld["items"], list)
+    assert isinstance(json_ld["orderedItems"], list)
     
     # Verify each item has required fields
-    for item in json_ld["items"]:
+    for item in json_ld["orderedItems"]:
         assert "@context" in item
         assert "type" in item
         assert "id" in item
@@ -198,7 +198,7 @@ def test_build_outbox_json_ld(lola_auth_context, mock_request):
         assert "visibility" in item
     
     # Verify activity types are present
-    activity_types = {item["type"] for item in json_ld["items"]}
+    activity_types = {item["type"] for item in json_ld["orderedItems"]}
     assert "Create" in activity_types
     assert "Like" in activity_types
     assert "Follow" in activity_types
