@@ -7,6 +7,10 @@ from testbed.core.views import (
     content_collection,
     liked_collection,
     blocked_collection,
+    note_detail,
+    create_activity_detail,
+    like_activity_detail,
+    follow_activity_detail,
 )
 
 urlpatterns = [
@@ -47,6 +51,30 @@ urlpatterns = [
         "actors/<int:pk>/blocked/",
         blocked_collection,
         name="blocked-collection",
+    ),
+    # Note: the URL its `id` names, nested under the owning actor so a moved actor can still be found from it
+    path(
+        "actors/<int:pk>/notes/<int:object_pk>/",
+        note_detail,
+        name="note-detail",
+    ),
+    # Create activity
+    path(
+        "actors/<int:pk>/activities/create/<int:object_pk>/",
+        create_activity_detail,
+        name="create-activity-detail",
+    ),
+    # Like activity
+    path(
+        "actors/<int:pk>/activities/like/<int:object_pk>/",
+        like_activity_detail,
+        name="like-activity-detail",
+    ),
+    # Follow activity
+    path(
+        "actors/<int:pk>/activities/follow/<int:object_pk>/",
+        follow_activity_detail,
+        name="follow-activity-detail",
     ),
     # Dedicated LOLA migration collection routes. These are the URLs advertised under the Actor `migration` object.
     # Each route delegates to the existing collection view so the advertised URL is real and resolves.
