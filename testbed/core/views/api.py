@@ -9,6 +9,8 @@ Contains:
 - content_collection [strict]: LOLA-gated raw Notes (no Activity wrappers)
 - liked_collection [strict]: LOLA-gated liked objects with migration metadata
 - blocked_collection [strict]: LOLA-gated block list (FEP-c648)
+- note_detail, create_activity_detail, like_activity_detail, follow_activity_detail [per object]: one Note or
+  activity under its actor; strict or dual-mode by the object's own visibility, via _serve_object
 - oauth_authorization_server_metadata [public]: RFC8414 discovery endpoint (no actor)
 
 Access model (actor-scoped views):
@@ -50,6 +52,9 @@ from rest_framework.response import Response
 from ..json_ld_builders import (
     build_actor_json_ld,
     build_collection_json_ld,
+    build_create_activity_json_ld,
+    build_follow_activity_json_ld,
+    build_like_activity_json_ld,
     build_like_object_json_ld,
     build_note_json_ld,
     build_outbox_json_ld,
@@ -58,16 +63,20 @@ from ..json_ld_builders import (
 from ..json_ld_utils import build_url
 from ..models import (
     Blocked,
+    CreateActivity,
+    FollowActivity,
     Followers,
     Following,
     LikeActivity,
     Note,
 )
 from ..oauth.authentication import OptionalOAuth2Authentication
+from ..utils.errors import build_object_not_found_error
 from .decorators import (
     actor_required,
     activitypub_content,
     build_auth_context,
+    lola_access_error,
     lola_scope_optional,
     lola_scope_required,
 )
@@ -268,6 +277,58 @@ def blocked_collection(request, pk, actor):
     logger.info(f"Blocked collection accessed: actor_id={pk}, items_count={len(items)}")
 
     return Response(collection_data)
+
+
+def _serve_object(request, pk, actor, object_pk, model, build):
+    """
+    One Note or activity, at the URL its `id` names; the shared body of the four object views below.
+
+    A public object is dual-mode: open to anyone, refused to a token bound to another actor (403).
+    A non-public object is strict: only a token bound to its owner sees it. Every other caller gets the
+    same 404 as a missing object, or one under another actor, so a private object's existence never shows.
+    """
+    obj = model.objects.filter(pk=object_pk, actor=actor).first()
+    if obj is None:
+        return build_object_not_found_error(request)
+
+    public = obj.visibility == "public"
+    denied = lola_access_error(request, required_scope=not public, url_pk=pk)
+    if denied is not None:
+        return denied if public else build_object_not_found_error(request)
+
+    return Response(build(obj, build_auth_context(request)))
+
+
+@api_view(["GET"])
+@authentication_classes([OptionalOAuth2Authentication])
+@activitypub_content
+@actor_required
+def note_detail(request, pk, actor, object_pk):
+    return _serve_object(request, pk, actor, object_pk, Note, build_note_json_ld)
+
+
+@api_view(["GET"])
+@authentication_classes([OptionalOAuth2Authentication])
+@activitypub_content
+@actor_required
+def create_activity_detail(request, pk, actor, object_pk):
+    return _serve_object(request, pk, actor, object_pk, CreateActivity, build_create_activity_json_ld)
+
+
+@api_view(["GET"])
+@authentication_classes([OptionalOAuth2Authentication])
+@activitypub_content
+@actor_required
+def like_activity_detail(request, pk, actor, object_pk):
+    return _serve_object(request, pk, actor, object_pk, LikeActivity, build_like_activity_json_ld)
+
+
+@api_view(["GET"])
+@authentication_classes([OptionalOAuth2Authentication])
+@activitypub_content
+@actor_required
+def follow_activity_detail(request, pk, actor, object_pk):
+    return _serve_object(request, pk, actor, object_pk, FollowActivity, build_follow_activity_json_ld)
 
 
 def oauth_authorization_server_metadata(request):
