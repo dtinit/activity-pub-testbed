@@ -291,10 +291,15 @@ def _serve_object(request, pk, actor, object_pk, model, build):
     if obj is None:
         return build_object_not_found_error(request)
 
-    public = obj.visibility == "public"
-    denied = lola_access_error(request, required_scope=not public, url_pk=pk)
-    if denied is not None:
-        return denied if public else build_object_not_found_error(request)
+    if obj.visibility == "public":
+        # Dual-mode, like the outbox: a token bound to another actor is refused (403)
+        denied = lola_access_error(request, required_scope=False, url_pk=pk)
+        if denied is not None:
+            return denied
+    else:
+        # Strict, like the content collection: any refusal becomes the missing-object 404
+        if lola_access_error(request, required_scope=True, url_pk=pk) is not None:
+            return build_object_not_found_error(request)
 
     return Response(build(obj, build_auth_context(request)))
 
