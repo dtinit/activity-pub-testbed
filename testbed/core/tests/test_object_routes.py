@@ -39,6 +39,8 @@ def test_public_object_is_served_to_anyone(basic_auth_context, route, object_fac
     assert response.status_code == status.HTTP_200_OK
     assert response["Content-Type"] == "application/activity+json"
     assert response.data == build(obj, basic_auth_context)
+    # The id is where the object lives, it names the URL just fetched
+    assert response.data["id"] == response.wsgi_request.build_absolute_uri()
 
 
 # Anything other than "public" is strict. Only a token bound to the owner gets through

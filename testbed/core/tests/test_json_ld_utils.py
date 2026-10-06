@@ -5,12 +5,12 @@ from testbed.core.json_ld_utils import (
     PREVIOUSLY_TERM,
     build_basic_context,
     build_actor_context,
-    build_id_url,
     build_actor_id,
     build_activity_id,
     build_note_id,
     build_outbox_id,
 )
+from testbed.core.models import CreateActivity, FollowActivity, LikeActivity, Note
 
 # Test that context URLs are correct
 def test_json_ld_context_constants():
@@ -26,29 +26,25 @@ def test_build_basic_context():
 def test_build_actor_context():
     assert build_actor_context() == [ACTIVITY_STREAM_CONTEXT, BLOCKED_CONTEXT, PREVIOUSLY_TERM]
 
-# Test base URL builder function
-def test_build_id_url(mock_request):
-    url = build_id_url("test", 123, mock_request)
-    assert url == "http://testserver/api/test/123/"
-
 def test_build_actor_id(mock_request):
     actor_id = build_actor_id(123, mock_request)
     assert actor_id == "http://testserver/api/actors/123/"
 
+# Unsaved instances: reverse() needs no database. Owner 7 and object 123 differ so a swap would show
 def test_activity_ids_are_unique_across_kinds(mock_request):
     ids = [
-        build_activity_id(activity_kind, 123, mock_request)
-        for activity_kind in ("create", "like", "follow")
+        build_activity_id(activity_kind, model(pk=123, actor_id=7), mock_request)
+        for activity_kind, model in (("create", CreateActivity), ("like", LikeActivity), ("follow", FollowActivity))
     ]
     assert ids == [
-        "http://testserver/api/activities/create/123/",
-        "http://testserver/api/activities/like/123/",
-        "http://testserver/api/activities/follow/123/",
+        "http://testserver/api/actors/7/activities/create/123/",
+        "http://testserver/api/actors/7/activities/like/123/",
+        "http://testserver/api/actors/7/activities/follow/123/",
     ]
 
 def test_build_note_id(mock_request):
-    note_id = build_note_id(123, mock_request)
-    assert note_id == "http://testserver/api/notes/123/"
+    note_id = build_note_id(Note(pk=123, actor_id=7), mock_request)
+    assert note_id == "http://testserver/api/actors/7/notes/123/"
 
 def test_build_outbox_id(mock_request):
     outbox_id = build_outbox_id(123, mock_request)
