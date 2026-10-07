@@ -77,12 +77,12 @@ urlpatterns = [
         name="follow-activity-detail",
     ),
     # Dedicated LOLA migration collection routes. These are the URLs advertised under the Actor `migration` object.
-    # Each route delegates to the existing collection view so the advertised URL is real and resolves.
-    # The behavioral update of the migration surface (migration-outbox activity filtering, pagination, and
-    # the public-vs-migration following/blocked gating decisions) is upcoming work and is intentionally not done here.
+    # Each route reuses the existing collection view. The migration outbox passes migration=True, which keeps
+    # only the Creates of a Note (LOLA §6.2, §6.6.1).
     path(
         "actors/<int:pk>/migration/outbox/",
         portability_outbox_detail,
+        {"migration": True},
         name="migration-outbox",
     ),
     path(

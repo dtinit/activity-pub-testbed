@@ -195,7 +195,7 @@ def build_follow_activity_json_ld(activity, auth_context=None):
     return base
 
 
-def build_outbox_json_ld(outbox, auth_context=None):
+def build_outbox_json_ld(outbox, auth_context=None, migration=False):
     """
     Build outbox JSON-LD with authentication-based content filtering.
     
@@ -205,16 +205,26 @@ def build_outbox_json_ld(outbox, auth_context=None):
             - is_authenticated: boolean
             - has_portability_scope: boolean  
             - request: HTTP request object
-    
+        migration: True for the migration outbox (LOLA §6.2): only the Creates of a Note.
+            Likes and Follows reach the destination through liked and migration/following (§6.6.1),
+            and the Create announcing the Actor would copy the Actor as content (§6.6)
+
     Returns:
         Dict containing ActivityPub OrderedCollection with filtered activities
     """
-    create_activities = list(outbox.activities_create.all())
-    like_activities = list(outbox.activities_like.all())
-    follow_activities = list(outbox.activities_follow.all())
+    request = auth_context.get('request') if auth_context else None
 
-    all_activities = create_activities + like_activities + follow_activities
-    
+    if migration:
+        all_activities = list(outbox.activities_create.filter(note__isnull=False))
+        collection_id = build_url(request, "migration-outbox", pk=outbox.actor.id)
+    else:
+        create_activities = list(outbox.activities_create.all())
+        like_activities = list(outbox.activities_like.all())
+        follow_activities = list(outbox.activities_follow.all())
+
+        all_activities = create_activities + like_activities + follow_activities
+        collection_id = build_outbox_id(outbox.actor.id, request)
+
     # Filter content based on authentication and scope
     if not auth_context or not auth_context.get('has_portability_scope'):
         # Public only for unauthenticated requests or requests without portability scope
@@ -222,9 +232,6 @@ def build_outbox_json_ld(outbox, auth_context=None):
     # LOLA authenticated requests with portability scope get ALL activities (public + private)
     
     all_activities.sort(key=lambda activity: (activity.timestamp, activity.pk), reverse=True)
-
-    # Extract request for dynamic URL generation
-    request = auth_context.get('request') if auth_context else None
     
     def build_activity_json_ld(activity):
         if isinstance(activity, CreateActivity):
@@ -235,7 +242,7 @@ def build_outbox_json_ld(outbox, auth_context=None):
             return build_follow_activity_json_ld(activity, auth_context)
 
     items = [build_activity_json_ld(activity) for activity in all_activities]
-    return build_collection_json_ld(build_outbox_id(outbox.actor.id, request), items)
+    return build_collection_json_ld(collection_id, items)
 
 
 def build_collection_json_ld(collection_id, items):

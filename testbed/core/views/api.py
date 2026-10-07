@@ -3,7 +3,7 @@ LOLA API views
 
 Contains:
 - actor_detail [dual-mode]: ActivityPub Actor with conditional LOLA migration.* properties
-- portability_outbox_detail [dual-mode]: Outbox with LOLA content filtering
+- portability_outbox_detail [dual-mode]: Outbox with LOLA content filtering; at migration/outbox/, the Creates of a Note only
 - following_collection [dual-mode]: Following OrderedCollection
 - followers_collection [strict]: LOLA-gated Followers OrderedCollection
 - content_collection [strict]: LOLA-gated raw Notes (no Activity wrappers)
@@ -103,14 +103,18 @@ def actor_detail(request, pk, actor):
 @activitypub_content
 @actor_required
 @lola_scope_optional
-def portability_outbox_detail(request, pk, actor):
+def portability_outbox_detail(request, pk, actor, migration=False):
+    """
+    The outbox and the migration outbox (LOLA §6.2) when its route passes migration=True.
+    One view for both routes; they share one gate and one visibility rule.
+    """
     outbox = actor.portability_outbox
 
     # Build standardized authentication context
     auth_context = build_auth_context(request)
 
     # Build response with authentication-based content filtering
-    data = build_outbox_json_ld(outbox, auth_context)
+    data = build_outbox_json_ld(outbox, auth_context, migration=migration)
     return Response(data)
 
 
