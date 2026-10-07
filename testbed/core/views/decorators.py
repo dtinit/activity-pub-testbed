@@ -26,7 +26,6 @@ from ..utils.errors import (
     ActorNotFound,
     InsufficientScope,
     LolaError,
-    build_error_response,
 )
 
 logger = logging.getLogger(__name__)
@@ -251,12 +250,12 @@ def lola_exception_handler(exc, context):
         return response
 
     request = context["request"]
-    response.data = build_error_response(
-        error_code=exc.get_codes(),
-        detail=str(exc.detail),
-        status_code=exc.status_code,
-        request=request,
-        remediation=exc.remediation,
-    ).data
+    response.data = {
+        "error_code": exc.get_codes(),
+        "detail": str(exc.detail),
+        "endpoint": f"{request.method} {request.path}",
+    }
+    if exc.remediation:
+        response.data["remediation"] = exc.remediation
     _allow_any_origin(request, response)
     return response

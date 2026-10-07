@@ -664,3 +664,7 @@ def test_every_error_keeps_its_status_type_and_cors(error_code):
     assert response.data["error_code"] == error_code
     assert response["Content-Type"] == "application/activity+json"
     assert response["Access-Control-Allow-Origin"] == "*"
+    # One shape that includes a code, a sentence and the request, plus a remedy on the 403s
+    expected_keys = {"error_code", "detail", "endpoint"} | ({"remediation"} if status_code == 403 else set())
+    assert set(response.data) == expected_keys
+    assert response.data["endpoint"] == f"GET {url}"
