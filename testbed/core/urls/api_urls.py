@@ -1,4 +1,11 @@
 from django.urls import path
+from testbed.core.json_ld_builders import (
+    build_create_activity_json_ld,
+    build_follow_activity_json_ld,
+    build_like_activity_json_ld,
+    build_note_json_ld,
+)
+from testbed.core.models import CreateActivity, FollowActivity, LikeActivity, Note
 from testbed.core.views import (
     actor_detail,
     portability_outbox_detail,
@@ -7,10 +14,7 @@ from testbed.core.views import (
     content_collection,
     liked_collection,
     blocked_collection,
-    note_detail,
-    create_activity_detail,
-    like_activity_detail,
-    follow_activity_detail,
+    object_detail,
 )
 
 urlpatterns = [
@@ -55,25 +59,29 @@ urlpatterns = [
     # Note: the URL its `id` names, nested under the owning actor so a moved actor can still be found from it
     path(
         "actors/<int:pk>/notes/<int:object_pk>/",
-        note_detail,
+        object_detail,
+        {"model": Note, "build": build_note_json_ld},
         name="note-detail",
     ),
     # Create activity
     path(
         "actors/<int:pk>/activities/create/<int:object_pk>/",
-        create_activity_detail,
+        object_detail,
+        {"model": CreateActivity, "build": build_create_activity_json_ld},
         name="create-activity-detail",
     ),
     # Like activity
     path(
         "actors/<int:pk>/activities/like/<int:object_pk>/",
-        like_activity_detail,
+        object_detail,
+        {"model": LikeActivity, "build": build_like_activity_json_ld},
         name="like-activity-detail",
     ),
     # Follow activity
     path(
         "actors/<int:pk>/activities/follow/<int:object_pk>/",
-        follow_activity_detail,
+        object_detail,
+        {"model": FollowActivity, "build": build_follow_activity_json_ld},
         name="follow-activity-detail",
     ),
     # Dedicated LOLA migration collection routes. These are the URLs advertised under the Actor `migration` object.
