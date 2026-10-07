@@ -85,11 +85,10 @@ def build_actor_json_ld(actor, auth_context=None):
 
     return actor_data
 
-# The fields of obj that hold a value under their AS2 names.
+# The fields that hold a value under their AS2 names.
 # empty ones are left out, never sent as null or []
-def _non_empty(obj, fields):
-    values = {key: getattr(obj, attr) for key, attr in fields.items()}
-    return {key: value for key, value in values.items() if value}
+def if_not_empty(fields):
+    return {key: value for key, value in fields.items() if value}
 
 
 def build_note_json_ld(note, auth_context=None):
@@ -104,7 +103,7 @@ def build_note_json_ld(note, auth_context=None):
         "content": note.content,
         "published": note.published.isoformat(),
         "visibility": note.visibility,
-        **_non_empty(note, NOTE_METADATA),
+        **if_not_empty({key: getattr(note, column) for key, column in NOTE_METADATA.items()}),
     }
 
 
@@ -119,7 +118,7 @@ def build_create_activity_json_ld(activity, auth_context=None):
         "actor": build_actor_id(activity.actor.id, request),
         "published": activity.timestamp.isoformat(),
         "visibility": activity.visibility,
-        **_non_empty(activity, {"previously": "previously"}),
+        **if_not_empty({"previously": activity.previously}),
     }
 
     if activity.note:
@@ -162,7 +161,7 @@ def build_like_activity_json_ld(activity, auth_context=None):
         "actor": build_actor_id(activity.actor.id, request),
         "published": activity.timestamp.isoformat(),
         "visibility": activity.visibility,
-        **_non_empty(activity, {"previously": "previously"}),
+        **if_not_empty({"previously": activity.previously}),
     }
     base["object"] = build_like_object_json_ld(activity, auth_context)
 
@@ -180,7 +179,7 @@ def build_follow_activity_json_ld(activity, auth_context=None):
         "actor": build_actor_id(activity.actor.id, request),
         "published": activity.timestamp.isoformat(),
         "visibility": activity.visibility,
-        **_non_empty(activity, {"previously": "previously"}),
+        **if_not_empty({"previously": activity.previously}),
     }
 
     if activity.target_actor:
