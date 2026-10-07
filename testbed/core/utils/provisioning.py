@@ -2,6 +2,7 @@
 
 import logging
 from datetime import timedelta
+from itertools import cycle
 from django.db import transaction
 from django.utils import timezone
 
@@ -62,8 +63,9 @@ def provision_actor_content(actor):
     )
 
     notes = []
+    note_visibilities = cycle(VISIBILITIES)
     for i in range(NOTE_COUNT):
-        visibility = VISIBILITIES[i % len(VISIBILITIES)]
+        visibility = next(note_visibilities)
         notes.append(Note(
             actor=actor,
             content=f"Provisioned note {i + 1} of {NOTE_COUNT} ({visibility})",
@@ -77,12 +79,13 @@ def provision_actor_content(actor):
     ))
 
     likes = []
+    like_visibilities = cycle(VISIBILITIES)
     for number, (author_url, author) in enumerate(_remote_actors("author", LIKE_COUNT), start=1):
         liked_at = now - number * NOTE_INTERVAL
         likes.append(LikeActivity(
             actor=actor,
             timestamp=liked_at,
-            visibility=VISIBILITIES[(number - 1) % len(VISIBILITIES)],
+            visibility=next(like_visibilities),
             object_url=f"{author_url}/notes/{number}",
             object_data={
                 "type": "Note",
