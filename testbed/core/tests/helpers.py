@@ -45,7 +45,7 @@ def bind_portability_token(actor, user=None):
 
     When `user` is given, the token is issued for that user so token.user matches actor.user;
     otherwise the factory creates a fresh token user. Only the token<->actor binding is what
-    lola_access_error() checks, so both shapes satisfy the gate.
+    require_lola_access() checks, so both shapes satisfy the gate.
     """
     if user is not None:
         token = AccessTokenFactory(lola_scope=True, user=user)

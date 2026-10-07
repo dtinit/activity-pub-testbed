@@ -1,43 +1,44 @@
 import uuid
 from datetime import timezone, datetime
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
 
+from ..oauth.scopes import LOLA_PORTABILITY_SCOPE
+
 """
-Provides standardized error response building and error code definitions
-for consistent, developer-friendly error handling across all LOLA endpoints.
+LOLA API errors as DRF exceptions. Views raise them; views.decorators.lola_exception_handler turns each
+into its error response, so every LOLA error has one shape and one place it is built.
 """
 
-class ErrorCodes:
+class LolaError:
     """
-    Comprehensive error code categorizing for LOLA endpoints.
-    
-    Provides machine-readable error identifiers categorized by HTTP status codes
-    and functional areas to enable consistent error handling across endpoints.
+    Mixed into every LOLA API exception. The remediation its error body can add to the code and the sentence,
+    and how the exception handler tells a LOLA error from one of DRF's own.
     """
-    
-    # Authentication & Authorization Errors (4xx)
-    INSUFFICIENT_SCOPE = "insufficient_scope"
-    ACTOR_NOT_FOUND = "actor_not_found"
-    OBJECT_NOT_FOUND = "object_not_found"
-    FORBIDDEN_ACCESS = "forbidden_access"
-    UNAUTHORIZED = "unauthorized"
-    ACTOR_MISMATCH = "actor_mismatch"
-    
-    # Rate Limiting Errors (429)
-    RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
-    
-    # Trust Policy Errors (Still in consideration)
-    # UNTRUSTED_SERVER = "untrusted_server"
-    # PUBLIC_ONLY_MODE = "public_only_mode_enabled"
-    
-    # Validation Errors (400) 
-    INVALID_PARAMETERS = "invalid_parameters"
-    MALFORMED_REQUEST = "malformed_request"
-    MISSING_REQUIRED_FIELD = "missing_required_field"
-    
-    # Server Errors (5xx)
-    INTERNAL_ERROR = "internal_server_error"
-    SERVICE_UNAVAILABLE = "service_unavailable"
+    remediation = None
+
+
+class ActorNotFound(LolaError, NotFound):
+    default_code = "actor_not_found"
+    default_detail = "No such actor"
+    remediation = "Check available actors via the actors list endpoint or verify the ID"
+
+
+class ObjectNotFound(LolaError, NotFound):
+    default_code = "object_not_found"
+    default_detail = "No such object"
+
+
+class InsufficientScope(LolaError, PermissionDenied):
+    default_code = "insufficient_scope"
+    default_detail = f"This endpoint requires {LOLA_PORTABILITY_SCOPE} scope"
+    remediation = f"Request OAuth token with '{LOLA_PORTABILITY_SCOPE}' scope"
+
+
+class ActorMismatch(LolaError, PermissionDenied):
+    default_code = "actor_mismatch"
+    default_detail = "This token is not authorized for the requested actor"
+    remediation = "Request a new OAuth token for the target actor"
 
 
 def generate_request_id():
@@ -50,7 +51,7 @@ def generate_request_id():
     return str(uuid.uuid4())
 
 
-def build_error_response(error_code, detail, status_code, request=None, hint=None, remediation=None):
+def build_error_response(error_code, detail, status_code, request=None, remediation=None):
     """
     Build standardized JSON error response.
     
@@ -58,24 +59,19 @@ def build_error_response(error_code, detail, status_code, request=None, hint=Non
     metadata for debugging, remediation, and support purposes.
     
     Args:
-        error_code (str): Machine-readable error identifier from ErrorCodes
+        error_code (str): Machine-readable error identifier, an exception's default_code
         detail (str): Human-readable error description
         status_code (int): HTTP status code for the response
         request (HttpRequest, optional): Django request object for context
-        hint (str, optional): Additional context or explanation
         remediation (str, optional): Actionable steps to fix the error
     
     Returns:
         Response: Django REST framework Response with structured error JSON
     
-    Example:
+    Example (as lola_exception_handler calls it):
         >>> build_error_response(
-        ...     ErrorCodes.INSUFFICIENT_SCOPE,
-        ...     "This endpoint requires activitypub_account_portability scope",
-        ...     403,
-        ...     request=request,
-        ...     hint="LOLA portability endpoints require specific OAuth scope",
-        ...     remediation="Request OAuth token with 'activitypub_account_portability' scope"
+        ...     exc.get_codes(), str(exc.detail), exc.status_code,
+        ...     request=request, remediation=exc.remediation,
         ... )
     """
     error_data = {
@@ -85,9 +81,6 @@ def build_error_response(error_code, detail, status_code, request=None, hint=Non
     }
     
     # Add optional context fields if provided
-    if hint:
-        error_data["hint"] = hint
-    
     if remediation:
         error_data["remediation"] = remediation
         
@@ -98,114 +91,3 @@ def build_error_response(error_code, detail, status_code, request=None, hint=Non
         error_data["request_id"] = generate_request_id()
     
     return Response(error_data, status=status_code)
-
-
-def build_actor_not_found_error(actor_id, request=None):
-    """
-    Build standardized 404 error for missing actors.
-    
-    Args:
-        actor_id (int): The actor ID that was not found
-        request (HttpRequest, optional): Django request object for context
-    
-    Returns:
-        Response: 404 error response with actor-specific context
-    """
-    return build_error_response(
-        error_code=ErrorCodes.ACTOR_NOT_FOUND,
-        detail=f"Actor with ID {actor_id} does not exist",
-        status_code=404,
-        request=request,
-        hint="Verify the actor ID is correct and the actor exists in the system",
-        remediation="Check available actors via the actors list endpoint or verify the ID"
-    )
-
-
-def build_object_not_found_error(request=None):
-    """
-    Build standardized 404 error for a Note or activity that is missing, belongs to another actor,
-    or is not visible to the caller. All three get this same response, so it never reveals that a
-    private object exists (ActivityPub §3.2).
-
-    Args:
-        request (HttpRequest, optional): Django request object for context
-
-    Returns:
-        Response: 404 error response with object_not_found error code
-    """
-    return build_error_response(
-        error_code=ErrorCodes.OBJECT_NOT_FOUND,
-        detail="No such object",
-        status_code=404,
-        request=request,
-        hint="The object does not exist under this actor, or is not visible to this caller",
-    )
-
-
-def build_insufficient_scope_error(required_scope, endpoint_path, request=None):
-    """
-    Build standardized 403 error for insufficient OAuth scope.
-    
-    Args:
-        required_scope (str): The OAuth scope required for access
-        endpoint_path (str): The endpoint path that requires the scope
-        request (HttpRequest, optional): Django request object for context
-    
-    Returns:
-        Response: 403 error response with scope-specific context
-    """
-    return build_error_response(
-        error_code=ErrorCodes.INSUFFICIENT_SCOPE,
-        detail=f"This endpoint requires {required_scope} scope",
-        status_code=403,
-        request=request,
-        hint="LOLA portability endpoints require specific OAuth scope for data access",
-        remediation=f"Request OAuth token with '{required_scope}' scope to access {endpoint_path}"
-    )
-
-
-def build_actor_mismatch_error(request=None):
-    """
-    Build standardized 403 error when a portability token is used to access an
-    Actor other than the one it was bound to at authorization time.
-
-    Args:
-        request (HttpRequest, optional): Django request object for context
-
-    Returns:
-        Response: 403 error response with actor_mismatch error code.
-    """
-    return build_error_response(
-        error_code=ErrorCodes.ACTOR_MISMATCH,
-        detail="This token is not authorized for the requested actor",
-        status_code=403,
-        request=request,
-        hint="LOLA portability tokens are bound to a single source actor at issuance and cannot access other actors",
-        remediation="Request a new OAuth token for the target actor",
-    )
-
-
-def build_rate_limit_error(retry_after_seconds, request=None):
-    """
-    Build standardized 429 error for rate limiting with Retry-After header.
-    
-    Args:
-        retry_after_seconds (int): Seconds to wait before retrying
-        request (HttpRequest, optional): Django request object for context
-    
-    Returns:
-        Response: 429 error response with rate limit context
-    """
-    response = build_error_response(
-        error_code=ErrorCodes.RATE_LIMIT_EXCEEDED,
-        detail="Request rate limit exceeded",
-        status_code=429,
-        request=request,
-        hint=f"Too many requests. Please wait {retry_after_seconds} seconds before retrying",
-        remediation="Implement exponential backoff or reduce request frequency"
-    )
-    
-    # Add standard Retry-After header for rate limiting
-    response['Retry-After'] = str(retry_after_seconds)
-    
-    return response

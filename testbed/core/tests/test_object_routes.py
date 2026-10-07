@@ -71,7 +71,7 @@ def test_hidden_missing_and_misplaced_objects_answer_alike():
         APIClient().get(detail_url("note-detail", public, actor=other)),
     ]
 
-    answers = {(r.status_code, r.data["error_code"], r.data["detail"], r.data["hint"]) for r in responses}
+    answers = {(r.status_code, r.data["error_code"], r.data["detail"]) for r in responses}
     assert len(answers) == 1
     assert answers.pop()[:2] == (status.HTTP_404_NOT_FOUND, "object_not_found")
 

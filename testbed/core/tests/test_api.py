@@ -632,3 +632,35 @@ def test_migration_collections_deliver_each_like_and_follow_once():
     for url in (advertised["liked"], advertised["migration"]["following"], advertised["migration"]["blocked"]):
         assert outbox_objects.isdisjoint(ids(items(url))), url
     assert outbox_objects == ids(items(advertised["migration"]["content"]))
+
+
+# Errors
+
+# Errors are raised outside @activitypub_content, which added CORS when they were returned.
+# every error must keep its status, its code, the ActivityPub content type and CORS
+@pytest.mark.django_db
+@pytest.mark.parametrize("error_code", ["insufficient_scope", "actor_mismatch", "actor_not_found", "object_not_found"])
+def test_every_error_keeps_its_status_type_and_cors(error_code):
+    owner = IsolatedActorFactory(prefix="error_owner")
+    requests = {
+        "insufficient_scope": lambda: (APIClient(), reverse("liked-collection", kwargs={"pk": owner.pk}), 403),
+        "actor_mismatch": lambda: (
+            lola_client(IsolatedActorFactory(prefix="error_other")),
+            reverse("actor-outbox", kwargs={"pk": owner.pk}),
+            403,
+        ),
+        "actor_not_found": lambda: (APIClient(), reverse("actor-detail", kwargs={"pk": 999999}), 404),
+        "object_not_found": lambda: (
+            APIClient(),
+            reverse("note-detail", kwargs={"pk": owner.pk, "object_pk": NoteFactory(actor=owner, visibility="private").pk}),
+            404,
+        ),
+    }
+    client, url, status_code = requests[error_code]()
+
+    response = client.get(url)
+
+    assert response.status_code == status_code
+    assert response.data["error_code"] == error_code
+    assert response["Content-Type"] == "application/activity+json"
+    assert response["Access-Control-Allow-Origin"] == "*"

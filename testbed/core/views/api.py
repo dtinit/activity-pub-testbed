@@ -66,14 +66,14 @@ from ..models import (
     Note,
 )
 from ..oauth.authentication import OptionalOAuth2Authentication
-from ..utils.errors import build_object_not_found_error
+from ..utils.errors import ActorMismatch, InsufficientScope, ObjectNotFound
 from .decorators import (
     actor_required,
     activitypub_content,
     build_auth_context,
-    lola_access_error,
     lola_scope_optional,
     lola_scope_required,
+    require_lola_access,
 )
 
 logger = logging.getLogger(__name__)
@@ -292,17 +292,17 @@ def object_detail(request, pk, actor, object_pk, model, build):
     """
     obj = model.objects.filter(pk=object_pk, actor=actor).first()
     if obj is None:
-        return build_object_not_found_error(request)
+        raise ObjectNotFound
 
     if obj.visibility == "public":
         # Dual-mode, like the outbox: a token bound to another actor is refused (403)
-        denied = lola_access_error(request, required_scope=False, url_pk=pk)
-        if denied is not None:
-            return denied
+        require_lola_access(request, required_scope=False, url_pk=pk)
     else:
         # Strict, like the content collection: any refusal becomes the missing-object 404
-        if lola_access_error(request, required_scope=True, url_pk=pk) is not None:
-            return build_object_not_found_error(request)
+        try:
+            require_lola_access(request, required_scope=True, url_pk=pk)
+        except (InsufficientScope, ActorMismatch):
+            raise ObjectNotFound from None
 
     return Response(build(obj, build_auth_context(request)))
 

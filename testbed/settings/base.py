@@ -267,4 +267,5 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ],
+    'EXCEPTION_HANDLER': 'testbed.core.views.decorators.lola_exception_handler',
 }

@@ -16,7 +16,8 @@ from testbed.core.factories import (
 )
 from testbed.core.models import Actor, TokenActorBinding
 from testbed.core.oauth.validators import ActivityPubOAuth2Validator
-from testbed.core.views.decorators import lola_access_error
+from testbed.core.utils.errors import ActorMismatch
+from testbed.core.views.decorators import require_lola_access
 
 
 # Model
@@ -89,7 +90,7 @@ def test_validator_skips_binding_for_non_portability_token():
 def _make_lola_request(token):
     """
     Build a fake request that claims portability scope and carries `token` as request.auth.
-    The actor pk the token must be bound to is passed to lola_access_error directly as url_pk,
+    The actor pk the token must be bound to is passed to require_lola_access directly as url_pk,
     so no request.resolver_match is needed. Pass token=None to model the "scope claimed but no token object" state.
     """
     request = RequestFactory().get("/api/actors/1/followers/")
@@ -105,7 +106,7 @@ def test_same_actor_access_succeeds():
     binding = TokenActorBindingFactory()
     request = _make_lola_request(binding.token)
 
-    assert lola_access_error(request, required_scope=True, url_pk=binding.actor.pk) is None
+    assert require_lola_access(request, required_scope=True, url_pk=binding.actor.pk) is None
 
 
 @pytest.mark.django_db
@@ -121,10 +122,8 @@ def test_cross_actor_access_denied():
     # Token bound to actor A, but the URL pk is actor B.
     request = _make_lola_request(binding.token)
 
-    error = lola_access_error(request, required_scope=True, url_pk=actor_b.pk)
-    assert error is not None
-    assert error.status_code == 403
-    assert error.data["error_code"] == "actor_mismatch"
+    with pytest.raises(ActorMismatch):
+        require_lola_access(request, required_scope=True, url_pk=actor_b.pk)
 
 
 @pytest.mark.django_db
@@ -139,10 +138,8 @@ def test_unbound_token_denied():
 
     request = _make_lola_request(token)
 
-    error = lola_access_error(request, required_scope=True, url_pk=actor.pk)
-    assert error is not None
-    assert error.status_code == 403
-    assert error.data["error_code"] == "actor_mismatch"
+    with pytest.raises(ActorMismatch):
+        require_lola_access(request, required_scope=True, url_pk=actor.pk)
 
 
 @pytest.mark.django_db
@@ -153,10 +150,8 @@ def test_missing_url_pk_fails_closed():
     # url_pk=None models an actor-scoped gate invoked without a pk in the URL
     request = _make_lola_request(binding.token)
 
-    error = lola_access_error(request, required_scope=True, url_pk=None)
-    assert error is not None
-    assert error.status_code == 403
-    assert error.data["error_code"] == "actor_mismatch"
+    with pytest.raises(ActorMismatch):
+        require_lola_access(request, required_scope=True, url_pk=None)
 
 
 # Integration
@@ -239,7 +234,5 @@ def test_scope_claimed_without_token_fails_closed():
     # no binding can be verified. The gate must deny, not grant.
     request = _make_lola_request(token=None)
 
-    error = lola_access_error(request, required_scope=True, url_pk=binding.actor.pk)
-    assert error is not None
-    assert error.status_code == 403
-    assert error.data["error_code"] == "actor_mismatch"
+    with pytest.raises(ActorMismatch):
+        require_lola_access(request, required_scope=True, url_pk=binding.actor.pk)
