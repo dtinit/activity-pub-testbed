@@ -522,17 +522,19 @@ def actor_with_every_collection():
 
 
 # AS2 Core §4.6: an OrderedCollection carries `orderedItems`. The exact key set is the assertion,
-# so an `items` key, or any second shape, fails it
+# so an `items` key, or any second shape, fails it. Its `id` is the URL it was fetched at, migration routes included
 @pytest.mark.django_db
 @pytest.mark.parametrize("route", LOLA_COLLECTION_ROUTES)
 def test_every_collection_returns_one_envelope(actor_with_every_collection, route):
     actor = actor_with_every_collection
-    response = lola_client(actor).get(reverse(route, kwargs={"pk": actor.id}))
+    url = reverse(route, kwargs={"pk": actor.id})
+    response = lola_client(actor).get(url)
 
     assert response.status_code == status.HTTP_200_OK
     data = response.data
     assert set(data) == {"@context", "type", "id", "totalItems", "orderedItems"}
     assert data["type"] == "OrderedCollection"
+    assert data["id"] == f"http://testserver{url}"
     assert data["totalItems"] == len(data["orderedItems"]) > 0
 
 

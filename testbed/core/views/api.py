@@ -148,7 +148,7 @@ def following_collection(request, pk, actor):
     )
 
     # Build ActivityPub OrderedCollection
-    collection_id = build_url(request, "following-collection", pk=pk)
+    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
     collection_data = build_collection_json_ld(collection_id, items)
 
     return Response(collection_data)
@@ -178,7 +178,7 @@ def followers_collection(request, pk, actor):
     )
 
     # Build ActivityPub OrderedCollection
-    collection_id = build_url(request, "followers-collection", pk=pk)
+    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
     collection_data = build_collection_json_ld(collection_id, items)
 
     return Response(collection_data)
@@ -209,7 +209,7 @@ def content_collection(request, pk, actor):
     items = [build_note_json_ld(note, auth_context) for note in notes_qs]
 
     # Build ActivityPub OrderedCollection
-    collection_id = build_url(request, "content-collection", pk=pk)
+    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
     collection_data = build_collection_json_ld(collection_id, items)
 
     return Response(collection_data)
@@ -234,7 +234,7 @@ def liked_collection(request, pk, actor):
     items = [build_like_object_json_ld(like, auth_context) for like in likes_qs]
 
     # Build ActivityPub OrderedCollection
-    collection_id = build_url(request, "liked-collection", pk=pk)
+    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
     collection_data = build_collection_json_ld(collection_id, items)
 
     return Response(collection_data)
@@ -275,7 +275,7 @@ def blocked_collection(request, pk, actor):
     )
 
     # Build ActivityPub OrderedCollection in FEP-c648 format
-    collection_id = build_url(request, "blocked-collection", pk=pk)
+    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
     collection_data = build_collection_json_ld(collection_id, items)
 
     logger.info(f"Blocked collection accessed: actor_id={pk}, items_count={len(items)}")
