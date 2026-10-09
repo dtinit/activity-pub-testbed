@@ -1,20 +1,29 @@
 from django.urls import reverse
 
 ACTIVITY_STREAM_CONTEXT = "https://www.w3.org/ns/activitystreams"
-LOLA_CONTEXT = "https://swicg.github.io/activitypub-data-portability/lola"
 BLOCKED_CONTEXT = "https://purl.archive.org/socialweb/blocked"
+# LOLA §7.1.8 gives `previously` no IRI yet and publishes no context that's why the term is defined here
+PREVIOUSLY_TERM = {
+    "previously": {
+        "@id": "https://swicg.github.io/activitypub-data-portability/lola#previously",
+        "@type": "@id",
+        "@container": "@list",
+    }
+}
 
-# Basic context used in most responses
-def build_basic_context():
+# Basic context used in most responses, extended with the `previously` term only when the object carries breadcrumbs
+def build_basic_context(breadcrumbs=False):
+    if breadcrumbs:
+        return [ACTIVITY_STREAM_CONTEXT, PREVIOUSLY_TERM]
     return ACTIVITY_STREAM_CONTEXT
 
 # Return the extended context used specifically for Actor responses
-# Includes blocked collection support (FEP-c648)
+# Includes blocked collection support (FEP-c648) and the `previously` term
 def build_actor_context():
     return [
         ACTIVITY_STREAM_CONTEXT,
         BLOCKED_CONTEXT,
-        LOLA_CONTEXT
+        PREVIOUSLY_TERM,
     ]
 
 def build_url(request, name, **kwargs):

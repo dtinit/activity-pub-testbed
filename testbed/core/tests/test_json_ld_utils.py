@@ -1,8 +1,8 @@
 import pytest
 from testbed.core.json_ld_utils import (
     ACTIVITY_STREAM_CONTEXT,
-    LOLA_CONTEXT,
     BLOCKED_CONTEXT,
+    PREVIOUSLY_TERM,
     build_basic_context,
     build_actor_context,
     build_id_url,
@@ -15,7 +15,6 @@ from testbed.core.json_ld_utils import (
 # Test that context URLs are correct
 def test_json_ld_context_constants():
     assert ACTIVITY_STREAM_CONTEXT == "https://www.w3.org/ns/activitystreams"
-    assert LOLA_CONTEXT == "https://swicg.github.io/activitypub-data-portability/lola"
     assert BLOCKED_CONTEXT == "https://purl.archive.org/socialweb/blocked"
 
 # Test basic context builder returns single URL
@@ -24,14 +23,8 @@ def test_build_basic_context():
     assert context == ACTIVITY_STREAM_CONTEXT
     assert isinstance(context, str)
 
-# Test actor context builder returns list with all three URLs
 def test_build_actor_context():
-    context = build_actor_context()
-    assert isinstance(context, list)
-    assert len(context) == 3
-    assert ACTIVITY_STREAM_CONTEXT in context
-    assert BLOCKED_CONTEXT in context
-    assert LOLA_CONTEXT in context
+    assert build_actor_context() == [ACTIVITY_STREAM_CONTEXT, BLOCKED_CONTEXT, PREVIOUSLY_TERM]
 
 # Test base URL builder function
 def test_build_id_url(mock_request):

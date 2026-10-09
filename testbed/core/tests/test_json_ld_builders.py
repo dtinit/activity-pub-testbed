@@ -1,5 +1,7 @@
 import pytest
+from datetime import datetime, timezone
 from testbed.core.json_ld_builders import (
+    NOTE_METADATA,
     build_actor_json_ld,
     build_note_json_ld,
     build_create_activity_json_ld,
@@ -8,6 +10,8 @@ from testbed.core.json_ld_builders import (
     build_outbox_json_ld
 )
 from testbed.core.json_ld_utils import (
+    ACTIVITY_STREAM_CONTEXT,
+    PREVIOUSLY_TERM,
     build_basic_context,
     build_actor_context,
     build_actor_id,
@@ -23,7 +27,7 @@ from testbed.core.factories import (
     CreateActivityFactory,
     NoteFactory
 )
-from testbed.core.models import Actor, CreateActivity, LikeActivity, FollowActivity
+from testbed.core.models import Actor, CreateActivity, LikeActivity, FollowActivity, Note
 
 # Test building JSON-LD for an actor
 @pytest.mark.django_db
@@ -45,9 +49,34 @@ def test_build_note_json_ld(note, basic_auth_context, mock_request):
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "Note"
     assert json_ld["id"] == build_note_id(note.id, mock_request)
-    assert json_ld["actor"] == build_actor_id(note.actor.id, mock_request)
+    assert json_ld["attributedTo"] == build_actor_id(note.actor.id, mock_request)
     assert json_ld["content"] == note.content
     assert json_ld["visibility"] == note.visibility
+    # Empty metadata is left out entirely, so locally authored Notes keep exactly these keys
+    assert set(json_ld) == {"@context", "type", "id", "attributedTo", "content", "published", "visibility"}
+
+# LOLA §6.3: a copied Note serves every metadata field as stored, and keeps its original `published` (§7.1.7)
+@pytest.mark.django_db
+def test_build_note_json_ld_serves_copied_metadata(actor, basic_auth_context):
+    published = datetime(2016, 5, 1, 12, 0, tzinfo=timezone.utc)
+    note = NoteFactory(actor=actor, copied=True, published=published)
+    json_ld = build_note_json_ld(note, basic_auth_context)
+
+    for key, column in NOTE_METADATA.items():
+        assert json_ld[key] == getattr(note, column)
+    assert json_ld["published"] == published.isoformat()
+    assert json_ld["@context"] == [ACTIVITY_STREAM_CONTEXT, PREVIOUSLY_TERM]
+
+# A new Note column fails here until someone decides whether it goes on the wire
+def test_every_note_column_has_a_wire_disposition():
+    always_served = {"actor", "content", "published", "visibility"}
+    served_when_set = set(NOTE_METADATA.values())
+    internal = {"id"}
+    columns = [field.name for field in Note._meta.concrete_fields]
+
+    assert always_served | served_when_set | internal == set(columns)
+    # With the union equal, equal sizes mean no column sits in two groups
+    assert len(always_served) + len(served_when_set) + len(internal) == len(columns)
 
 # Test building JSON-LD for note creation activity
 @pytest.mark.django_db
@@ -145,6 +174,23 @@ def test_build_follow_activity_json_ld_remote(actor, basic_auth_context, mock_re
     assert json_ld["actor"] == build_actor_id(actor.id, mock_request)
     assert json_ld["object"]["id"] == "https://remote.example/users/remote_user"
     assert json_ld["object"]["preferredUsername"] == "remote_user"
+
+# LOLA §7.1.8: an activity serves its breadcrumbs and the term defining them, or neither
+@pytest.mark.django_db
+@pytest.mark.parametrize("activity_factory, build, related", [
+    (CreateActivityFactory, build_create_activity_json_ld, {"note": None}),
+    (LikeActivityFactory, build_like_activity_json_ld, {"remote": True}),
+    (FollowActivityFactory, build_follow_activity_json_ld, {"remote": True}),
+])
+def test_activity_serves_breadcrumbs_only_when_present(actor, basic_auth_context, activity_factory, build, related):
+    breadcrumbs = [{"actor": "https://mistywing.example/", "id": "https://mistywing.example/cherry/228"}]
+    with_breadcrumbs = build(activity_factory(actor=actor, previously=breadcrumbs, **related), basic_auth_context)
+    without = build(activity_factory(actor=actor, **related), basic_auth_context)
+
+    assert with_breadcrumbs["previously"] == breadcrumbs
+    assert with_breadcrumbs["@context"] == [ACTIVITY_STREAM_CONTEXT, PREVIOUSLY_TERM]
+    assert "previously" not in without
+    assert without["@context"] == ACTIVITY_STREAM_CONTEXT
 
 # Test Outbox JSON-LD builder with multiple activities
 @pytest.mark.django_db

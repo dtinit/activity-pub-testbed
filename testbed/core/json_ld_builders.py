@@ -8,6 +8,17 @@ from .json_ld_utils import (build_basic_context,
 from .oauth.utils import build_oauth_endpoint_url
 from .models import CreateActivity, LikeActivity, FollowActivity
 
+# AS2 name -> Note column for the §6.3 metadata. Served only when it holds a value
+NOTE_METADATA = {
+    "summary": "summary",
+    "to": "to",
+    "cc": "cc",
+    "inReplyTo": "in_reply_to",
+    "url": "url",
+    "source": "source",
+    "previously": "previously",
+}
+
 # Build JSON-LD Actor with LOLA compliance.
 def build_actor_json_ld(actor, auth_context=None):
     """
@@ -74,18 +85,26 @@ def build_actor_json_ld(actor, auth_context=None):
 
     return actor_data
 
+# The fields of obj that hold a value under their AS2 names.
+# empty ones are left out, never sent as null or []
+def _non_empty(obj, fields):
+    values = {key: getattr(obj, attr) for key, attr in fields.items()}
+    return {key: value for key, value in values.items() if value}
+
+
 def build_note_json_ld(note, auth_context=None):
     """Build Note JSON-LD with dynamic URL generation"""
     request = auth_context.get('request') if auth_context else None
     
     return {
-        "@context": build_basic_context(),
+        "@context": build_basic_context(breadcrumbs=bool(note.previously)),
         "type": "Note",
         "id": build_note_id(note.id, request),
-        "actor": build_actor_id(note.actor.id, request),
+        "attributedTo": build_actor_id(note.actor.id, request),
         "content": note.content,
         "published": note.published.isoformat(),
         "visibility": note.visibility,
+        **_non_empty(note, NOTE_METADATA),
     }
 
 
@@ -94,12 +113,13 @@ def build_create_activity_json_ld(activity, auth_context=None):
     request = auth_context.get('request') if auth_context else None
     
     json_ld = {
-        "@context": build_basic_context(),
+        "@context": build_basic_context(breadcrumbs=bool(activity.previously)),
         "type": "Create",
         "id": build_activity_id("create", activity.id, request),
         "actor": build_actor_id(activity.actor.id, request),
         "published": activity.timestamp.isoformat(),
         "visibility": activity.visibility,
+        **_non_empty(activity, {"previously": "previously"}),
     }
 
     if activity.note:
@@ -115,12 +135,13 @@ def build_like_activity_json_ld(activity, auth_context=None):
     request = auth_context.get('request') if auth_context else None
     
     base = {
-        "@context": build_basic_context(),
+        "@context": build_basic_context(breadcrumbs=bool(activity.previously)),
         "type": "Like",
         "id": build_activity_id("like", activity.id, request),
         "actor": build_actor_id(activity.actor.id, request),
         "published": activity.timestamp.isoformat(),
         "visibility": activity.visibility,
+        **_non_empty(activity, {"previously": "previously"}),
     }
 
     if activity.note:
@@ -142,12 +163,13 @@ def build_follow_activity_json_ld(activity, auth_context=None):
     request = auth_context.get('request') if auth_context else None
     
     base = {
-        "@context": build_basic_context(),
+        "@context": build_basic_context(breadcrumbs=bool(activity.previously)),
         "type": "Follow",
         "id": build_activity_id("follow", activity.id, request),
         "actor": build_actor_id(activity.actor.id, request),
         "published": activity.timestamp.isoformat(),
         "visibility": activity.visibility,
+        **_non_empty(activity, {"previously": "previously"}),
     }
 
     if activity.target_actor:
