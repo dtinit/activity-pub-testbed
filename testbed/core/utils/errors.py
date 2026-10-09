@@ -18,6 +18,7 @@ class ErrorCodes:
     # Authentication & Authorization Errors (4xx)
     INSUFFICIENT_SCOPE = "insufficient_scope"
     ACTOR_NOT_FOUND = "actor_not_found"
+    OBJECT_NOT_FOUND = "object_not_found"
     FORBIDDEN_ACCESS = "forbidden_access"
     UNAUTHORIZED = "unauthorized"
     ACTOR_MISMATCH = "actor_mismatch"
@@ -117,6 +118,27 @@ def build_actor_not_found_error(actor_id, request=None):
         request=request,
         hint="Verify the actor ID is correct and the actor exists in the system",
         remediation="Check available actors via the actors list endpoint or verify the ID"
+    )
+
+
+def build_object_not_found_error(request=None):
+    """
+    Build standardized 404 error for a Note or activity that is missing, belongs to another actor,
+    or is not visible to the caller. All three get this same response, so it never reveals that a
+    private object exists (ActivityPub §3.2).
+
+    Args:
+        request (HttpRequest, optional): Django request object for context
+
+    Returns:
+        Response: 404 error response with object_not_found error code
+    """
+    return build_error_response(
+        error_code=ErrorCodes.OBJECT_NOT_FOUND,
+        detail="No such object",
+        status_code=404,
+        request=request,
+        hint="The object does not exist under this actor, or is not visible to this caller",
     )
 
 

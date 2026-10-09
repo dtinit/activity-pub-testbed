@@ -29,22 +29,14 @@ def build_actor_context():
 def build_url(request, name, **kwargs):
     return request.build_absolute_uri(reverse(name, kwargs=kwargs))
 
-def build_id_url(type_name, obj_id, request):
-    """
-    Build dynamic URLs based on the current request.
-    This ensures URLs work in development, production, and any deployment environment.
-    """
-    base_url = f"{request.scheme}://{request.get_host()}"
-    return f"{base_url}/api/{type_name}/{obj_id}/"
-
 def build_actor_id(actor_id, request):
     return build_url(request, "actor-detail", pk=actor_id)
 
-def build_activity_id(activity_kind, activity_id, request):
-    return build_id_url(f"activities/{activity_kind}", activity_id, request)
+def build_activity_id(activity_kind, activity, request):
+    return build_url(request, f"{activity_kind}-activity-detail", pk=activity.actor_id, object_pk=activity.pk)
 
-def build_note_id(note_id, request):
-    return build_id_url("notes", note_id, request)
+def build_note_id(note, request):
+    return build_url(request, "note-detail", pk=note.actor_id, object_pk=note.pk)
 
 def build_outbox_id(actor_id, request):
     return build_url(request, "actor-outbox", pk=actor_id)

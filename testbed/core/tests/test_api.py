@@ -544,7 +544,7 @@ def test_like_of_another_accounts_private_note_is_served_as_id_only(mock_request
     response = APIClient().get(reverse("actor-outbox", kwargs={"pk": liker.id}))
 
     likes = [item for item in response.data["orderedItems"] if item["type"] == "Like"]
-    assert [like["object"] for like in likes] == [build_note_id(note.id, mock_request)]
+    assert [like["object"] for like in likes] == [build_note_id(note, mock_request)]
     assert b"AUTHOR PRIVATE CONTENT" not in response.content
     assert b"lemongrove.example/followers" not in response.content
 
@@ -564,7 +564,7 @@ def test_liked_items_are_the_like_objects(basic_auth_context, mock_request):
     response = lola_client(liker).get(reverse("liked-collection", kwargs={"pk": liker.id}))
 
     assert response.data["orderedItems"] == [
-        build_note_id(private_note.id, mock_request),
+        build_note_id(private_note, mock_request),
         build_note_json_ld(public_note, basic_auth_context),
         {"@context": [ACTIVITY_STREAM_CONTEXT, PREVIOUSLY_TERM], **remote_data, "id": remote.object_url},
     ]

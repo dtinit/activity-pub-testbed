@@ -99,7 +99,7 @@ def build_note_json_ld(note, auth_context=None):
     return {
         "@context": build_basic_context(breadcrumbs=bool(note.previously)),
         "type": "Note",
-        "id": build_note_id(note.id, request),
+        "id": build_note_id(note, request),
         "attributedTo": build_actor_id(note.actor.id, request),
         "content": note.content,
         "published": note.published.isoformat(),
@@ -115,7 +115,7 @@ def build_create_activity_json_ld(activity, auth_context=None):
     json_ld = {
         "@context": build_basic_context(breadcrumbs=bool(activity.previously)),
         "type": "Create",
-        "id": build_activity_id("create", activity.id, request),
+        "id": build_activity_id("create", activity, request),
         "actor": build_actor_id(activity.actor.id, request),
         "published": activity.timestamp.isoformat(),
         "visibility": activity.visibility,
@@ -148,7 +148,7 @@ def build_like_object_json_ld(like, auth_context=None):
         }
     if like.note.visibility == "public":
         return build_note_json_ld(like.note, auth_context)
-    return build_note_id(like.note.id, request)
+    return build_note_id(like.note, request)
 
 
 def build_like_activity_json_ld(activity, auth_context=None):
@@ -158,7 +158,7 @@ def build_like_activity_json_ld(activity, auth_context=None):
     base = {
         "@context": build_basic_context(breadcrumbs=bool(activity.previously)),
         "type": "Like",
-        "id": build_activity_id("like", activity.id, request),
+        "id": build_activity_id("like", activity, request),
         "actor": build_actor_id(activity.actor.id, request),
         "published": activity.timestamp.isoformat(),
         "visibility": activity.visibility,
@@ -176,7 +176,7 @@ def build_follow_activity_json_ld(activity, auth_context=None):
     base = {
         "@context": build_basic_context(breadcrumbs=bool(activity.previously)),
         "type": "Follow",
-        "id": build_activity_id("follow", activity.id, request),
+        "id": build_activity_id("follow", activity, request),
         "actor": build_actor_id(activity.actor.id, request),
         "published": activity.timestamp.isoformat(),
         "visibility": activity.visibility,
