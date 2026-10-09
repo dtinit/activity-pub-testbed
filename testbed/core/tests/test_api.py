@@ -632,3 +632,39 @@ def test_migration_collections_deliver_each_like_and_follow_once():
     for url in (advertised["liked"], advertised["migration"]["following"], advertised["migration"]["blocked"]):
         assert outbox_objects.isdisjoint(ids(items(url))), url
     assert outbox_objects == ids(items(advertised["migration"]["content"]))
+
+
+# Errors
+
+# Errors are raised outside @activitypub_content, which added CORS when they were returned.
+# every error must keep its status, its code, the ActivityPub content type and CORS
+@pytest.mark.django_db
+@pytest.mark.parametrize("error_code", ["insufficient_scope", "actor_mismatch", "actor_not_found", "object_not_found"])
+def test_every_error_keeps_its_status_type_and_cors(error_code):
+    owner = IsolatedActorFactory(prefix="error_owner")
+    requests = {
+        "insufficient_scope": lambda: (APIClient(), reverse("liked-collection", kwargs={"pk": owner.pk}), 403),
+        "actor_mismatch": lambda: (
+            lola_client(IsolatedActorFactory(prefix="error_other")),
+            reverse("actor-outbox", kwargs={"pk": owner.pk}),
+            403,
+        ),
+        "actor_not_found": lambda: (APIClient(), reverse("actor-detail", kwargs={"pk": 999999}), 404),
+        "object_not_found": lambda: (
+            APIClient(),
+            reverse("note-detail", kwargs={"pk": owner.pk, "object_pk": NoteFactory(actor=owner, visibility="private").pk}),
+            404,
+        ),
+    }
+    client, url, status_code = requests[error_code]()
+
+    response = client.get(url)
+
+    assert response.status_code == status_code
+    assert response.data["error_code"] == error_code
+    assert response["Content-Type"] == "application/activity+json"
+    assert response["Access-Control-Allow-Origin"] == "*"
+    # One shape that includes a code, a sentence and the request, plus a remedy on the 403s
+    expected_keys = {"error_code", "detail", "endpoint"} | ({"remediation"} if status_code == 403 else set())
+    assert set(response.data) == expected_keys
+    assert response.data["endpoint"] == f"GET {url}"

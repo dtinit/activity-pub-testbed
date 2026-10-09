@@ -71,9 +71,11 @@ def test_hidden_missing_and_misplaced_objects_answer_alike():
         APIClient().get(detail_url("note-detail", public, actor=other)),
     ]
 
-    answers = {(r.status_code, r.data["error_code"], r.data["detail"], r.data["hint"]) for r in responses}
-    assert len(answers) == 1
-    assert answers.pop()[:2] == (status.HTTP_404_NOT_FOUND, "object_not_found")
+    assert all(r.status_code == status.HTTP_404_NOT_FOUND for r in responses)
+    # Every key but the echoed endpoint is identical, so a hidden object reads exactly as a missing one
+    body = {"error_code": "object_not_found", "detail": "No such object"}
+    assert all({k: v for k, v in r.data.items() if k != "endpoint"} == body for r in responses)
+    assert all(r.data["endpoint"] == f"GET {r.wsgi_request.path}" for r in responses)
 
 
 # LOLA §5: a token bound to another actor is refused on a public object, as on every dual-mode endpoint

@@ -7,32 +7,36 @@ Access-control decorators:
 - lola_scope_optional: dual-mode LOLA gate - public allowed, binding still enforced
 
 Supporting helpers:
-- lola_access_error: the gate logic behind the two decorators (Response | None)
+- require_lola_access: the gate logic behind the two decorators. Raises InsufficientScope or ActorMismatch
 - build_auth_context: standardized auth context dict passed to JSON-LD builders
 - activitypub_content: sets ActivityPub content-type + CORS headers
+- lola_exception_handler: DRF's exception handler for LOLA errors that includes their body, plus the same CORS rule
 """
 
 import logging
 from functools import wraps
 
 from django.core.exceptions import ObjectDoesNotExist
+from rest_framework.views import exception_handler
 
 from ..models import Actor
 from ..oauth.scopes import LOLA_PORTABILITY_SCOPE
 from ..utils.errors import (
-    build_actor_mismatch_error,
-    build_actor_not_found_error,
-    build_insufficient_scope_error,
+    ActorMismatch,
+    ActorNotFound,
+    InsufficientScope,
+    LolaError,
 )
 
 logger = logging.getLogger(__name__)
 
 
-def lola_access_error(request, required_scope, url_pk):
+def require_lola_access(request, required_scope, url_pk):
     """
     Evaluate the LOLA access gate for an actor-scoped request.
 
-    Returns the error Response that should be sent, or None if access is allowed (no error -> None).
+    Raises InsufficientScope or ActorMismatch on denial. Returns None when access is allowed.
+    lola_exception_handler turns the exception into the 403 response.
 
     Two-layer check, each regulated by a different condition:
 
@@ -62,18 +66,18 @@ def lola_access_error(request, required_scope, url_pk):
         url_pk: the actor pk from the URL (the value the token must be bound to).
 
     Returns:
-        Response on denial, or None when access is allowed.
+        None when access is allowed.
+
+    Raises:
+        InsufficientScope: a strict endpoint without the portability scope.
+        ActorMismatch: a portability token whose binding is missing, unverifiable, or to another actor.
     """
     has_scope = bool(getattr(request, "has_portability_scope", False))
 
     # Layer 1: scope presence (strict endpoints only)
     if required_scope and not has_scope:
         logger.warning("LOLA access denied: insufficient_scope for %s", request.path)
-        return build_insufficient_scope_error(
-            required_scope=LOLA_PORTABILITY_SCOPE,
-            endpoint_path=request.path,
-            request=request,
-        )
+        raise InsufficientScope
 
     # No portability token: nothing to bind. Strict endpoints already returned above
     # dual-mode endpoints fall through to their public response.
@@ -88,7 +92,7 @@ def lola_access_error(request, required_scope, url_pk):
             "LOLA access denied: actor binding check invoked without URL pk path=%s",
             request.path,
         )
-        return build_actor_mismatch_error(request=request)
+        raise ActorMismatch
 
     token = getattr(request, "auth", None)
     if token is None:
@@ -98,11 +102,9 @@ def lola_access_error(request, required_scope, url_pk):
             "LOLA access denied: portability scope claimed without a token object path=%s",
             request.path,
         )
-        return build_actor_mismatch_error(request=request)
+        raise ActorMismatch
 
-    error = _check_actor_binding(request, token, url_pk)
-    if error is not None:
-        return error
+    _check_actor_binding(request, token, url_pk)
 
     logger.info(
         "LOLA access granted: scope=%s endpoint=%s actor_pk=%s",
@@ -117,8 +119,8 @@ def _check_actor_binding(request, token, url_pk):
     """
     Compare the token's bound Actor against the actor pk in the URL.
 
-    Returns an actor_mismatch Response on a missing binding row or a binding to a
-    different actor, or None when the binding is valid.
+    Raises ActorMismatch on a missing binding row or a binding to a different actor.
+    Returns None when the binding is valid.
 
     Failure modes:
     - Missing binding row (ObjectDoesNotExist on token.actor_binding):
@@ -134,7 +136,7 @@ def _check_actor_binding(request, token, url_pk):
             getattr(token, "pk", None),
             request.path,
         )
-        return build_actor_mismatch_error(request=request)
+        raise ActorMismatch
 
     if binding.actor_id != int(url_pk):
         logger.warning(
@@ -145,22 +147,18 @@ def _check_actor_binding(request, token, url_pk):
             url_pk,
             request.path,
         )
-        return build_actor_mismatch_error(request=request)
-
-    return None
+        raise ActorMismatch
 
 
 def _apply_lola_gate(view_func, required_scope):
     """
-    Wrap `view_func` so lola_access_error runs before it, short-circuiting with the error Response on denial.
+    Wrap `view_func` so require_lola_access runs before it, a denial raises and the view never runs.
     Shared implementation behind lola_scope_required (required_scope=True) and lola_scope_optional (required_scope=False).
     The actor pk is read from the view's URL kwargs.
     """
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
-        error = lola_access_error(request, required_scope, kwargs.get("pk"))
-        if error is not None:
-            return error
+        require_lola_access(request, required_scope, kwargs.get("pk"))
         return view_func(request, *args, **kwargs)
 
     return wrapper
@@ -187,7 +185,7 @@ def lola_scope_optional(view_func):
 def actor_required(view_func):
     """
     Resolve the Actor named by the URL <pk> and inject it into the view as the
-    `actor` keyword argument; return 404 actor_not_found if no such actor exists.
+    `actor` keyword argument; raise ActorNotFound (404 actor_not_found) if no such actor exists.
 
     Stack this ABOVE the LOLA gate decorators (lola_scope_required / lola_scope_optional) so the existence check (404)
     runs before the auth check (403), preserving each endpoint's 404-before-403 precedence.
@@ -199,7 +197,7 @@ def actor_required(view_func):
         try:
             actor = Actor.objects.get(pk=pk)
         except Actor.DoesNotExist:
-            return build_actor_not_found_error(pk, request)
+            raise ActorNotFound(f"Actor with ID {pk} does not exist")
         kwargs["actor"] = actor
         return view_func(request, *args, **kwargs)
 
@@ -226,19 +224,38 @@ def build_auth_context(request):
     }
 
 
+def _allow_any_origin(request, response):
+    if hasattr(request, "accepted_renderer") and request.accepted_renderer.format == "json":
+        response["Access-Control-Allow-Origin"] = "*"
+
+
 def activitypub_content(view_func):
     # Decorator that adds the CORS header to views that return ActivityPub JSON-LD content.
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         response = view_func(request, *args, **kwargs)
-
-        # JSON responses only; the browsable API is HTML
-        if (
-            hasattr(request, "accepted_renderer")
-            and request.accepted_renderer.format == "json"
-        ):
-            response["Access-Control-Allow-Origin"] = "*"
-
+        _allow_any_origin(request, response)
         return response
 
     return wrapper
+
+
+def lola_exception_handler(exc, context):
+    """
+    DRF's exception handler: a LOLA error gets its error body and the same CORS rule as activitypub_content,
+    which never sees a raised error. DRF's own errors keep DRF's handling.
+    """
+    response = exception_handler(exc, context)
+    if response is None or not isinstance(exc, LolaError):
+        return response
+
+    request = context["request"]
+    response.data = {
+        "error_code": exc.get_codes(),
+        "detail": str(exc.detail),
+        "endpoint": f"{request.method} {request.path}",
+    }
+    if exc.remediation:
+        response.data["remediation"] = exc.remediation
+    _allow_any_origin(request, response)
+    return response
