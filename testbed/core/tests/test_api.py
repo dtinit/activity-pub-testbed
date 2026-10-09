@@ -12,11 +12,12 @@ from testbed.core.factories import (
     ApplicationFactory,
     AccessTokenFactory,
     NoteFactory,
+    CreateActivityFactory,
     LikeActivityFactory,
     FollowingFactory,
     FollowersFactory,
 )
-from testbed.core.tests.helpers import lola_client
+from testbed.core.tests.helpers import lola_client, source_actor_for
 from testbed.core.json_ld_builders import build_note_json_ld
 from testbed.core.json_ld_utils import (
     ACTIVITY_STREAM_CONTEXT,
@@ -506,7 +507,9 @@ LOLA_COLLECTION_ROUTES = [
 @pytest.fixture
 def actor_with_every_collection():
     actor = IsolatedActorFactory(prefix="envelope")
-    NoteFactory(actor=actor)
+    note = NoteFactory(actor=actor)
+    # The migration outbox lists only the Creates of a Note
+    actor.portability_outbox.add_activity(CreateActivityFactory(actor=actor, note=note))
     LikeActivityFactory(actor=actor, remote=True, visibility="public")
     FollowingFactory(actor=actor, remote=True)
     FollowersFactory(actor=actor, remote=True)
@@ -519,17 +522,19 @@ def actor_with_every_collection():
 
 
 # AS2 Core §4.6: an OrderedCollection carries `orderedItems`. The exact key set is the assertion,
-# so an `items` key, or any second shape, fails it
+# so an `items` key, or any second shape, fails it. Its `id` is the URL it was fetched at, migration routes included
 @pytest.mark.django_db
 @pytest.mark.parametrize("route", LOLA_COLLECTION_ROUTES)
 def test_every_collection_returns_one_envelope(actor_with_every_collection, route):
     actor = actor_with_every_collection
-    response = lola_client(actor).get(reverse(route, kwargs={"pk": actor.id}))
+    url = reverse(route, kwargs={"pk": actor.id})
+    response = lola_client(actor).get(url)
 
     assert response.status_code == status.HTTP_200_OK
     data = response.data
     assert set(data) == {"@context", "type", "id", "totalItems", "orderedItems"}
     assert data["type"] == "OrderedCollection"
+    assert data["id"] == f"http://testserver{url}"
     assert data["totalItems"] == len(data["orderedItems"]) > 0
 
 
@@ -584,3 +589,46 @@ def test_liked_lists_the_owners_non_public_likes():
 
     listed = {item["id"] for item in response.data["orderedItems"]}
     assert listed == {like.object_url for like in likes}
+
+
+# Migration outbox
+
+# LOLA §6.2: the migration outbox is the outbox's Creates of a Note, filtered by visibility exactly as the outbox is
+@pytest.mark.django_db
+@pytest.mark.parametrize("bound", [False, True], ids=["anonymous", "bound"])
+def test_migration_outbox_is_the_outboxs_note_creates(bound):
+    actor = source_actor_for()
+    client = lola_client(actor) if bound else APIClient()
+
+    outbox = client.get(reverse("actor-outbox", kwargs={"pk": actor.id})).data["orderedItems"]
+    migration = client.get(reverse("migration-outbox", kwargs={"pk": actor.id})).data["orderedItems"]
+
+    assert {item["type"] for item in outbox} == {"Create", "Like", "Follow"}
+    assert {item["type"] for item in migration} == {"Create"}
+    # `type` before `object`: a Like's object can be a bare id string
+    assert migration == [item for item in outbox if item["type"] == "Create" and item["object"]["type"] == "Note"]
+    assert {item["visibility"] for item in migration} == (
+        {"public", "followers-only", "private"} if bound else {"public"}
+    )
+
+
+# LOLA §6.6.1: walked as a destination walks it, the migration outbox shares no object with liked,
+# migration/following or migration/blocked. Its objects are migration/content's, the spec's two routes to
+# the same posts, and which one a destination imports is the destination's choice
+@pytest.mark.django_db
+def test_migration_collections_deliver_each_like_and_follow_once():
+    actor = source_actor_for()
+    client = lola_client(actor)
+    advertised = client.get(reverse("actor-detail", kwargs={"pk": actor.id})).data
+
+    def items(url):
+        return client.get(url).data["orderedItems"]
+
+    def ids(values):
+        # An item, or an activity's object, is embedded or a bare id string
+        return {value if isinstance(value, str) else value["id"] for value in values}
+
+    outbox_objects = ids(item["object"] for item in items(advertised["migration"]["outbox"]))
+    for url in (advertised["liked"], advertised["migration"]["following"], advertised["migration"]["blocked"]):
+        assert outbox_objects.isdisjoint(ids(items(url))), url
+    assert outbox_objects == ids(items(advertised["migration"]["content"]))

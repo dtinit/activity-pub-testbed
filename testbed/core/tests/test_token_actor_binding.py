@@ -203,14 +203,14 @@ stay publicly readable but must reject a portability token bound to a different 
 Public access and same-actor access are already exercised by the public and bound-token tests in
 test_api.py / test_lola_actor.py, this guarantee to assert here is the cross-actor denial.
 
-One representative route per dual-mode view. The migration/outbox and
-migration/following routes resolve to these same views (proven by
-test_dedicated_migration_routes_resolve), so they share this enforcement.
+One route per dual-mode view, plus migration/outbox, which reaches portability_outbox_detail with a
+different payload. migration/following reaches following_collection unchanged and therefore shares this enforcement.
 """
 DUAL_MODE_ROUTE_NAMES = [
     "actor-detail",
     "actor-outbox",
     "following-collection",
+    "migration-outbox",
 ]
 
 # A portability token bound to actor A is rejected on actor B's dual-mode endpoints
