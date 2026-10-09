@@ -17,10 +17,14 @@ from testbed.core.factories import (
     FollowersFactory,
 )
 from testbed.core.tests.helpers import lola_client
+from testbed.core.json_ld_builders import build_note_json_ld
 from testbed.core.json_ld_utils import (
+    ACTIVITY_STREAM_CONTEXT,
+    PREVIOUSLY_TERM,
     build_basic_context,
     build_actor_context,
     build_actor_id,
+    build_note_id,
     build_outbox_id,
 )
 from testbed.core.oauth.authentication import OptionalOAuth2Authentication
@@ -527,3 +531,41 @@ def test_every_collection_returns_one_envelope(actor_with_every_collection, rout
     assert set(data) == {"@context", "type", "id", "totalItems", "orderedItems"}
     assert data["type"] == "OrderedCollection"
     assert data["totalItems"] == len(data["orderedItems"]) > 0
+
+
+# LOLA §5: a public Like of another account's private Note carries that Note's id, never the Note
+@pytest.mark.django_db
+def test_like_of_another_accounts_private_note_is_served_as_id_only(mock_request):
+    liker = IsolatedActorFactory(prefix="liker")
+    author = IsolatedActorFactory(prefix="author")
+    note = NoteFactory(actor=author, visibility="private", content="AUTHOR PRIVATE CONTENT", copied=True)
+    liker.portability_outbox.add_activity(LikeActivityFactory(actor=liker, note=note, visibility="public"))
+
+    response = APIClient().get(reverse("actor-outbox", kwargs={"pk": liker.id}))
+
+    likes = [item for item in response.data["orderedItems"] if item["type"] == "Like"]
+    assert [like["object"] for like in likes] == [build_note_id(note.id, mock_request)]
+    assert b"AUTHOR PRIVATE CONTENT" not in response.content
+    assert b"lemongrove.example/followers" not in response.content
+
+
+# ActivityPub §5.5: a liked item is the object of the Like, served as the Like serves it, with nothing rewritten (LOLA §6.4)
+@pytest.mark.django_db
+def test_liked_items_are_the_like_objects(basic_auth_context, mock_request):
+    liker = IsolatedActorFactory(prefix="liked_owner")
+    author = IsolatedActorFactory(prefix="liked_author")
+    remote_data = {"type": "Note", "content": "remote", "previously": ["https://older.example/notes/9"]}
+    remote = LikeActivityFactory(actor=liker, remote=True, visibility="public", object_data=remote_data)
+    public_note = NoteFactory(actor=author, visibility="public", content="long " * 70, copied=True)
+    LikeActivityFactory(actor=liker, note=public_note, visibility="public")
+    private_note = NoteFactory(actor=author, visibility="private", content="AUTHOR PRIVATE CONTENT")
+    LikeActivityFactory(actor=liker, note=private_note, visibility="public")
+
+    response = lola_client(liker).get(reverse("liked-collection", kwargs={"pk": liker.id}))
+
+    assert response.data["orderedItems"] == [
+        build_note_id(private_note.id, mock_request),
+        build_note_json_ld(public_note, basic_auth_context),
+        {"@context": [ACTIVITY_STREAM_CONTEXT, PREVIOUSLY_TERM], **remote_data, "id": remote.object_url},
+    ]
+    assert b"AUTHOR PRIVATE CONTENT" not in response.content

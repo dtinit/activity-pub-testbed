@@ -112,7 +112,8 @@ def test_build_create_activity_json_ld_actor_creation(actor, basic_auth_context,
 # Test building JSON-LD for local like activity
 @pytest.mark.django_db
 def test_build_like_activity_json_ld_local(actor, basic_auth_context, mock_request):
-    note = NoteFactory(actor=actor)
+    # Only a public Note is embedded. The non-public case is test_like_of_another_accounts_private_note_is_served_as_id_only
+    note = NoteFactory(actor=actor, visibility="public")
     activity = LikeActivityFactory(actor=actor, note=note)
     json_ld = build_like_activity_json_ld(activity, basic_auth_context)
     

@@ -130,6 +130,27 @@ def build_create_activity_json_ld(activity, auth_context=None):
     return json_ld
 
 
+def build_like_object_json_ld(like, auth_context=None):
+    """
+    The object of a Like. What the Like activity carries and what the liked collection lists.
+
+    A remote object is served as stored. A local Note is embedded only when it is public; any other
+    visibility is served as its id alone, because the Note may belong to another account (LOLA §5).
+    """
+    request = auth_context.get('request') if auth_context else None
+
+    if like.note is None:
+        data = like.object_data or {}
+        return {
+            "@context": build_basic_context(breadcrumbs=bool(data.get("previously"))),
+            **data,
+            "id": like.object_url,
+        }
+    if like.note.visibility == "public":
+        return build_note_json_ld(like.note, auth_context)
+    return build_note_id(like.note.id, request)
+
+
 def build_like_activity_json_ld(activity, auth_context=None):
     # Build Like Activity JSON-LD with dynamic URL generation
     request = auth_context.get('request') if auth_context else None
@@ -143,17 +164,7 @@ def build_like_activity_json_ld(activity, auth_context=None):
         "visibility": activity.visibility,
         **_non_empty(activity, {"previously": "previously"}),
     }
-
-    if activity.note:
-        # For local notes, use the Note model's get_json_ld method
-        base["object"] = build_note_json_ld(activity.note, auth_context)
-    else:
-        # For remote objects, use the stored data
-        base["object"] = {
-            "@context": build_basic_context(),
-            **activity.object_data,
-            "id": activity.object_url,
-        }
+    base["object"] = build_like_object_json_ld(activity, auth_context)
 
     return base
 
