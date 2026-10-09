@@ -96,7 +96,7 @@ def build_create_activity_json_ld(activity, auth_context=None):
     json_ld = {
         "@context": build_basic_context(),
         "type": "Create",
-        "id": build_activity_id(activity.id, request),
+        "id": build_activity_id("create", activity.id, request),
         "actor": build_actor_id(activity.actor.id, request),
         "published": activity.timestamp.isoformat(),
         "visibility": activity.visibility,
@@ -117,7 +117,7 @@ def build_like_activity_json_ld(activity, auth_context=None):
     base = {
         "@context": build_basic_context(),
         "type": "Like",
-        "id": build_activity_id(activity.id, request),
+        "id": build_activity_id("like", activity.id, request),
         "actor": build_actor_id(activity.actor.id, request),
         "published": activity.timestamp.isoformat(),
         "visibility": activity.visibility,
@@ -144,7 +144,7 @@ def build_follow_activity_json_ld(activity, auth_context=None):
     base = {
         "@context": build_basic_context(),
         "type": "Follow",
-        "id": build_activity_id(activity.id, request),
+        "id": build_activity_id("follow", activity.id, request),
         "actor": build_actor_id(activity.actor.id, request),
         "published": activity.timestamp.isoformat(),
         "visibility": activity.visibility,

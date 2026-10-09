@@ -26,18 +26,16 @@ def build_id_url(type_name, obj_id, request):
     This ensures URLs work in development, production, and any deployment environment.
     """
     base_url = f"{request.scheme}://{request.get_host()}"
-    return f"{base_url}/api/{type_name}/{obj_id}"
+    return f"{base_url}/api/{type_name}/{obj_id}/"
 
 def build_actor_id(actor_id, request):
     return build_url(request, "actor-detail", pk=actor_id)
 
-def build_activity_id(activity_id, request):
-    base_url = f"{request.scheme}://{request.get_host()}"
-    return f"{base_url}/api/activities/{activity_id}"
+def build_activity_id(activity_kind, activity_id, request):
+    return build_id_url(f"activities/{activity_kind}", activity_id, request)
 
 def build_note_id(note_id, request):
-    base_url = f"{request.scheme}://{request.get_host()}"
-    return f"{base_url}/api/notes/{note_id}"
+    return build_id_url("notes", note_id, request)
 
 def build_outbox_id(actor_id, request):
     return build_url(request, "actor-outbox", pk=actor_id)

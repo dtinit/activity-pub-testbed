@@ -58,7 +58,7 @@ def test_build_create_activity_json_ld_note(actor, basic_auth_context, mock_requ
     
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "Create"
-    assert json_ld["id"] == build_activity_id(activity.id, mock_request)
+    assert json_ld["id"] == build_activity_id("create", activity.id, mock_request)
     assert json_ld["actor"] == build_actor_id(actor.id, mock_request)
     assert json_ld["object"]["type"] == "Note"
     assert json_ld["object"]["id"] == build_note_id(note.id, mock_request)
@@ -75,7 +75,7 @@ def test_build_create_activity_json_ld_actor_creation(actor, basic_auth_context,
     
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "Create"
-    assert json_ld["id"] == build_activity_id(activity.id, mock_request)
+    assert json_ld["id"] == build_activity_id("create", activity.id, mock_request)
     assert json_ld["actor"] == build_actor_id(actor.id, mock_request)
     assert json_ld["object"]["type"] == "Person"
     assert json_ld["object"]["id"] == build_actor_id(actor.id, mock_request)
@@ -89,7 +89,7 @@ def test_build_like_activity_json_ld_local(actor, basic_auth_context, mock_reque
     
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "Like"
-    assert json_ld["id"] == build_activity_id(activity.id, mock_request)
+    assert json_ld["id"] == build_activity_id("like", activity.id, mock_request)
     assert json_ld["actor"] == build_actor_id(actor.id, mock_request)
     assert json_ld["object"]["type"] == "Note"
     assert json_ld["object"]["id"] == build_note_id(note.id, mock_request)
@@ -107,7 +107,7 @@ def test_build_like_activity_json_ld_remote(actor, basic_auth_context, mock_requ
     json_ld = build_like_activity_json_ld(activity, basic_auth_context)
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "Like"
-    assert json_ld["id"] == build_activity_id(activity.id, mock_request)
+    assert json_ld["id"] == build_activity_id("like", activity.id, mock_request)
     assert json_ld["actor"] == build_actor_id(actor.id, mock_request)
     assert json_ld["object"]["id"] == "https://remote.example/notes/123"
     assert json_ld["object"]["content"] == "Remote content"
@@ -123,7 +123,7 @@ def test_build_follow_activity_json_ld_local(actor, other_actor, basic_auth_cont
     json_ld = build_follow_activity_json_ld(activity, basic_auth_context)
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "Follow"
-    assert json_ld["id"] == build_activity_id(activity.id, mock_request)
+    assert json_ld["id"] == build_activity_id("follow", activity.id, mock_request)
     assert json_ld["actor"] == build_actor_id(actor.id, mock_request)
     assert json_ld["object"]["type"] == "Person"
     assert json_ld["object"]["id"] == build_actor_id(other_actor.id, mock_request)
@@ -141,7 +141,7 @@ def test_build_follow_activity_json_ld_remote(actor, basic_auth_context, mock_re
     json_ld = build_follow_activity_json_ld(activity, basic_auth_context)
     assert json_ld["@context"] == build_basic_context()
     assert json_ld["type"] == "Follow"
-    assert json_ld["id"] == build_activity_id(activity.id, mock_request)
+    assert json_ld["id"] == build_activity_id("follow", activity.id, mock_request)
     assert json_ld["actor"] == build_actor_id(actor.id, mock_request)
     assert json_ld["object"]["id"] == "https://remote.example/users/remote_user"
     assert json_ld["object"]["preferredUsername"] == "remote_user"
