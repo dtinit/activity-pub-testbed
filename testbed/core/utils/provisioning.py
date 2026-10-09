@@ -82,7 +82,7 @@ def provision_actor_content(actor):
         likes.append(LikeActivity(
             actor=actor,
             timestamp=liked_at,
-            visibility="public",
+            visibility=VISIBILITIES[(number - 1) % len(VISIBILITIES)],
             object_url=f"{author_url}/notes/{number}",
             object_data={
                 "type": "Note",
