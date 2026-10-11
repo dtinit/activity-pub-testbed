@@ -51,7 +51,8 @@ def test_actor_detail_api(actor, mock_request):
     assert json_ld["id"] == build_actor_id(actor.id, mock_request)
     assert json_ld["preferredUsername"] == actor.username
     assert json_ld["name"] == actor.username
-    assert isinstance(json_ld["previously"], list)
+    # LOLA §6.6: an Actor is never copied, it carries no breadcrumbs
+    assert "previously" not in json_ld
 
 # Test outbox detail API endpoint
 @pytest.mark.django_db

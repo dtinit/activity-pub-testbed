@@ -18,12 +18,11 @@ def build_basic_context(breadcrumbs=False):
     return ACTIVITY_STREAM_CONTEXT
 
 # Return the extended context used specifically for Actor responses
-# Includes blocked collection support (FEP-c648) and the `previously` term
+# Includes blocked collection support (FEP-c648). No `previously` term since an Actor is never copied (LOLA §6.6)
 def build_actor_context():
     return [
         ACTIVITY_STREAM_CONTEXT,
         BLOCKED_CONTEXT,
-        PREVIOUSLY_TERM,
     ]
 
 def build_url(request, name, **kwargs):

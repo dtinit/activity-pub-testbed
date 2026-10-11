@@ -79,7 +79,6 @@ def build_actor_json_ld(actor, auth_context=None):
     actor_data = {
         **build_actor_reference_json_ld(actor, request),
         "@context": build_actor_context(),
-        "previously": actor.previously or [],
         # Publicly readable collections, so they are advertised to everyone (ActivityPub §4.1)
         "outbox": build_url(request, "actor-outbox", pk=actor.id),
         "following": build_url(request, "following-collection", pk=actor.id),

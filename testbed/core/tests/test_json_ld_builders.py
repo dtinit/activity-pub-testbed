@@ -40,7 +40,17 @@ def test_build_actor_json_ld(actor, basic_auth_context, mock_request):
     assert json_ld["id"] == build_actor_id(actor.id, mock_request)
     assert json_ld["preferredUsername"] == actor.username
     assert json_ld["name"] == actor.username
-    assert isinstance(json_ld["previously"], list)
+    assert "previously" not in json_ld
+
+# LOLA §6.6, §7.1.8: an Actor is never copied, it never carries breadcrumbs, even with a recorded move
+@pytest.mark.django_db
+def test_build_actor_json_ld_never_serves_previously(actor, basic_auth_context):
+    actor.record_move("old-server.com", "old_username")
+    json_ld = build_actor_json_ld(actor, basic_auth_context)
+
+    assert actor.previously
+    assert "previously" not in json_ld
+    assert PREVIOUSLY_TERM not in json_ld["@context"]
 
 # LOLA §5: a reference names an actor and nothing scoped. It takes no auth context, its keys are the same for every caller
 @pytest.mark.django_db
