@@ -42,12 +42,14 @@ def test_actor_without_token_includes_oauth_endpoint_but_no_migration():
     assert 'migration' not in data, \
         "migration object requires portability token"
     
-    # Privacy-sensitive collections must NOT be present
-    assert 'following' not in data, "following requires authentication"
+    # outbox and following are publicly readable, therefore the Actor advertises them too (ActivityPub §4.1)
+    assert data['outbox'] == f'http://testserver/api/actors/{actor.id}/outbox/'
+    assert data['following'] == f'http://testserver/api/actors/{actor.id}/following/'
+
+    # Collections that refuse without a token must NOT be advertised
     assert 'followers' not in data, "followers requires authentication"
     assert 'liked' not in data, "liked requires authentication"
     assert 'blocked' not in data, "blocked requires authentication"
-    assert 'outbox' not in data, "outbox requires authentication"
     
     # Basic Actor fields must be present
     assert data['type'] == 'Person'
@@ -137,7 +139,7 @@ def test_actor_with_wrong_scope_returns_public_response():
     
     # Should NOT have migration data (insufficient scope)
     assert 'migration' not in data
-    assert 'following' not in data
+    assert 'following' in data, "following is public. A wrong-scope token sees what anyone sees"
     assert 'followers' not in data
 
 
@@ -206,7 +208,10 @@ def test_public_vs_authenticated_response_comparison():
     assert 'migration' not in public_data
     assert 'migration' in auth_data
     
-    # Only authenticated should have privacy-sensitive collections
-    for collection in ['following', 'followers', 'liked', 'blocked', 'outbox']:
+    # outbox and following are public. The collections that refuse without a token are advertised only with one
+    for collection in ['outbox', 'following']:
+        assert collection in public_data
+        assert collection in auth_data
+    for collection in ['followers', 'liked', 'blocked']:
         assert collection not in public_data
         assert collection in auth_data

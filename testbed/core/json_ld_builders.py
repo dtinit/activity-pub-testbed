@@ -56,6 +56,8 @@ def build_actor_json_ld(actor, auth_context=None):
       for OAuth endpoint discovery (public visibility).
     - It is advertised in parallel with `endpoints.oauthAuthorizationEndpoint`.
       Both point at `/oauth/authorize/` endpoint, which is also the URL advertised in the RFC8414 metadata.
+    - `outbox` and `following` are publicly readable, so every response advertises them.
+      `followers`, `liked` and `blocked` refuse without a token. Only a portability-scoped token sees them.
     - The `migration` object (outbox / content / following / blocked) is privacy-sensitive feature
       discovery and is only included when the request carries a valid portability-scoped token.
     
@@ -78,12 +80,13 @@ def build_actor_json_ld(actor, auth_context=None):
         **build_actor_reference_json_ld(actor, request),
         "@context": build_actor_context(),
         "previously": actor.previously or [],
+        # Publicly readable collections, so they are advertised to everyone (ActivityPub §4.1)
+        "outbox": build_url(request, "actor-outbox", pk=actor.id),
+        "following": build_url(request, "following-collection", pk=actor.id),
     }
 
-    # Privacy-sensitive fields ONLY with portability scope
+    # Collections that refuse without a token, ONLY with portability scope
     if auth_context and auth_context.get('has_portability_scope'):
-        actor_data["outbox"] = build_url(request, "actor-outbox", pk=actor.id)
-        actor_data["following"] = build_url(request, "following-collection", pk=actor.id)
         actor_data["followers"] = build_url(request, "followers-collection", pk=actor.id)
         actor_data["liked"] = build_url(request, "liked-collection", pk=actor.id)
         actor_data["blocked"] = build_url(request, "blocked-collection", pk=actor.id)

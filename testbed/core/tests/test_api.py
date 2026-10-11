@@ -399,26 +399,28 @@ class TestFollowersCollectionEndpoint:
 
 """
 Tests for LOLA collection URL discovery via Actor endpoint
-Following/Followers URLs only appear in LOLA-authenticated Actor responses
+outbox and following are publicly readable. Every Actor response advertises them (ActivityPub §4.1).
+The collections that refuse without a token (followers, liked, blocked) appear only in LOLA-authenticated responses
 """
 class TestLOLACollectionDiscovery:
 
-    # Verify Following/Followers URLs only appear in LOLA-authenticated Actor responses
+    # Verify the gated collection URLs (followers) only appear in LOLA-authenticated Actor responses
     @pytest.mark.django_db
-    def test_collection_urls_appear_only_with_lola_auth(self):
+    def test_gated_collection_urls_appear_only_with_lola_auth(self):
         actor = IsolatedActorFactory(prefix="discovery_test")
         
-        # Public request should not show collection URLs
+        # Public request shows the public collections and not the gated ones
         public_response = APIClient().get(reverse("actor-detail", kwargs={"pk": actor.id}))
         public_data = public_response.data
         
-        assert "following" not in public_data
+        assert public_data["outbox"].endswith(f"/actors/{actor.id}/outbox/")
+        assert public_data["following"].endswith(f"/actors/{actor.id}/following/")
         assert "followers" not in public_data
         
-        # LOLA-authenticated request should show collection URLs
+        # LOLA-authenticated request should show the gated collection URLs as well
         lola_response = lola_client(actor).get(reverse("actor-detail", kwargs={"pk": actor.id}))
         lola_data = lola_response.data
-        
+
         assert "following" in lola_data
         assert "followers" in lola_data
         assert lola_data["following"].endswith(f"/actors/{actor.id}/following/")
@@ -448,13 +450,13 @@ class TestLOLACollectionDiscovery:
             response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
             data = response.data
             
+            # Everyone sees the public collection
+            assert "following" in data
             if auth_type == "lola_oauth":
-                # Only LOLA authentication should reveal collection URLs
-                assert "following" in data
+                # Only LOLA authentication should reveal the gated collection URLs
                 assert "followers" in data
             else:
-                # Public and basic OAuth should not see collection URLs
-                assert "following" not in data
+                # Public and basic OAuth should not see them
                 assert "followers" not in data
 
 
