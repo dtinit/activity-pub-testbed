@@ -79,6 +79,14 @@ from .decorators import (
 logger = logging.getLogger(__name__)
 
 
+def _ordered_collection(request, pk, items):
+    """
+    The OrderedCollection a collection view serves. The route that served it names it
+    therefore a migration route answers with its own UR."""
+    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
+    return build_collection_json_ld(collection_id, items)
+
+
 def _relationship_collection(request, pk, actor, model, actor_field):
     """
     One of the actor's relationship collections (following, followers, blocked): the active rows, newest first,
@@ -90,10 +98,7 @@ def _relationship_collection(request, pk, actor, model, actor_field):
     """
     relationships = model.objects.filter(actor=actor, status=model.STATUS_ACTIVE).order_by("-created_at", "-id")
     items = build_relationship_items(relationships, actor_field, request)
-
-    # The route that served the collection names it. A migration route answers with its own URL
-    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
-    return build_collection_json_ld(collection_id, items)
+    return _ordered_collection(request, pk, items)
 
 
 @api_view(["GET"])
@@ -178,11 +183,7 @@ def content_collection(request, pk, actor):
     # Build raw Note objects (no Activity wrappers)
     items = [build_note_json_ld(note, auth_context) for note in notes_qs]
 
-    # Build ActivityPub OrderedCollection
-    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
-    collection_data = build_collection_json_ld(collection_id, items)
-
-    return Response(collection_data)
+    return Response(_ordered_collection(request, pk, items))
 
 
 @api_view(["GET"])
@@ -203,11 +204,7 @@ def liked_collection(request, pk, actor):
 
     items = [build_like_object_json_ld(like, auth_context) for like in likes_qs]
 
-    # Build ActivityPub OrderedCollection
-    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
-    collection_data = build_collection_json_ld(collection_id, items)
-
-    return Response(collection_data)
+    return Response(_ordered_collection(request, pk, items))
 
 
 @api_view(["GET"])
