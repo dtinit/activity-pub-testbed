@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -14,6 +16,7 @@ from testbed.core.factories import (
     NoteFactory,
     CreateActivityFactory,
     LikeActivityFactory,
+    FollowActivityFactory,
     FollowingFactory,
     FollowersFactory,
 )
@@ -632,6 +635,51 @@ def test_migration_collections_deliver_each_like_and_follow_once():
     for url in (advertised["liked"], advertised["migration"]["following"], advertised["migration"]["blocked"]):
         assert outbox_objects.isdisjoint(ids(items(url))), url
     assert outbox_objects == ids(items(advertised["migration"]["content"]))
+
+
+# Embedded actors
+
+EMBEDDED_ACTOR_KEYS = {"@context", "type", "id", "preferredUsername", "name", "inbox", "endpoints"}
+
+
+# Every Person found anywhere in a payload. Doesn't matter how nested it is
+def persons_in(value):
+    if isinstance(value, dict) and value.get("type") == "Person":
+        yield value
+    children = value.values() if isinstance(value, dict) else value if isinstance(value, list) else []
+    for child in children:
+        yield from persons_in(child)
+
+
+# LOLA §5: an actor embedded in another payload is a reference, however much scope the caller holds.
+# A token bound to one account is never handed another account's collection URLs or its migration block.
+# Checked on the Persons inside each payload since a migration route's own `id` contains "migration"
+@pytest.mark.django_db
+@pytest.mark.parametrize("route", [
+    "following-collection",
+    "followers-collection",
+    "blocked-collection",
+    "migration-following",
+    "migration-blocked",
+    "actor-outbox",
+    "follow-activity-detail",
+])
+def test_embedded_actors_are_references(route):
+    actor = IsolatedActorFactory(prefix="embed_owner")
+    other = IsolatedActorFactory(prefix="embed_other")
+    Following.objects.create(actor=actor, target_actor=other, status=Following.STATUS_ACTIVE)
+    Followers.objects.create(actor=actor, follower_actor=other, status=Followers.STATUS_ACTIVE)
+    Blocked.objects.create(actor=actor, blocked_actor=other)
+    follow = FollowActivityFactory(actor=actor, target_actor=other, visibility="public")
+    actor.portability_outbox.add_activity(follow)
+    kwargs = {"pk": actor.id, **({"object_pk": follow.pk} if route == "follow-activity-detail" else {})}
+
+    response = lola_client(actor).get(reverse(route, kwargs=kwargs))
+
+    persons = list(persons_in(response.data))
+    assert persons
+    assert all(set(person) == EMBEDDED_ACTOR_KEYS for person in persons)
+    assert "migration" not in json.dumps(persons)
 
 
 # Errors

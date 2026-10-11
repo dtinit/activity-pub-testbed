@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from testbed.core.json_ld_builders import (
     NOTE_METADATA,
     build_actor_json_ld,
+    build_actor_reference_json_ld,
     build_note_json_ld,
     build_create_activity_json_ld,
     build_like_activity_json_ld,
@@ -40,6 +41,16 @@ def test_build_actor_json_ld(actor, basic_auth_context, mock_request):
     assert json_ld["preferredUsername"] == actor.username
     assert json_ld["name"] == actor.username
     assert isinstance(json_ld["previously"], list)
+
+# LOLA §5: a reference names an actor and nothing scoped. It takes no auth context, its keys are the same for every caller
+@pytest.mark.django_db
+def test_build_actor_reference_json_ld(actor, mock_request):
+    reference = build_actor_reference_json_ld(actor, mock_request)
+
+    assert set(reference) == {"@context", "type", "id", "preferredUsername", "name", "inbox", "endpoints"}
+    assert reference["@context"] == build_basic_context()
+    assert reference["id"] == build_actor_id(actor.id, mock_request)
+    assert reference["preferredUsername"] == actor.username
 
 # Test building JSON-LD for a note
 @pytest.mark.django_db
