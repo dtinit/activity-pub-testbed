@@ -181,6 +181,29 @@ def test_non_portability_scope_redirect_has_no_actor(settings):
     assert ACTIVITYPUB_ACTOR_PARAM not in query
 
 
+# Consent screen rendering
+
+
+@pytest.mark.django_db
+def test_fatal_error_renders_the_error_not_the_consent_form():
+    # DOT renders authorize.html with only `error` when it refuses to redirect therefore no approval can be offered
+    user = UserWithActorsFactory()
+    application = _make_application(user)
+
+    client = Client()
+    client.force_login(user)
+
+    response = client.get(
+        reverse("oauth2_provider:authorize"),
+        data=_authorize_params(application, redirect_uri="https://unregistered.example/callback"),
+    )
+
+    assert response.status_code == 400
+    content = response.content.decode()
+    assert "Mismatching redirect URI." in content
+    assert 'name="allow"' not in content
+
+
 # Security: actor comes from the approving user, never the client/app owner
 
 
