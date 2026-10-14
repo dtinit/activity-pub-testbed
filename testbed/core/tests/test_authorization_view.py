@@ -204,6 +204,50 @@ def test_fatal_error_renders_the_error_not_the_consent_form():
     assert 'name="allow"' not in content
 
 
+@pytest.mark.django_db
+def test_consent_screen_names_the_actor_the_redirect_returns():
+    # The screen and the approval redirect build the Actor URL with the same builder and they should match exactly
+    user = UserWithActorsFactory()
+    source_actor = source_actor_for(user)
+    application = _make_application(user)
+    actor_url = _expected_actor_url(source_actor)
+
+    client = Client()
+    client.force_login(user)
+
+    screen = client.get(reverse("oauth2_provider:authorize"), data=_authorize_params(application))
+    visible = screen.content.decode().replace(f'value="{LOLA_SCOPE}"', "")
+
+    assert screen.status_code == 200
+    assert source_actor.username in visible
+    assert actor_url in visible
+    assert LOLA_SCOPE in visible
+
+    form_data = _authorize_params(application)
+    form_data["allow"] = "True"
+    approve = client.post(reverse("oauth2_provider:authorize"), data=form_data)
+
+    assert _redirect_query(approve)[ACTIVITYPUB_ACTOR_PARAM] == [actor_url]
+
+
+@pytest.mark.django_db
+def test_consent_screen_without_source_actor_says_so():
+    # Approving would issue a code whose exchange fails (actor_binding_unavailable). Only Cancel is offered
+    user = UserWithActorsFactory()
+    source_actor_for(user).delete()
+    application = _make_application(user)
+
+    client = Client()
+    client.force_login(user)
+
+    response = client.get(reverse("oauth2_provider:authorize"), data=_authorize_params(application))
+    content = response.content.decode()
+
+    assert response.status_code == 200
+    assert "no source account to transfer" in content
+    assert 'name="allow"' not in content
+
+
 # Security: actor comes from the approving user, never the client/app owner
 
 
