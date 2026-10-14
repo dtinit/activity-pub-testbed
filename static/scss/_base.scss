@@ -33,6 +33,27 @@ html {
   border: 1px solid #ccc;
 }
 
+.layout .messages {
+  list-style: none;
+  padding: 0;
+}
+
+.layout .messages li {
+  margin-bottom: 1em;
+  padding: 0.7em;
+  border-radius: 4px;
+}
+
+.layout .messages .success {
+  background: #e3fdd7;
+  color: #102010;
+}
+
+.layout .messages .error {
+  background: #f2dede;
+  color: #a94442;
+}
+
 .layout footer {
   padding: 25px;
   display: flex;

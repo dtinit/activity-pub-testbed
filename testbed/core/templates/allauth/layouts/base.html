@@ -1,19 +1,11 @@
 {# Adapted from https://github.com/pennersr/django-allauth/blob/1e72c343752ac244fce92a1829c85bfce90d1309/allauth/templates/allauth/layouts/base.html #}
-{# allauth's account pages render inside the site's own frame. Only the account menu and messages are added here #}
+{# allauth's account pages render inside the site's own frame. Only the account menu is added here #}
 {% extends "_base.html" %}
 {% load i18n %}
 
 {% block title %}{% block head_title %}{% endblock head_title %} · ActivityPub Account Portability Testbed{% endblock title %}
 
 {% block body %}
-    {% if messages %}
-        <div>
-            <strong>{% trans "Messages:" %}</strong>
-            <ul>
-                {% for message in messages %}<li>{{ message }}</li>{% endfor %}
-            </ul>
-        </div>
-    {% endif %}
     <div>
         <strong>{% trans "Menu:" %}</strong>
         <ul>

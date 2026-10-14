@@ -10,24 +10,6 @@
     background: #f5f5f5;
   }
 
-  .messages {
-    list-style: none;
-    padding: 0;
-  }
-  .messages p {
-    margin-bottom: 1em;
-    padding: 0.7em;
-    border-radius: 4px;
-  }
-  .messages p.success {
-    background: #e3fdd7;
-    color: #102010;
-  }
-  .messages p.error {
-    background: #f2dede;
-    color: #a94442;
-  }
-  
   .info-note {
     background-color: #e8f4fd;
     padding: 0.8em;

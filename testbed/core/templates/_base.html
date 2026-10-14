@@ -19,6 +19,13 @@
       {% endif %}
     </header>
     <div class="main-content">
+    {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}
+      <li class="{{ message.tags }}">{{ message }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
     {% block body %}
     {% block content %}
     {% endblock content %}

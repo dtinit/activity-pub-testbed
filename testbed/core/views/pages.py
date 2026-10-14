@@ -84,7 +84,7 @@ def index(request):
 
                 # Get the specific error message
                 redirect_error = oauth_form.errors["redirect_uris"][0]
-                error_message += f"<br>• {redirect_error}"
+                error_message += f" {redirect_error}"
             messages.error(request, error_message)
     else:
         # Initialize form with the application instance
