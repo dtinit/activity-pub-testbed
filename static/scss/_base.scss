@@ -115,6 +115,34 @@ a:focus {
   color: $primary;
 }
 
+.layout a.btn {
+  display: inline-block;
+  padding: 0.5em 1.25em;
+  border: 2px solid $primary;
+  border-radius: $small-radius;
+  background: transparent;
+  color: $primary;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.layout a.btn:hover,
+.layout a.btn:focus {
+  background: $primary;
+  color: $surface;
+}
+
+.layout a.btn-primary {
+  background: $primary;
+  color: $surface;
+}
+
+.layout a.btn-primary:hover,
+.layout a.btn-primary:focus {
+  background: transparent;
+  color: $primary;
+}
+
 .layout footer {
   padding: $frame-spacing;
   display: flex;
