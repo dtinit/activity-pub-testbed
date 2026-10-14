@@ -130,16 +130,13 @@ def following_collection(request, pk, actor):
         actor=actor, status=Following.STATUS_ACTIVE
     ).order_by("-created_at", "-id")
 
-    # Build standardized authentication context for nested Actor objects
-    auth_context = build_auth_context(request)
-
     # Build the collection items
     items = build_relationship_items(
         relationships=following_qs,
         local_actor_field="target_actor",
         remote_url_field="target_actor_url",
         remote_data_field="target_actor_data",
-        auth_context=auth_context,
+        request=request,
     )
 
     # Build ActivityPub OrderedCollection
@@ -160,16 +157,13 @@ def followers_collection(request, pk, actor):
         actor=actor, status=Followers.STATUS_ACTIVE
     ).order_by("-created_at", "-id")
 
-    # Build standardized authentication context for nested Actor objects
-    auth_context = build_auth_context(request)
-
     # Build the collection items
     items = build_relationship_items(
         relationships=followers_qs,
         local_actor_field="follower_actor",
         remote_url_field="follower_actor_url",
         remote_data_field="follower_actor_data",
-        auth_context=auth_context,
+        request=request,
     )
 
     # Build ActivityPub OrderedCollection
@@ -257,16 +251,13 @@ def blocked_collection(request, pk, actor):
         actor=actor, status=Blocked.STATUS_ACTIVE
     ).order_by("-created_at", "-id")
 
-    # Build standardized authentication context for nested Actor objects
-    auth_context = build_auth_context(request)
-
     # Build the collection items using the same pattern as followers/following
     items = build_relationship_items(
         relationships=blocked_qs,
         local_actor_field="blocked_actor",
         remote_url_field="blocked_actor_url",
         remote_data_field="blocked_actor_data",
-        auth_context=auth_context,
+        request=request,
     )
 
     # Build ActivityPub OrderedCollection in FEP-c648 format

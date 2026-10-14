@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -14,6 +16,7 @@ from testbed.core.factories import (
     NoteFactory,
     CreateActivityFactory,
     LikeActivityFactory,
+    FollowActivityFactory,
     FollowingFactory,
     FollowersFactory,
 )
@@ -48,7 +51,8 @@ def test_actor_detail_api(actor, mock_request):
     assert json_ld["id"] == build_actor_id(actor.id, mock_request)
     assert json_ld["preferredUsername"] == actor.username
     assert json_ld["name"] == actor.username
-    assert isinstance(json_ld["previously"], list)
+    # LOLA §6.6: an Actor is never copied, it carries no breadcrumbs
+    assert "previously" not in json_ld
 
 # Test outbox detail API endpoint
 @pytest.mark.django_db
@@ -396,26 +400,28 @@ class TestFollowersCollectionEndpoint:
 
 """
 Tests for LOLA collection URL discovery via Actor endpoint
-Following/Followers URLs only appear in LOLA-authenticated Actor responses
+outbox and following are publicly readable. Every Actor response advertises them (ActivityPub §4.1).
+The collections that refuse without a token (followers, liked, blocked) appear only in LOLA-authenticated responses
 """
 class TestLOLACollectionDiscovery:
 
-    # Verify Following/Followers URLs only appear in LOLA-authenticated Actor responses
+    # Verify the gated collection URLs (followers) only appear in LOLA-authenticated Actor responses
     @pytest.mark.django_db
-    def test_collection_urls_appear_only_with_lola_auth(self):
+    def test_gated_collection_urls_appear_only_with_lola_auth(self):
         actor = IsolatedActorFactory(prefix="discovery_test")
         
-        # Public request should not show collection URLs
+        # Public request shows the public collections and not the gated ones
         public_response = APIClient().get(reverse("actor-detail", kwargs={"pk": actor.id}))
         public_data = public_response.data
         
-        assert "following" not in public_data
+        assert public_data["outbox"].endswith(f"/actors/{actor.id}/outbox/")
+        assert public_data["following"].endswith(f"/actors/{actor.id}/following/")
         assert "followers" not in public_data
         
-        # LOLA-authenticated request should show collection URLs
+        # LOLA-authenticated request should show the gated collection URLs as well
         lola_response = lola_client(actor).get(reverse("actor-detail", kwargs={"pk": actor.id}))
         lola_data = lola_response.data
-        
+
         assert "following" in lola_data
         assert "followers" in lola_data
         assert lola_data["following"].endswith(f"/actors/{actor.id}/following/")
@@ -445,13 +451,13 @@ class TestLOLACollectionDiscovery:
             response = client.get(reverse("actor-detail", kwargs={"pk": actor.id}))
             data = response.data
             
+            # Everyone sees the public collection
+            assert "following" in data
             if auth_type == "lola_oauth":
-                # Only LOLA authentication should reveal collection URLs
-                assert "following" in data
+                # Only LOLA authentication should reveal the gated collection URLs
                 assert "followers" in data
             else:
-                # Public and basic OAuth should not see collection URLs
-                assert "following" not in data
+                # Public and basic OAuth should not see them
                 assert "followers" not in data
 
 
@@ -632,6 +638,51 @@ def test_migration_collections_deliver_each_like_and_follow_once():
     for url in (advertised["liked"], advertised["migration"]["following"], advertised["migration"]["blocked"]):
         assert outbox_objects.isdisjoint(ids(items(url))), url
     assert outbox_objects == ids(items(advertised["migration"]["content"]))
+
+
+# Embedded actors
+
+EMBEDDED_ACTOR_KEYS = {"@context", "type", "id", "preferredUsername", "name", "inbox", "endpoints"}
+
+
+# Every Person found anywhere in a payload. Doesn't matter how nested it is
+def persons_in(value):
+    if isinstance(value, dict) and value.get("type") == "Person":
+        yield value
+    children = value.values() if isinstance(value, dict) else value if isinstance(value, list) else []
+    for child in children:
+        yield from persons_in(child)
+
+
+# LOLA §5: an actor embedded in another payload is a reference, however much scope the caller holds.
+# A token bound to one account is never handed another account's collection URLs or its migration block.
+# Checked on the Persons inside each payload since a migration route's own `id` contains "migration"
+@pytest.mark.django_db
+@pytest.mark.parametrize("route", [
+    "following-collection",
+    "followers-collection",
+    "blocked-collection",
+    "migration-following",
+    "migration-blocked",
+    "actor-outbox",
+    "follow-activity-detail",
+])
+def test_embedded_actors_are_references(route):
+    actor = IsolatedActorFactory(prefix="embed_owner")
+    other = IsolatedActorFactory(prefix="embed_other")
+    Following.objects.create(actor=actor, target_actor=other, status=Following.STATUS_ACTIVE)
+    Followers.objects.create(actor=actor, follower_actor=other, status=Followers.STATUS_ACTIVE)
+    Blocked.objects.create(actor=actor, blocked_actor=other)
+    follow = FollowActivityFactory(actor=actor, target_actor=other, visibility="public")
+    actor.portability_outbox.add_activity(follow)
+    kwargs = {"pk": actor.id, **({"object_pk": follow.pk} if route == "follow-activity-detail" else {})}
+
+    response = lola_client(actor).get(reverse(route, kwargs=kwargs))
+
+    persons = list(persons_in(response.data))
+    assert persons
+    assert all(set(person) == EMBEDDED_ACTOR_KEYS for person in persons)
+    assert "migration" not in json.dumps(persons)
 
 
 # Errors

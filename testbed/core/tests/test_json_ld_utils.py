@@ -2,7 +2,6 @@ import pytest
 from testbed.core.json_ld_utils import (
     ACTIVITY_STREAM_CONTEXT,
     BLOCKED_CONTEXT,
-    PREVIOUSLY_TERM,
     build_basic_context,
     build_actor_context,
     build_actor_id,
@@ -24,7 +23,7 @@ def test_build_basic_context():
     assert isinstance(context, str)
 
 def test_build_actor_context():
-    assert build_actor_context() == [ACTIVITY_STREAM_CONTEXT, BLOCKED_CONTEXT, PREVIOUSLY_TERM]
+    assert build_actor_context() == [ACTIVITY_STREAM_CONTEXT, BLOCKED_CONTEXT]
 
 def test_build_actor_id(mock_request):
     actor_id = build_actor_id(123, mock_request)

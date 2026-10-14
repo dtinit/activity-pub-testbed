@@ -19,6 +19,34 @@ NOTE_METADATA = {
     "previously": "previously",
 }
 
+def build_actor_reference_json_ld(actor, request):
+    """
+    An actor named inside another payload. Identity and the public OAuth endpoints, nothing else.
+
+    Takes the request and not the auth context, so no caller's scope can widen it (LOLA §5).
+    It never carries a collection URL or `migration`. Those belong to the Actor's own response,
+    which build_actor_json_ld serves only to the token bound to that actor.
+    """
+    actor_id = build_actor_id(actor.id, request)
+
+    # The migration OAuth endpoint and the general OAuth authorization endpoint are the same URL,
+    # so both `endpoints.*` fields resolve to it. Computed once and reused.
+    oauth_authorize_url = build_oauth_endpoint_url(request)
+
+    return {
+        "@context": build_basic_context(),
+        "type": "Person",
+        "id": actor_id,
+        "preferredUsername": actor.username,
+        "name": actor.username,
+        "inbox": f"{actor_id}inbox",  # no route serves the inbox yet. reverse() cannot build it
+        "endpoints": {
+            "oauthAuthorizationEndpoint": oauth_authorize_url,
+            "oauthMigrationEndpoint": oauth_authorize_url,
+        },
+    }
+
+
 # Build JSON-LD Actor with LOLA compliance.
 def build_actor_json_ld(actor, auth_context=None):
     """
@@ -28,6 +56,8 @@ def build_actor_json_ld(actor, auth_context=None):
       for OAuth endpoint discovery (public visibility).
     - It is advertised in parallel with `endpoints.oauthAuthorizationEndpoint`.
       Both point at `/oauth/authorize/` endpoint, which is also the URL advertised in the RFC8414 metadata.
+    - `outbox` and `following` are publicly readable, so every response advertises them.
+      `followers`, `liked` and `blocked` refuse without a token. Only a portability-scoped token sees them.
     - The `migration` object (outbox / content / following / blocked) is privacy-sensitive feature
       discovery and is only included when the request carries a valid portability-scoped token.
     
@@ -45,32 +75,17 @@ def build_actor_json_ld(actor, auth_context=None):
     # Extract request for dynamic URL generation
     request = auth_context.get('request') if auth_context else None
     
-    # Build actor URL
-    actor_id = build_actor_id(actor.id, request)
-    
-    # The migration OAuth endpoint and the general OAuth authorization endpoint are the same URL,
-    # so both `endpoints.*` fields resolve to it. Computed once and reused.
-    oauth_authorize_url = build_oauth_endpoint_url(request)
-
-    # Base ActivityPub Actor (always included)
+    # Base ActivityPub Actor (always included). The reference every embedded actor gets with the Actor's own context
     actor_data = {
+        **build_actor_reference_json_ld(actor, request),
         "@context": build_actor_context(),
-        "type": "Person",
-        "id": actor_id,
-        "preferredUsername": actor.username,
-        "name": actor.username,
-        "inbox": f"{actor_id}inbox",  # no route serves the inbox yet, so reverse() cannot build it
-        "previously": actor.previously or [],
-        "endpoints": {
-            "oauthAuthorizationEndpoint": oauth_authorize_url,
-            "oauthMigrationEndpoint": oauth_authorize_url,
-        },
+        # Publicly readable collections, so they are advertised to everyone (ActivityPub §4.1)
+        "outbox": build_url(request, "actor-outbox", pk=actor.id),
+        "following": build_url(request, "following-collection", pk=actor.id),
     }
 
-    # Privacy-sensitive fields ONLY with portability scope
+    # Collections that refuse without a token, ONLY with portability scope
     if auth_context and auth_context.get('has_portability_scope'):
-        actor_data["outbox"] = build_url(request, "actor-outbox", pk=actor.id)
-        actor_data["following"] = build_url(request, "following-collection", pk=actor.id)
         actor_data["followers"] = build_url(request, "followers-collection", pk=actor.id)
         actor_data["liked"] = build_url(request, "liked-collection", pk=actor.id)
         actor_data["blocked"] = build_url(request, "blocked-collection", pk=actor.id)
@@ -124,7 +139,7 @@ def build_create_activity_json_ld(activity, auth_context=None):
     if activity.note:
         json_ld["object"] = build_note_json_ld(activity.note, auth_context)
     else:
-        json_ld["object"] = build_actor_json_ld(activity.actor, auth_context)
+        json_ld["object"] = build_actor_reference_json_ld(activity.actor, request)
 
     return json_ld
 
@@ -183,7 +198,7 @@ def build_follow_activity_json_ld(activity, auth_context=None):
     }
 
     if activity.target_actor:
-        base["object"] = build_actor_json_ld(activity.target_actor, auth_context)
+        base["object"] = build_actor_reference_json_ld(activity.target_actor, request)
     else:
         base["object"] = {
             "@context": build_basic_context(),
@@ -264,7 +279,7 @@ def build_collection_json_ld(collection_id, items):
     }
 
 
-def build_relationship_items(relationships, local_actor_field, remote_url_field, remote_data_field, auth_context):
+def build_relationship_items(relationships, local_actor_field, remote_url_field, remote_data_field, request):
     """
     Build collection items from Following or Followers relationship querysets.
     
@@ -275,8 +290,9 @@ def build_relationship_items(relationships, local_actor_field, remote_url_field,
         local_actor_field: Field name for local actor (e.g., 'target_actor', 'follower_actor')
         remote_url_field: Field name for remote URL (e.g., 'target_actor_url', 'follower_actor_url')  
         remote_data_field: Field name for remote data (e.g., 'target_actor_data', 'follower_actor_data')
-        auth_context: Authentication context for JSON-LD building
-    
+        request: HTTP request object for dynamic URL building. Not the auth context: an actor listed in a
+            collection is a reference, the same for every caller (LOLA §5)
+
     Returns:
         List of actor JSON-LD objects ready for collection
     """
@@ -286,8 +302,8 @@ def build_relationship_items(relationships, local_actor_field, remote_url_field,
         local_actor = getattr(relationship, local_actor_field, None)
         
         if local_actor:
-            # Local actor: use full JSON-LD builder with authentication context
-            items.append(build_actor_json_ld(local_actor, auth_context))
+            # Local actor. A reference, never its full representation
+            items.append(build_actor_reference_json_ld(local_actor, request))
         else:
             # Remote actor: use cached data with URL injection
             remote_url = getattr(relationship, remote_url_field, None)
