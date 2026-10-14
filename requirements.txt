@@ -7,7 +7,7 @@ django-oauth-toolkit==3.0.1
 django-sass-processor==1.4.2
 django-structlog==10.1.0
 django-tree-queries==0.26.1
-djangorestframework==3.18.1
+djangorestframework==3.18.3
 factory_boy==3.3.3
 html-sanitizer==2.6.0
 libsass==0.23.0
