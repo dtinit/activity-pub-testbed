@@ -1,4 +1,5 @@
 {% extends "_base.html" %}
+{% load static %}
 
 {% block content %}
 <main class="index">
@@ -80,3 +81,9 @@
   {% endif %}
 </main>
 {% endblock %}
+
+{% block extra_body %}
+{% if oauth_form %}
+<script src="{% static 'js/copy-field.js' %}" defer></script>
+{% endif %}
+{% endblock extra_body %}

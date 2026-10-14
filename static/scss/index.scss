@@ -75,6 +75,36 @@
     margin-top: 0.5rem;
   }
 
+  // The Copy button sits inside the right end of its box shown on hover or when it has keyboard focus
+  .oauth-form .copy-field {
+    grid-column: 2;
+    position: relative;
+  }
+  .oauth-form .copy-field .form-control {
+    padding-right: 5em;
+  }
+  .oauth-form .copy-button {
+    position: absolute;
+    top: 50%;
+    right: 0.3em;
+    transform: translateY(-50%);
+    margin: 0;
+    padding: 0.2em 0.7em;
+    font-size: 0.8em;
+    opacity: 0;
+  }
+  .oauth-form .copy-field:hover .copy-button,
+  .oauth-form .copy-field:focus-within .copy-button {
+    opacity: 1;
+  }
+
+  // Touch screens have no hover, so the button is always shown there
+  @media (hover: none) {
+    .oauth-form .copy-button {
+      opacity: 1;
+    }
+  }
+
   @media (max-width: 600px) {
     .oauth-form {
       grid-template-columns: 1fr;
@@ -82,6 +112,7 @@
     .oauth-form label,
     .oauth-form .form-control,
     .oauth-form .helptext,
+    .oauth-form .copy-field,
     .oauth-form button {
       grid-column: 1;
     }

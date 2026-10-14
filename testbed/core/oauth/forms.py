@@ -22,12 +22,14 @@ class OAuthApplicationForm(forms.ModelForm):
             'client_id': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'Client ID',
-                'readonly': 'readonly'
+                'readonly': 'readonly',
+                'data-copy': ''
             }),
             'client_secret': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'Client Secret',
-                'readonly': 'readonly'
+                'readonly': 'readonly',
+                'data-copy': ''
             }),
             'redirect_uris': forms.TextInput(attrs={
                 'class': 'form-control', 
