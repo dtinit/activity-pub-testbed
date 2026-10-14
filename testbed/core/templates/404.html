@@ -1,0 +1,11 @@
+{% extends "_base.html" %}
+
+{% block title %}Page not found · ActivityPub Account Portability Testbed{% endblock title %}
+
+{% block content %}
+<main class="status-page">
+  <h1>Page not found</h1>
+  <p>There's no page at this address. It may have moved, or the link may be mistyped.</p>
+  <p><a href="{% url 'home' %}">Return to the testbed</a></p>
+</main>
+{% endblock %}

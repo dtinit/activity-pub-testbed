@@ -1,0 +1,11 @@
+{% extends "_base.html" %}
+
+{% block title %}Something went wrong · ActivityPub Account Portability Testbed{% endblock title %}
+
+{% block content %}
+<main class="status-page">
+  <h1>Something went wrong</h1>
+  <p>The server hit an error while handling this request. Please try again in a moment.</p>
+  <p><a href="{% url 'home' %}">Return to the testbed</a></p>
+</main>
+{% endblock %}
