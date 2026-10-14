@@ -45,9 +45,14 @@ a:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1em;
   padding: $frame-spacing;
   background: $surface;
   border-bottom: 1px solid $border-color;
+}
+
+.layout header > a:last-child {
+  white-space: nowrap;
 }
 
 .layout header .site-title {
