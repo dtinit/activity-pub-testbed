@@ -10,7 +10,6 @@
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     
     h1 {
-      color: #333;
       margin-bottom: 1.5rem;
       font-size: 1.8rem;
     }
@@ -60,12 +59,12 @@
   }
   
   .security-note {
-    background-color: #fff8e1;
+    background-color: $warning-background;
     padding: 1rem;
     border-radius: 4px;
     margin-top: 1.5rem;
     font-size: 0.9rem;
-    border-left: 4px solid #ffb300;
+    border-left: 4px solid $warning-accent;
   }
   
   .authorize-actions {
@@ -75,28 +74,35 @@
     
     input[type="submit"] {
       margin-left: 1rem;
-      padding: 0.6rem 1.2rem;
-      border-radius: 4px;
-      border: none;
+      padding: 0.5em 1.25em;
+      border: 2px solid $primary;
+      border-radius: $small-radius;
       font-size: 1rem;
+      font-weight: 500;
       cursor: pointer;
     }
-    
+
+    // DTI's primary button: filled, turning to an outline on hover
     input[name="allow"] {
       background-color: $primary;
-      color: white;
-      
-      &:hover {
-        background-color: $primary-hover;
+      color: $surface;
+
+      &:hover,
+      &:focus {
+        background-color: transparent;
+        color: $primary;
       }
     }
-    
+
+    // DTI's secondary button: an outline, filling on hover
     input[value="Cancel"] {
-      background-color: #f5f5f5;
-      color: #333;
-      
-      &:hover {
-        background-color: #e0e0e0;
+      background-color: transparent;
+      color: $primary;
+
+      &:hover,
+      &:focus {
+        background-color: $primary;
+        color: $surface;
       }
     }
   }
