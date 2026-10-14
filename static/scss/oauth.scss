@@ -102,6 +102,24 @@
   }
 }
 
+.layout .error-card {
+  background-color: #fff;
+  border-radius: 6px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  border-left: 4px solid $error-text;
+
+  .error-description {
+    font-size: 1.2rem;
+  }
+
+  .error-code {
+    margin-top: 0.5rem;
+    font-size: 0.9em;
+    color: #555;
+  }
+}
+
 .oauth-error {
   max-width: 800px;
   margin: 0 auto;
