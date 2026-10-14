@@ -279,17 +279,16 @@ def build_collection_json_ld(collection_id, items):
     }
 
 
-def build_relationship_items(relationships, local_actor_field, remote_url_field, remote_data_field, request):
+def build_relationship_items(relationships, actor_field, request):
     """
-    Build collection items from Following or Followers relationship querysets.
+    Build collection items from Following, Followers or Blocked relationship querysets.
     
     Handles both local and remote actors consistently across relationship types.
     
     Args:
-        relationships: QuerySet of Following or Followers objects
-        local_actor_field: Field name for local actor (e.g., 'target_actor', 'follower_actor')
-        remote_url_field: Field name for remote URL (e.g., 'target_actor_url', 'follower_actor_url')  
-        remote_data_field: Field name for remote data (e.g., 'target_actor_data', 'follower_actor_data')
+        relationships: QuerySet of Following, Followers or Blocked objects
+        actor_field: Field name for the local actor (e.g., 'target_actor', 'follower_actor', 'blocked_actor').
+            Its remote URL and cached data are the fields named '<actor_field>_url' and '<actor_field>_data'
         request: HTTP request object for dynamic URL building. Not the auth context: an actor listed in a
             collection is a reference, the same for every caller (LOLA §5)
 
@@ -299,15 +298,15 @@ def build_relationship_items(relationships, local_actor_field, remote_url_field,
     items = []
     for relationship in relationships:
         # Try to get local actor using dynamic field access
-        local_actor = getattr(relationship, local_actor_field, None)
+        local_actor = getattr(relationship, actor_field, None)
         
         if local_actor:
             # Local actor. A reference, never its full representation
             items.append(build_actor_reference_json_ld(local_actor, request))
         else:
             # Remote actor: use cached data with URL injection
-            remote_url = getattr(relationship, remote_url_field, None)
-            remote_data = getattr(relationship, remote_data_field, None)
+            remote_url = getattr(relationship, f"{actor_field}_url", None)
+            remote_data = getattr(relationship, f"{actor_field}_data", None)
             
             actor_data = remote_data.copy() if remote_data else {}
             actor_data['id'] = remote_url

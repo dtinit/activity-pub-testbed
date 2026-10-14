@@ -79,6 +79,28 @@ from .decorators import (
 logger = logging.getLogger(__name__)
 
 
+def _ordered_collection(request, pk, items):
+    """
+    The OrderedCollection a collection view serves. The route that served it names it
+    therefore a migration route answers with its own UR."""
+    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
+    return build_collection_json_ld(collection_id, items)
+
+
+def _relationship_collection(request, pk, actor, model, actor_field):
+    """
+    One of the actor's relationship collections (following, followers, blocked): the active rows, newest first,
+    each listed as a reference to the other actor (LOLA §5). Returns the OrderedCollection dict.
+
+    Args:
+        model: Following, Followers or Blocked
+        actor_field: the model's local-actor field (build_relationship_items)
+    """
+    relationships = model.objects.filter(actor=actor, status=model.STATUS_ACTIVE).order_by("-created_at", "-id")
+    items = build_relationship_items(relationships, actor_field, request)
+    return _ordered_collection(request, pk, items)
+
+
 @api_view(["GET"])
 @authentication_classes([OptionalOAuth2Authentication])
 @activitypub_content
@@ -125,25 +147,7 @@ def following_collection(request, pk, actor):
     SHOULD be provided on the Actor object when accessed with the account migration authorization token."
     Also serves the advertised .../migration/following/ route.
     """
-    # Get all active following relationships for this actor
-    following_qs = Following.objects.filter(
-        actor=actor, status=Following.STATUS_ACTIVE
-    ).order_by("-created_at", "-id")
-
-    # Build the collection items
-    items = build_relationship_items(
-        relationships=following_qs,
-        local_actor_field="target_actor",
-        remote_url_field="target_actor_url",
-        remote_data_field="target_actor_data",
-        request=request,
-    )
-
-    # Build ActivityPub OrderedCollection
-    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
-    collection_data = build_collection_json_ld(collection_id, items)
-
-    return Response(collection_data)
+    return Response(_relationship_collection(request, pk, actor, Following, "target_actor"))
 
 
 @api_view(["GET"])
@@ -152,25 +156,7 @@ def following_collection(request, pk, actor):
 @actor_required
 @lola_scope_required
 def followers_collection(request, pk, actor):
-    # Get all active follower relationships for this actor
-    followers_qs = Followers.objects.filter(
-        actor=actor, status=Followers.STATUS_ACTIVE
-    ).order_by("-created_at", "-id")
-
-    # Build the collection items
-    items = build_relationship_items(
-        relationships=followers_qs,
-        local_actor_field="follower_actor",
-        remote_url_field="follower_actor_url",
-        remote_data_field="follower_actor_data",
-        request=request,
-    )
-
-    # Build ActivityPub OrderedCollection
-    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
-    collection_data = build_collection_json_ld(collection_id, items)
-
-    return Response(collection_data)
+    return Response(_relationship_collection(request, pk, actor, Followers, "follower_actor"))
 
 
 @api_view(["GET"])
@@ -197,11 +183,7 @@ def content_collection(request, pk, actor):
     # Build raw Note objects (no Activity wrappers)
     items = [build_note_json_ld(note, auth_context) for note in notes_qs]
 
-    # Build ActivityPub OrderedCollection
-    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
-    collection_data = build_collection_json_ld(collection_id, items)
-
-    return Response(collection_data)
+    return Response(_ordered_collection(request, pk, items))
 
 
 @api_view(["GET"])
@@ -222,11 +204,7 @@ def liked_collection(request, pk, actor):
 
     items = [build_like_object_json_ld(like, auth_context) for like in likes_qs]
 
-    # Build ActivityPub OrderedCollection
-    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
-    collection_data = build_collection_json_ld(collection_id, items)
-
-    return Response(collection_data)
+    return Response(_ordered_collection(request, pk, items))
 
 
 @api_view(["GET"])
@@ -246,25 +224,9 @@ def blocked_collection(request, pk, actor):
     as block lists reveal who users consider threats, harassers, or sources of harm.
     Unauthorized access could compromise user safety.
     """
-    # Get all active blocking relationships for this actor
-    blocked_qs = Blocked.objects.filter(
-        actor=actor, status=Blocked.STATUS_ACTIVE
-    ).order_by("-created_at", "-id")
+    collection_data = _relationship_collection(request, pk, actor, Blocked, "blocked_actor")
 
-    # Build the collection items using the same pattern as followers/following
-    items = build_relationship_items(
-        relationships=blocked_qs,
-        local_actor_field="blocked_actor",
-        remote_url_field="blocked_actor_url",
-        remote_data_field="blocked_actor_data",
-        request=request,
-    )
-
-    # Build ActivityPub OrderedCollection in FEP-c648 format
-    collection_id = build_url(request, request.resolver_match.url_name, pk=pk)
-    collection_data = build_collection_json_ld(collection_id, items)
-
-    logger.info(f"Blocked collection accessed: actor_id={pk}, items_count={len(items)}")
+    logger.info(f"Blocked collection accessed: actor_id={pk}, items_count={collection_data['totalItems']}")
 
     return Response(collection_data)
 

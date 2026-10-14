@@ -544,6 +544,25 @@ def test_every_collection_returns_one_envelope(actor_with_every_collection, rout
     assert data["totalItems"] == len(data["orderedItems"]) > 0
 
 
+# A remote row of following, followers or blocked lists its stored data under its own id.
+# build_relationship_items finds that url and data from the local field's name therefore a model that broke the
+# '<field>_url' / '<field>_data' naming would lose them
+@pytest.mark.django_db
+@pytest.mark.parametrize("route, model, field", [
+    ("following-collection", Following, "target_actor"),
+    ("followers-collection", Followers, "follower_actor"),
+    ("blocked-collection", Blocked, "blocked_actor"),
+])
+def test_remote_relationship_is_listed_with_its_stored_data(route, model, field):
+    actor = IsolatedActorFactory(prefix="remote_rows")
+    data = {"type": "Person", "preferredUsername": "remote_one"}
+    model.objects.create(actor=actor, **{f"{field}_url": "https://remote.example/users/one", f"{field}_data": data})
+
+    response = lola_client(actor).get(reverse(route, kwargs={"pk": actor.id}))
+
+    assert response.data["orderedItems"] == [{**data, "id": "https://remote.example/users/one"}]
+
+
 # LOLA §5: a public Like of another account's private Note carries that Note's id, never the Note
 @pytest.mark.django_db
 def test_like_of_another_accounts_private_note_is_served_as_id_only(mock_request):
