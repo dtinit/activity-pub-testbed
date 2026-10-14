@@ -91,6 +91,23 @@ a:focus {
   color: $error-text;
 }
 
+.layout button {
+  padding: 0.5em 1.25em;
+  border: 2px solid transparent;
+  border-radius: $small-radius;
+  background: $primary;
+  color: $surface;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.layout button:hover,
+.layout button:focus {
+  border-color: $primary;
+  background: transparent;
+  color: $primary;
+}
+
 .layout footer {
   padding: $frame-spacing;
   display: flex;
