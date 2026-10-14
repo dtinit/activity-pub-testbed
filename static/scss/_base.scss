@@ -50,6 +50,12 @@ html {
   border: 1px solid $border-color;
 }
 
+@media (max-width: 600px) {
+  .layout .main-content {
+    min-width: 0;
+  }
+}
+
 .layout .messages {
   list-style: none;
   padding: 0;
