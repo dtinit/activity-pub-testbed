@@ -1,0 +1,58 @@
+.account {
+  // A form with field rows lays them out as two columns: labels as wide as the form's longest label, then the boxes
+  form:has(> p > label:first-child) {
+    display: grid;
+    grid-template-columns: max-content auto;
+    gap: 0.5em;
+    align-items: center;
+    justify-content: start;
+  }
+
+  form:has(> p > label:first-child) > * {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  // A field row's label and box become cells of the form's grid
+  form > p:has(> label:first-child) {
+    display: contents;
+  }
+
+  form > p > label:first-child {
+    grid-column: 1;
+  }
+
+  form > p > label:first-child + input {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .helptext,
+  form:has(> p > label:first-child) > ul {
+    grid-column: 2;
+    font-size: 0.85em;
+    color: #555;
+  }
+
+  form:has(> p > label:first-child) > ul {
+    padding-left: 1.2em;
+  }
+
+  .helptext:empty,
+  form > p:empty {
+    display: none;
+  }
+
+  @media (max-width: 600px) {
+    form:has(> p > label:first-child) {
+      grid-template-columns: auto;
+    }
+
+    form > p > label:first-child,
+    form > p > label:first-child + input,
+    .helptext,
+    form:has(> p > label:first-child) > ul {
+      grid-column: 1;
+    }
+  }
+}
