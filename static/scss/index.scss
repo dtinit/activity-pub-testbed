@@ -1,6 +1,16 @@
 .index {
-  h3 {
+  h1 {
+    margin-bottom: 1.5rem;
+  }
+
+  // Section headings keep the size they had as <h3>
+  h2 {
+    font-size: 1.17em;
     margin: 10px 0;
+  }
+
+  .intro p + p {
+    margin-top: 1.5rem;
   }
 
   .actor {
@@ -48,16 +58,7 @@
     border-width: 2px;
     background-color: #fff8f8;
   }
-  .oauth-form .btn {
-    background: $primary;
-    color: $surface;
-    border: none;
-    padding: 0.5em 1.5em;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 1em;
-  }
-  .oauth-form .btn:hover {
-    background: $primary-hover;
+  .oauth-form button {
+    margin-top: 1.5rem;
   }
 }
