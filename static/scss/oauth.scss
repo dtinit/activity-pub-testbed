@@ -21,6 +21,18 @@
     margin-bottom: 1.5rem;
   }
 
+  .granted-account {
+    background-color: #fff;
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    border-left: 4px solid #4285f4;
+
+    p + p {
+      margin-top: 0.5rem;
+    }
+  }
+
   .granted-account-id {
     overflow-wrap: anywhere;
   }
