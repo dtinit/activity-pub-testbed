@@ -50,6 +50,13 @@
     </div>
     {% endif %}
     <main class="account">
+    {% url 'authorize' as authorize_url %}
+    {% if redirect_field_value and authorize_url in redirect_field_value %}
+    <p class="note">
+      You're signing in to continue an account data transfer request.
+      Once you're signed in, you'll be taken straight back to it.
+    </p>
+    {% endif %}
     {% block content %}
     {% endblock content %}
     </main>

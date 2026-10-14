@@ -1,4 +1,12 @@
 .account {
+  .note {
+    background-color: $info-background;
+    padding: 0.8em;
+    border-radius: $small-radius;
+    border-left: 4px solid $info-accent;
+    margin-bottom: 1.5rem;
+  }
+
   // A form with field rows lays them out as two columns: labels as wide as the form's longest label, then the boxes
   form:has(> p > label:first-child) {
     display: grid;
