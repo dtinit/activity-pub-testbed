@@ -141,7 +141,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Create service-account-credentials.json
-        uses: jsdaniell/create-json@v1.2.3
+        uses: jsdaniell/create-json@v1.2.4
         with:
           name: service-account-credentials.json
           json: ${{ secrets.GCP_CREDENTIALS }}
