@@ -26,7 +26,7 @@
     border-radius: 6px;
     padding: 1.5rem;
     margin-bottom: 2rem;
-    border-left: 4px solid #4285f4;
+    border-left: 4px solid $primary;
 
     p + p {
       margin-top: 0.5rem;
@@ -42,12 +42,12 @@
     border-radius: 6px;
     padding: 1.5rem;
     margin-bottom: 2rem;
-    border-left: 4px solid #4285f4;
+    border-left: 4px solid $primary;
     
     h2 {
       font-size: 1.4rem;
       margin-bottom: 1rem;
-      color: #4285f4;
+      color: $primary;
     }
     
     ul {
@@ -83,11 +83,11 @@
     }
     
     input[name="allow"] {
-      background-color: #4285f4;
+      background-color: $primary;
       color: white;
       
       &:hover {
-        background-color: #3367d6;
+        background-color: $primary-hover;
       }
     }
     
