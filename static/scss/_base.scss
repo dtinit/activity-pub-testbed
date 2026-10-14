@@ -19,6 +19,11 @@ html {
   border-bottom: 1px solid #ccc;
 }
 
+.layout header .site-title {
+  color: inherit;
+  text-decoration: none;
+}
+
 .layout .main-content {
   padding: 25px;
   max-width: 1300px;
