@@ -1,23 +1,37 @@
-// The site's look, taken from the index page. Every page's styles reuse these
-$page-background: #eee;
+// The site's look: DTI's font and colours (dtinit.org) on the index page's layout. Every page's styles reuse these
+$page-background: #F0F0F0;
 $surface: #fff;
 $border-color: #ccc;
 $frame-spacing: 25px;
 $panel-background: #f5f5f5;
 $panel-radius: 6px;
 $small-radius: 4px;
-$primary: #1976d2;
-$primary-hover: #1565c0;
+$primary: #0B9A33;
+$primary-hover: #0a7f2c;
 $success-background: #e3fdd7;
 $success-text: #102010;
 $error-background: #f2dede;
 $error-text: #a94442;
-$info-background: #e8f4fd;
-$info-accent: #2196f3;
+$info-background: #EDFFF5;
+$info-accent: #0B9A33;
+$link-hover: #0b8ce9;
 
 html {
   height: 100%;
   background: $page-background;
+}
+
+body {
+  font-family: "Roboto", sans-serif;
+}
+
+a {
+  color: $primary;
+}
+
+a:hover,
+a:focus {
+  color: $link-hover;
 }
 
 .layout {
@@ -31,9 +45,14 @@ html {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1em;
   padding: $frame-spacing;
   background: $surface;
   border-bottom: 1px solid $border-color;
+}
+
+.layout header > a:last-child {
+  white-space: nowrap;
 }
 
 .layout header .site-title {
@@ -75,6 +94,23 @@ html {
 .layout .messages .error {
   background: $error-background;
   color: $error-text;
+}
+
+.layout button {
+  padding: 0.5em 1.25em;
+  border: 2px solid transparent;
+  border-radius: $small-radius;
+  background: $primary;
+  color: $surface;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.layout button:hover,
+.layout button:focus {
+  border-color: $primary;
+  background: transparent;
+  color: $primary;
 }
 
 .layout footer {
