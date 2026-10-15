@@ -93,6 +93,10 @@ class OAuthApplicationForm(forms.ModelForm):
         
         self.fields['redirect_uris'].help_text = ''
         
+        self.fields['client_secret'].help_text = (
+            "Shown only to you. A destination sends it with your Client id when it exchanges a code for a token."
+        )
+
         client_secret = getattr(self.instance, 'raw_client_secret', None)
         self.initial['client_secret'] = client_secret or ''
         if not client_secret:
