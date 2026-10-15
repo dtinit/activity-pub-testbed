@@ -49,16 +49,19 @@
   </div>
   {% endif %}
   
-  <h2>Test OAuth Flow</h2>
   <div class="actor">
-    <p>Test the OAuth authorization flow to see how it works:</p>
-    <ul>
-      <li><a href="{% url 'test-oauth-authorize' %}">Test Authorization Flow</a> - Initiates a full OAuth flow with your own credentials</li>
-    </ul>
-    <p class="info-note">
-      <strong>Note:</strong> The authorization test uses your own OAuth credentials to simulate 
-      a destination service requesting access to your source actor's data.
+    <p>
+      <a href="{% url 'test-oauth-authorize' %}">Test the authorization flow</a> to see how it works.
     </p>
+    <div class="info-note">
+      <p>
+        <strong>Note:</strong> The authorization test uses your own OAuth credentials to simulate
+        a destination service requesting access to your source actor's data.
+      </p>
+      <p>It also adds this site's <code>/callback</code> to your Redirect URL.</p>
+      <p>After the token exchange, the token is kept in your session.</p>
+      <p>You can then open your actor's LOLA-gated endpoints in the browser and compare them with their public versions.</p>
+    </div>
   </div>
 
   {% else %}

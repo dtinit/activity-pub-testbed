@@ -20,6 +20,11 @@
     background: $panel-background;
   }
 
+  // Cards that follow one another without a heading between them
+  .actor + .actor {
+    margin-top: 1rem;
+  }
+
   .info-note {
     background-color: $info-background;
     padding: 0.8em;
@@ -27,6 +32,10 @@
     margin-top: 1em;
     font-size: 0.9em;
     border-left: 4px solid $info-accent;
+  }
+
+  .info-note p + p {
+    margin-top: 0.4em;
   }
 
   // Labels in one column. Boxes in the next therefore every box starts at the same point beside its label
