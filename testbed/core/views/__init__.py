@@ -23,7 +23,6 @@ from .pages import deactivate_account, index, report_activity, trigger_account
 from .oauth_demo import (
     oauth_callback,
     test_authorization_view,
-    test_error_view,
     test_token_exchange_view,
 )
 
@@ -48,6 +47,5 @@ __all__ = [
     "index",
     "oauth_callback",
     "test_authorization_view",
-    "test_error_view",
     "test_token_exchange_view",
 ]

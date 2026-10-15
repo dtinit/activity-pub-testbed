@@ -4,7 +4,6 @@ OAuth test and demo views — simulate the destination-side OAuth flow.
 Contains:
 - oauth_callback: handle OAuth server redirect with authorization code or error
 - test_authorization_view: initiate an OAuth authorization flow for testing
-- test_error_view: render an OAuth error template for UI preview
 - test_token_exchange_view: exchange an authorization code for an access token
 
 These views are development/testing utilities that demonstrate what a destination
@@ -133,21 +132,6 @@ def test_authorization_view(request):
     auth_url = f"{reverse('oauth2_provider:authorize')}?{query_string}"
 
     return redirect(auth_url)
-
-
-@login_required
-def test_error_view(request):
-    """
-    Test view to simulate an OAuth error.
-    This renders the error template with a sample error.
-    """
-    error = {
-        "error": "invalid_request",
-        "description": "This is a test error to preview the error template.",
-        "uri": None,
-    }
-
-    return render(request, "oauth2_provider/error.html", {"error": error})
 
 
 # Token Exchange View
