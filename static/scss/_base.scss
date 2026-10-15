@@ -15,6 +15,8 @@ $error-text: #a94442;
 $info-background: #EDFFF5;
 $info-accent: #0B9A33;
 $link-hover: #0b8ce9;
+$warning-background: #FFF3CD;
+$warning-accent: #FFCE4B;
 
 html {
   height: 100%;
@@ -121,4 +123,8 @@ a:focus {
   gap: $frame-spacing;
   background: $surface;
   border-top: 1px solid $border-color;
+}
+
+.layout .status-page p {
+  margin-top: 1rem;
 }

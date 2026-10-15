@@ -4,16 +4,21 @@
 
 {% block content %}
 {% if error %}
-<main class="oauth-error">
-  <div class="error-container">
+<main class="oauth-authorize">
+  <div class="authorization-container">
     <h1>Authorization Error</h1>
 
-    <div class="error-message">
-      <div class="error-details">
-        <h2>{{ error.error }}</h2>
-        <p>{{ error.description }}</p>
-      </div>
+    {% include "oauth2_provider/_error.html" %}
+
+    <div class="scope-explanation">
+      <h2>What can cause this</h2>
+      <ul>
+        <li>The redirect URI isn't registered for this application, or it uses <code>http://</code> where this environment only allows <code>https://</code></li>
+        <li>The client ID is missing, or doesn't match a registered application</li>
+      </ul>
     </div>
+
+    <p><a href="{% url 'home' %}">Return to the testbed</a></p>
   </div>
 </main>
 {% else %}
