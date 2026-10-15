@@ -6,13 +6,8 @@
     <h1>OAuth Authorization Result</h1>
     
     {% if error %}
-    <div class="callback-error">
-      <h2>Authorization Failed</h2>
-      <p>Error: {{ error }}</p>
-      {% if error_description %}
-      <p>Description: {{ error_description }}</p>
-      {% endif %}
-    </div>
+    <h2>Authorization Failed</h2>
+    {% include "oauth2_provider/_error.html" with code=error description=error_description %}
     {% else %}
     <div class="callback-success">
       <h2>Authorization Successful</h2>
@@ -68,11 +63,11 @@
     
     <div class="callback-actions">
       {% if code and not error %}
-      <a href="{% url 'test-oauth-token' %}?code={{ code }}&state={{ state }}{% if activitypub_actor %}&activitypub_actor={{ activitypub_actor|urlencode }}{% endif %}" class="btn btn-primary">
+      <a href="{% url 'test-oauth-token' %}?code={{ code|urlencode }}&state={{ state|urlencode }}{% if activitypub_actor %}&activitypub_actor={{ activitypub_actor|urlencode }}{% endif %}" class="btn btn-primary">
         Exchange Code for Token →
       </a>
       {% endif %}
-      <a href="/" class="btn {% if code and not error %}btn-secondary{% else %}btn-primary{% endif %}">Return to Home</a>
+      <a href="{% url 'home' %}" class="btn {% if code and not error %}btn-secondary{% else %}btn-primary{% endif %}">Return to Home</a>
     </div>
   </div>
 </main>

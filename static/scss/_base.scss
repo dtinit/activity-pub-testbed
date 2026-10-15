@@ -36,6 +36,26 @@ a:focus {
   color: $link-hover;
 }
 
+// Focus rings and checked controls in DTI green rather than the browser's blue
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid $primary;
+  outline-offset: 0;
+}
+
+a:focus-visible,
+button:focus-visible,
+input[type="submit"]:focus-visible {
+  outline: 2px solid $primary;
+  outline-offset: 2px;
+}
+
+input,
+select {
+  accent-color: $primary;
+}
+
 .layout {
   display: grid;
   min-height: 100%;
@@ -111,6 +131,34 @@ a:focus {
 .layout button:hover,
 .layout button:focus {
   border-color: $primary;
+  background: transparent;
+  color: $primary;
+}
+
+.layout a.btn {
+  display: inline-block;
+  padding: 0.5em 1.25em;
+  border: 2px solid $primary;
+  border-radius: $small-radius;
+  background: transparent;
+  color: $primary;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.layout a.btn:hover,
+.layout a.btn:focus {
+  background: $primary;
+  color: $surface;
+}
+
+.layout a.btn-primary {
+  background: $primary;
+  color: $surface;
+}
+
+.layout a.btn-primary:hover,
+.layout a.btn-primary:focus {
   background: transparent;
   color: $primary;
 }

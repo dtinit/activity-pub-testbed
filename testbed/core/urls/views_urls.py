@@ -5,7 +5,6 @@ from testbed.core.views import (
     trigger_account,
     report_activity,
     test_authorization_view,
-    test_error_view,
     oauth_callback,
     test_token_exchange_view,
 )
@@ -18,7 +17,6 @@ urlpatterns = [
     path("report-activity/", report_activity, name="report-activity"),
     # OAuth Testing Views
     path("test/oauth/authorize/", test_authorization_view, name="test-oauth-authorize"),
-    path("test/oauth/error/", test_error_view, name="test-oauth-error"),
     path("test/oauth/token/", test_token_exchange_view, name="test-oauth-token"),
     path("callback", oauth_callback, name="oauth-callback"),
     # Staff-only admin action: deactivate a user account

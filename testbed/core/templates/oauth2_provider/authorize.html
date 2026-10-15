@@ -8,7 +8,7 @@
   <div class="authorization-container">
     <h1>Authorization Error</h1>
 
-    {% include "oauth2_provider/_error.html" %}
+    {% include "oauth2_provider/_error.html" with code=error.error description=error.description %}
 
     <div class="scope-explanation">
       <h2>What can cause this</h2>
