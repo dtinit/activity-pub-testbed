@@ -196,7 +196,7 @@ def test_token_exchange_view(request):
             f"Raw client secret not available for token exchange. Client ID: {application.client_id}"
         )
         context["token_error"] = (
-            "Client secret not available. This may happen if your session expired. Try restarting the OAuth flow."
+            "Client secret not available: no stored secret was found for your application, or it could not be decrypted (for example after SECRET_KEY changed)."
         )
         return render(request, "oauth_token_exchange.html", context)
 

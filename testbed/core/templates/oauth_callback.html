@@ -67,7 +67,7 @@
         Exchange Code for Token →
       </a>
       {% endif %}
-      <a href="/" class="btn {% if code and not error %}btn-secondary{% else %}btn-primary{% endif %}">Return to Home</a>
+      <a href="{% url 'home' %}" class="btn {% if code and not error %}btn-secondary{% else %}btn-primary{% endif %}">Return to Home</a>
     </div>
   </div>
 </main>
