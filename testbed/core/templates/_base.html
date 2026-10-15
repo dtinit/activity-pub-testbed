@@ -6,14 +6,12 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ActivityPub Account Portability Testbed</title>
+    <title>{% block title %}ActivityPub Account Portability Testbed{% endblock title %}</title>
     <link rel="stylesheet" href="{% sass_src 'scss/site.scss' %}">
   </head>
   <body class="layout">
     <header>
-      <b>
-        ActivityPub Account Portability Testbed
-      </b>
+      <a href="{% url 'home' %}" class="site-title"><b>ActivityPub Account Portability Testbed</b></a>
       {% if user.is_authenticated %}
       <a href="{% url 'account_logout' %}">Sign out</a>
       {% else %}
@@ -21,8 +19,17 @@
       {% endif %}
     </header>
     <div class="main-content">
+    {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}
+      <li class="{{ message.tags }}">{{ message }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% block body %}
     {% block content %}
-    {% endblock %}
+    {% endblock content %}
+    {% endblock body %}
     </div>
     <footer>
       <span>
@@ -30,5 +37,7 @@
       </span>
       <a href="https://dtinit.org/privacy-policy">Privacy policy</a>
     </footer>
+    {% block extra_body %}
+    {% endblock extra_body %}
   </body>
 </html>

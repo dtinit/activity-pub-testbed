@@ -1,5 +1,7 @@
 {% extends "_base.html" %}
 
+{% block title %}{% if error %}Authorization Error{% else %}Account Data Transfer Request{% endif %} · ActivityPub Account Portability Testbed{% endblock title %}
+
 {% block content %}
 {% if error %}
 <main class="oauth-error">
@@ -26,9 +28,9 @@
       </p>
 
       <div class="granted-account">
-        <p class="granted-account-name"><strong>{{ portability_actor.username }}</strong></p>
-        <code class="granted-account-id">{{ portability_actor_url }}</code>
-        <p class="granted-scope">Scope: {% for scope in scopes %}<code>{{ scope }}</code>{% endfor %}</p>
+        <p><strong>Account:</strong> {{ portability_actor.username }}</p>
+        <p><strong>Actor ID:</strong> <code class="granted-account-id">{{ portability_actor_url }}</code></p>
+        <p><strong>Scope:</strong> {% for scope in scopes %}<code>{{ scope }}</code>{% endfor %}</p>
       </div>
 
       <div class="scope-explanation">
