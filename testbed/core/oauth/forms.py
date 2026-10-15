@@ -12,6 +12,8 @@ class OAuthApplicationForm(forms.ModelForm):
         fields = ['name', 'client_id', 'client_secret', 'redirect_uris']
         labels = {
             'name': 'Service Name',
+            'client_id': 'Client ID',
+            'client_secret': 'Client Secret',
             'redirect_uris': 'Redirect URL'
         }
         widgets = {
@@ -34,7 +36,7 @@ class OAuthApplicationForm(forms.ModelForm):
             'redirect_uris': forms.TextInput(attrs={
                 'class': 'form-control', 
                 # https is valid in every environment; production and staging reject http.
-                'placeholder': 'Enter a valid URL (e.g., https://your-service.example/callback). Add multiples separated by spaces'
+                'placeholder': 'https://your-service.example/callback'
             }),
         }
     
@@ -56,15 +58,11 @@ class OAuthApplicationForm(forms.ModelForm):
         if not uris:
             raise forms.ValidationError("Redirect URL is required")
 
-        allowed_schemes = [s.lower() for s in oauth2_settings.ALLOWED_REDIRECT_URI_SCHEMES]
-        # Rendered into the error message, e.g. "https://" or "http:// or https://"
-        expected_prefixes = " or ".join(f"{scheme}://" for scheme in allowed_schemes)
-
         for uri in uris.split():
             # urlparse lowercases the scheme, so HTTPS:// is accepted as https.
-            if urlparse(uri).scheme not in allowed_schemes:
+            if urlparse(uri).scheme not in self.allowed_schemes:
                 raise forms.ValidationError(
-                    f"Each URL must start with {expected_prefixes}"
+                    f"Each URL must start with {self.allowed_prefixes}"
                 )
         
         return uris
@@ -91,8 +89,19 @@ class OAuthApplicationForm(forms.ModelForm):
             self.instance.client_type = 'confidential'
             self.instance.authorization_grant_type = 'authorization-code'
         
-        self.fields['redirect_uris'].help_text = ''
+        # The accepted schemes are per environment (https only on staging and production)
+        # The hint under the field and the validation error both name exactly what this server accepts
+        self.allowed_schemes = [s.lower() for s in oauth2_settings.ALLOWED_REDIRECT_URI_SCHEMES]
+        # e.g. "https://" or "http:// or https://"
+        self.allowed_prefixes = " or ".join(f"{scheme}://" for scheme in self.allowed_schemes)
+        self.fields['redirect_uris'].help_text = (
+            f"Must start with {self.allowed_prefixes}. Separate several URLs with spaces."
+        )
         
+        self.fields['client_secret'].help_text = (
+            "Shown only to you. A destination sends it with your Client ID when it exchanges a code for a token."
+        )
+
         client_secret = getattr(self.instance, 'raw_client_secret', None)
         self.initial['client_secret'] = client_secret or ''
         if not client_secret:

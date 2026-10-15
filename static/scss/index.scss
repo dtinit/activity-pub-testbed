@@ -13,6 +13,10 @@
     margin-top: 1.5rem;
   }
 
+  .admin-link {
+    margin-bottom: 0.75rem;
+  }
+
   .actor {
     border: 1px solid $border-color;
     border-radius: $panel-radius;
@@ -59,6 +63,8 @@
   }
   .oauth-form .helptext {
     margin-top: -0.4rem;
+    font-size: 0.85em;
+    color: #555;
   }
   .oauth-form .form-control {
     width: 100%;

@@ -54,3 +54,18 @@ def test_redirect_uri_scheme_policy_per_environment(policy, uri, expected_messag
     # The message must describe the actual policy
     assert expected_message_fragment in errors[0]
     assert "http:// or" not in errors[0]
+
+
+# The hint under the field names the same schemes the validation enforces in this environment
+@pytest.mark.parametrize(
+    "policy, hint",
+    [
+        (DEFAULT_POLICY, "Must start with http:// or https://."),
+        (HTTPS_ONLY, "Must start with https://."),
+    ],
+)
+def test_redirect_uri_hint_names_this_environments_schemes(policy, hint):
+    with override_settings(OAUTH2_PROVIDER=policy):
+        form = OAuthApplicationForm()
+
+    assert form.fields["redirect_uris"].help_text.startswith(hint)
