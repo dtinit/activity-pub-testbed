@@ -1,15 +1,36 @@
 {% extends "_base.html" %}
 
 {% block content %}
+{% if error %}
+<main class="oauth-error">
+  <div class="error-container">
+    <h1>Authorization Error</h1>
+
+    <div class="error-message">
+      <div class="error-details">
+        <h2>{{ error.error }}</h2>
+        <p>{{ error.description }}</p>
+      </div>
+    </div>
+  </div>
+</main>
+{% else %}
 <main class="oauth-authorize">
   <div class="authorization-container">
     <h1>Account Data Transfer Request</h1>
     
     <div class="authorization-info">
+      {% if portability_actor %}
       <p class="lead">
-        <strong>{{ application.name }}</strong> is requesting permission to transfer your ActivityPub account data.
+        <strong>{{ application.name }}</strong> is requesting permission to transfer this ActivityPub account:
       </p>
-      
+
+      <div class="granted-account">
+        <p class="granted-account-name"><strong>{{ portability_actor.username }}</strong></p>
+        <code class="granted-account-id">{{ portability_actor_url }}</code>
+        <p class="granted-scope">Scope: {% for scope in scopes %}<code>{{ scope }}</code>{% endfor %}</p>
+      </div>
+
       <div class="scope-explanation">
         <h2>What does this mean?</h2>
         <p>
@@ -29,6 +50,11 @@
           you initiated this request from. The data will only be sent to <strong>{{ application.name }}</strong>.
         </p>
       </div>
+      {% else %}
+      <p class="lead">
+        There is no source account to transfer for this user, so <strong>{{ application.name }}</strong>'s request cannot be approved.
+      </p>
+      {% endif %}
     </div>
     
     <div class="authorize-actions">
@@ -43,7 +69,9 @@
         
         <div class="control-group">
           <div class="controls">
+            {% if portability_actor %}
             <input type="submit" class="btn btn-large btn-primary" name="allow" value="Authorize Data Transfer" />
+            {% endif %}
             <input type="submit" class="btn btn-large" value="Cancel" />
           </div>
         </div>
@@ -51,4 +79,5 @@
     </div>
   </div>
 </main>
+{% endif %}
 {% endblock %}

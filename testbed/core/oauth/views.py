@@ -34,6 +34,9 @@ class PortabilityAuthorizationView(AuthorizationView):
     The redirect value is the absolute URL of the source Actor that granted access.
     """
 
+    # Set by get(). Stays None when DOT renders the template from a POST (form_invalid)
+    portability_actor = None
+
     def form_valid(self, form):
         """
         Handle the POST approval path.
@@ -56,12 +59,21 @@ class PortabilityAuthorizationView(AuthorizationView):
     def get(self, request, *args, **kwargs):
         scopes = request.GET.get("scope", "")
         actor = self._prepare_actor_binding(scopes)
+        self.portability_actor = actor
 
         response = super().get(request, *args, **kwargs)
 
         if actor is not None and self._is_redirect(response):
             self._append_actor_to_redirect(response, actor)
         return response
+
+    def get_context_data(self, **kwargs):
+        # Name the granted account on the consent screen with the same builder the approval redirect uses
+        context = super().get_context_data(**kwargs)
+        if self.portability_actor is not None:
+            context["portability_actor"] = self.portability_actor
+            context["portability_actor_url"] = build_actor_id(self.portability_actor.pk, self.request)
+        return context
 
     def _prepare_actor_binding(self, scope_string):
         """
