@@ -12,6 +12,8 @@ class OAuthApplicationForm(forms.ModelForm):
         fields = ['name', 'client_id', 'client_secret', 'redirect_uris']
         labels = {
             'name': 'Service Name',
+            'client_id': 'Client ID',
+            'client_secret': 'Client Secret',
             'redirect_uris': 'Redirect URL'
         }
         widgets = {
@@ -97,7 +99,7 @@ class OAuthApplicationForm(forms.ModelForm):
         )
         
         self.fields['client_secret'].help_text = (
-            "Shown only to you. A destination sends it with your Client id when it exchanges a code for a token."
+            "Shown only to you. A destination sends it with your Client ID when it exchanges a code for a token."
         )
 
         client_secret = getattr(self.instance, 'raw_client_secret', None)
