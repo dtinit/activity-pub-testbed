@@ -657,6 +657,468 @@
           }
         }
       ]
+    },
+    {
+      "name": "5 · What is refused",
+      "description": "The security boundary from a destination's side: what an anonymous caller, an invalid token, a valid\ntoken on another account, and the token endpoint must refuse (LOLA §5: the source MUST NOT allow access\nto any account other than the one granted). Requests 5.4–5.7 need `other_actor_url` and\n`other_private_note_url` from a second account, and are skipped without them.",
+      "item": [
+        {
+          "name": "5.1 Content, anonymous",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/activity+json"
+              }
+            ],
+            "url": "{{migration_content}}",
+            "description": "A strict collection refuses a caller with no token.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 insufficient_scope', () => {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.json().error_code).to.eql('insufficient_scope');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.2 Content, invalid token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/activity+json"
+              }
+            ],
+            "url": "{{migration_content}}",
+            "description": "An unknown Bearer token is treated as no token.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "not-a-valid-token",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 insufficient_scope', () => {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.json().error_code).to.eql('insufficient_scope');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.3 Outbox, invalid token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/activity+json"
+              }
+            ],
+            "url": "{{outbox_url}}",
+            "description": "A public-or-scoped endpoint answers an unknown token with the public view. What matters is that\nnothing non-public leaks; whether it should answer `401 invalid_token` instead is an open question.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "not-a-valid-token",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const outbox = pm.response.json();",
+                  "",
+                  "pm.test('An invalid token sees public activities only', () => {",
+                  "    outbox.orderedItems.forEach(item => pm.expect(item.visibility).to.eql('public'));",
+                  "    pm.expect(outbox.totalItems).to.eql(Number(pm.environment.get('public_outbox_total')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.4 Another account's Actor, with this token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/activity+json"
+              }
+            ],
+            "url": "{{other_actor_url}}",
+            "description": "The token is bound to one account. Another account's Actor refuses it, though it is public."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Cross-account checks need a second account's URLs; without them the request is skipped, not failed",
+                  "if (!pm.variables.get('other_actor_url') || !pm.variables.get('other_private_note_url')) {",
+                  "    console.log('Skipped: set other_actor_url and other_private_note_url (printed by 4.9 for another account)');",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 actor_mismatch', () => {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.json().error_code).to.eql('actor_mismatch');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.5 Another account's outbox, with this token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/activity+json"
+              }
+            ],
+            "url": "{{other_actor_url}}outbox/",
+            "description": "A public-or-scoped collection. The URL is built from the testbed's routes to reach its gate; a real\ndestination must never derive URLs from an Actor ID."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Cross-account checks need a second account's URLs; without them the request is skipped, not failed",
+                  "if (!pm.variables.get('other_actor_url') || !pm.variables.get('other_private_note_url')) {",
+                  "    console.log('Skipped: set other_actor_url and other_private_note_url (printed by 4.9 for another account)');",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 actor_mismatch', () => {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.json().error_code).to.eql('actor_mismatch');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.6 Another account's followers, with this token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/activity+json"
+              }
+            ],
+            "url": "{{other_actor_url}}followers/",
+            "description": "A strict collection, refused for the same reason. The URL is built from the testbed's routes."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Cross-account checks need a second account's URLs; without them the request is skipped, not failed",
+                  "if (!pm.variables.get('other_actor_url') || !pm.variables.get('other_private_note_url')) {",
+                  "    console.log('Skipped: set other_actor_url and other_private_note_url (printed by 4.9 for another account)');",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 actor_mismatch', () => {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.json().error_code).to.eql('actor_mismatch');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.7 Another account's private Note, with this token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/activity+json"
+              }
+            ],
+            "url": "{{other_private_note_url}}",
+            "description": "A non-public object reads as missing to anyone but its owner's token."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Cross-account checks need a second account's URLs; without them the request is skipped, not failed",
+                  "if (!pm.variables.get('other_actor_url') || !pm.variables.get('other_private_note_url')) {",
+                  "    console.log('Skipped: set other_actor_url and other_private_note_url (printed by 4.9 for another account)');",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 object_not_found', () => {",
+                  "    pm.response.to.have.status(404);",
+                  "    pm.expect(pm.response.json().error_code).to.eql('object_not_found');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.8 The spent code, again",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{token_endpoint}}",
+            "description": "An authorization code is single-use (RFC 6749 §4.1.2). Runs after every request that needs the\ntoken, in case the server revokes tokens issued from a replayed code.",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{client_id}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{client_secret}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code"
+                },
+                {
+                  "key": "code",
+                  "value": "{{code}}"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "{{redirect_uri}}"
+                },
+                {
+                  "key": "code_verifier",
+                  "value": "{{code_verifier}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 invalid_grant', () => {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().error).to.eql('invalid_grant');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.9 A wrong client secret",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{token_endpoint}}",
+            "description": "The token endpoint authenticates the client (RFC 6749 §5.2).",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{client_id}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "not-the-client-secret",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code"
+                },
+                {
+                  "key": "code",
+                  "value": "{{code}}"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "{{redirect_uri}}"
+                },
+                {
+                  "key": "code_verifier",
+                  "value": "{{code_verifier}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 invalid_client', () => {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.json().error).to.eql('invalid_client');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.10 A client that accepts only HTML",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
+            "url": "{{activitypub_actor}}",
+            "description": "The API serves JSON only.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('406 for a client that accepts only HTML', () => pm.response.to.have.status(406));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{access_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// A browser-based destination cannot read an error that lacks CORS",
+              "const body = (() => { try { return pm.response.json(); } catch (e) { return null; } })();",
+              "if (body && body.error_code) {",
+              "    pm.test('The error carries Access-Control-Allow-Origin: *', () => {",
+              "        pm.expect(pm.response.headers.get('Access-Control-Allow-Origin')).to.eql('*');",
+              "    });",
+              "}"
+            ]
+          }
+        }
+      ]
     }
   ]
 }
