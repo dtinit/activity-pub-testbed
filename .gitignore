@@ -93,6 +93,6 @@ staticfiles/
 # Personal development files
 personal-development/
 
-# Documentation - Will be added later on, except the testing kit
+# Documentation - Will be added later on, except the source server docs
 docs/*
-!docs/testing/
+!docs/source-server/

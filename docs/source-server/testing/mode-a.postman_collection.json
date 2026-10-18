@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "ActivityPub Testbed · Mode A (source server)",
-    "description": "Tests the testbed as a LOLA v0.3 **source**, the way an external destination uses it: discovery,\nauthorization with its own `state` and PKCE, the token exchange, then the account's collections.\nRun the folders in order. Folder 2 ends in a browser: approve, then paste the address-bar URL into\n`callback_url` and continue with folder 3. Setup and expected results: `docs/testing/README.md`.",
+    "description": "Tests the testbed as a LOLA v0.3 **source**, the way an external destination uses it: discovery,\nauthorization with its own `state` and PKCE, the token exchange, then the account's collections.\nRun the folders in order. Folder 2 ends in a browser: approve, then paste the address-bar URL into\n`callback_url` and continue with folder 3. Setup and expected results: `docs/source-server/testing/source-server-guide-mode-a.md`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -62,7 +62,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "if (!pm.variables.get('actor_url')) {",
-                  "    throw new Error('Set actor_url to your source Actor (the dashboard\\'s Details link) — see docs/testing/README.md');",
+                  "    throw new Error('Set actor_url to your source Actor (the dashboard\\'s Details link); see docs/source-server/testing/source-server-guide-mode-a.md');",
                   "}"
                 ]
               }
@@ -187,7 +187,7 @@
               }
             ],
             "url": "{{authorize_url}}",
-            "description": "Sent without cookies and without following redirects: a signed-out user must be sent to sign in\nwith the request kept. Open the printed URL in a browser, sign in, review the consent screen,\napprove, and copy the address-bar URL — nothing listens on the callback, so the browser shows\nan error page with `code`, `state` and `activitypub_actor` in its address."
+            "description": "Sent without cookies and without following redirects: a signed-out user must be sent to sign in\nwith the request kept. Open the printed URL in a browser, sign in, review the consent screen,\napprove, and copy the address-bar URL. Nothing listens on the callback, so the browser shows\nan error page with `code`, `state` and `activitypub_actor` in its address."
           },
           "event": [
             {
@@ -309,7 +309,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "['callback_url', 'client_id', 'client_secret', 'token_endpoint', 'state'].forEach(name => {",
-                  "    if (!pm.variables.get(name)) throw new Error(`Set ${name} first — callback_url is the browser's address bar after approving`);",
+                  "    if (!pm.variables.get(name)) throw new Error(`Set ${name} first. callback_url is the browser's address bar after approving`);",
                   "});",
                   "",
                   "const query = (pm.variables.get('callback_url').split('#')[0].split('?')[1] || '');",
@@ -376,7 +376,7 @@
               }
             ],
             "url": "{{activitypub_actor}}",
-            "description": "The bound token sees the `migration` object — exactly `outbox`, `content`, `following`, `blocked`\n— and the `followers`, `liked` and `blocked` collections."
+            "description": "The bound token sees the `migration` object (exactly `outbox`, `content`, `following`, `blocked`)\nand the `followers`, `liked` and `blocked` collections."
           },
           "event": [
             {
@@ -581,7 +581,7 @@
               }
             ],
             "url": "{{followers_url}}",
-            "description": "The account's followers — readable only with the token. A destination does not copy them (LOLA §6.6)."
+            "description": "The account's followers, readable only with the token. A destination does not copy them (LOLA §6.6)."
           },
           "event": [
             {
