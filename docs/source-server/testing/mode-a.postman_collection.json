@@ -710,7 +710,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "not-a-valid-token",
+                  "value": "{{invalid_token}}",
                   "type": "string"
                 }
               ]
@@ -748,7 +748,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "not-a-valid-token",
+                  "value": "{{invalid_token}}",
                   "type": "string"
                 }
               ]
@@ -1021,7 +1021,7 @@
                 },
                 {
                   "key": "password",
-                  "value": "not-the-client-secret",
+                  "value": "{{wrong_client_secret}}",
                   "type": "string"
                 }
               ]
@@ -1103,6 +1103,18 @@
         ]
       },
       "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Deliberately invalid credentials for the refusal checks, set at run time so Postman's",
+              "// secret scanner does not mistake them for real ones stored in the collection",
+              "pm.variables.set('invalid_token', 'not-a-valid-token');",
+              "pm.variables.set('wrong_client_secret', 'not-the-client-secret');"
+            ]
+          }
+        },
         {
           "listen": "test",
           "script": {
