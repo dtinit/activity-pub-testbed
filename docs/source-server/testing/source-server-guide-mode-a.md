@@ -19,8 +19,9 @@ collection first to see a working exchange, then point your own code at the same
 
 ## Setup
 
-1. **Sign up** at <https://ap-testbed.dtinit.org/account/signup/>. The dashboard shows two actors: **Source**
-   (`<name>_source`, the account you migrate) and Destination
+1. **Sign up** at <https://ap-testbed.dtinit.org/account/signup/> with an address you can receive mail at:
+   the testbed sends a confirmation email. For a second account, an alias such as `you+b@example.com` works.
+   The dashboard shows two actors: **Source** (`<name>_source`, the account you migrate) and Destination
 2. **Find your Actor URL**: the Source card's **Details** link, `https://ap-testbed.dtinit.org/api/actors/<id>/`.
    This is what a user would give your destination
 3. **Copy your client credentials** from **Update Your OAuth Connection**: Client ID and Client Secret. Every
@@ -145,9 +146,11 @@ LOLA errors are JSON with `error_code`, `detail` and `endpoint`, and carry `Acce
 
 ## Using the Postman collection
 
-Import `mode-a.postman_collection.json` and `mode-a.postman_environment.json`, and fill in `actor_url`,
-`client_id` and `client_secret` in the environment's **Current value** column. It stays on your machine;
-**Initial value** syncs to your Postman account. Keep `redirect_uri` as `https://localhost:9999/callback`.
+Import `mode-a.postman_collection.json` and `mode-a.postman_environment.json`. In the environment, fill in
+`actor_url`, `client_id` and `client_secret` and keep them **local**: in Postman 12 the environment has one
+**Value** column, and a ☁ icon marks a value shared with your workspace. (Older versions have two columns;
+use **Current value**, which stays on your machine.) Keep `redirect_uri` as `https://localhost:9999/callback`,
+and select the environment in the top-right selector.
 
 The folders follow the flow above, with checks on every response:
 
@@ -159,14 +162,32 @@ The folders follow the flow above, with checks on every response:
 | 4 · Read the account | The scoped Actor, every collection non-empty with the shared envelope |
 | 5 · What is refused | Anonymous and invalid tokens, another account, a spent code, a wrong secret, `text/html` |
 
-Run folders 1 and 2. Request 2.1 prints an authorize URL in the Postman Console: open it in a browser,
-approve, copy the whole address-bar URL into `callback_url`, then run folders 3, 4 and 5.
+Send the requests one by one, reading each response's **Test Results** tab, or use the Runner with **Keep
+variable values** on. Either way the run has one hand-off, so run folders 1 and 2 first:
 
-**Cross-account checks** (5.4 to 5.7) need a second account and are skipped without one. Run folders 1 to 4
-as the first account; request 4.9 prints `other_actor_url` and `other_private_note_url`. Set them in a second
-account's environment and run the whole collection as that account.
+1. Send **2.1**. It answers `302`, and then prints an authorize URL in the **Console** (bottom left). The same
+   URL is saved in the environment as `authorize_url`
+2. Open it in a browser, sign in, check that the consent screen names your account, and approve
+3. Copy the whole address-bar URL into `callback_url`, save the environment, and run folders 3, 4 and 5
+   within 10 minutes. Sending 2.1 again makes a new `state`, so start again from step 1 if you do
 
-**With newman**, the same collection runs in two steps, passing state through an exported environment:
+**Cross-account checks** (5.4 to 5.7) need a second account and are skipped without one. After a run as the
+first account, request 4.9 prints `other_actor_url` and `other_private_note_url`; set both in the environment.
+Then do what a real second user does: send 2.1 again, open the URL in a signed-out browser window, and sign up
+(or sign in) as the second account from the sign-in page. The consent screen names that account, and the
+callback's `activitypub_actor` is its Actor. Run folders 3, 4 and 5: the collection follows `activitypub_actor`
+(LOLA §5.3; request 3.1 logs that it differs from the discovered Actor), reads the second account, and checks
+that its token is refused on the first account's resources.
+
+Good to know:
+
+- The first request after a quiet period can take about 15 seconds while the server starts; send one before
+  a demo
+- Several wrong passwords in a row lock sign-in for that account for a few minutes
+
+**With newman**, the same collection runs in two steps, passing state through an exported environment.
+Exporting the environment from Postman leaves out local values, so fill in `actor_url`, `client_id` and
+`client_secret` in the file itself:
 
 ```bash
 newman run docs/source-server/testing/mode-a.postman_collection.json -e ~/mode-a.postman_environment.json \
