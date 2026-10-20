@@ -393,6 +393,10 @@
                 "exec": [
                   "const actor = pm.response.json();",
                   "",
+                  "if (!actor.migration) {",
+                  "    console.log('No migration object: the token is missing, expired or for another account, and the source answered with the public view (an invalid token counts as none). Send 2.1 and 3.1 again');",
+                  "}",
+                  "",
                   "pm.test('200 with the ActivityPub content type', () => {",
                   "    pm.response.to.have.status(200);",
                   "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/activity+json');",
@@ -405,7 +409,7 @@
                   "    pm.expect(actor).to.include.keys('followers', 'liked', 'blocked');",
                   "});",
                   "",
-                  "Object.entries(actor.migration).forEach(([name, url]) => pm.environment.set(`migration_${name}`, url));",
+                  "Object.entries(actor.migration || {}).forEach(([name, url]) => pm.environment.set(`migration_${name}`, url));",
                   "pm.environment.set('liked_url', actor.liked);",
                   "pm.environment.set('followers_url', actor.followers);",
                   "pm.environment.set('outbox_url', actor.outbox);"
