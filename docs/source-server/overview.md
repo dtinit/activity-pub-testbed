@@ -4,8 +4,9 @@ The ActivityPub Account Portability Testbed implements [LOLA v0.3](https://swicg
 the account portability specification for [ActivityPub](https://www.w3.org/TR/activitypub/), as a **source**
 server: the server an account moves *from*. A destination developer signs up, gets an account full of
 content, and points their destination at it. This page explains what the source provides and how each part
-works. To test against it, see the [Source Server Guide (Mode A)](testing/source-server-guide-mode-a.md); to
-see it in a browser, see the [demo](demo.md).
+works. For what each collection holds, see [What Each Collection Holds](collections.md); to test against it,
+the [Source Server Guide (Mode A)](testing/source-server-guide-mode-a.md); to see it in a browser, the
+[demo](demo.md).
 
 The testbed will also be a destination (Mode B) and its own counterpart (Mode C). Neither exists yet.
 
