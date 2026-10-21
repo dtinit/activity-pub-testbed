@@ -92,7 +92,3 @@ staticfiles/
 
 # Personal development files
 personal-development/
-
-# Documentation - Will be added later on, except the source server docs
-docs/*
-!docs/source-server/
