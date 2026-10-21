@@ -3,7 +3,8 @@
 The ActivityPub Account Portability Testbed implements [LOLA v0.3](https://swicg.github.io/activitypub-data-portability/lola.html),
 the account portability specification for [ActivityPub](https://www.w3.org/TR/activitypub/), as a **source** server. Sign up, and your account comes with posts, likes, follows, followers and blocks to
 migrate; then point your destination at it. This guide covers what your destination has to do, and the ways
-to check each step.
+to check each step. How the source works is explained in the [overview](../overview.md), and what each
+collection holds in [What Each Collection Holds](../collections.md).
 
 ## Ways to test
 

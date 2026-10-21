@@ -17,7 +17,12 @@ This tool is especially useful for developers looking to ensure compatibility wi
 
 ## Testing your LOLA destination
 
-The testbed runs as a LOLA source at <https://ap-testbed.dtinit.org>. To test a destination against it (with your own code, the Postman collection, or curl), see the [Source Server Guide (Mode A)](docs/source-server/testing/source-server-guide-mode-a.md).
+The testbed runs as a LOLA source at <https://ap-testbed.dtinit.org>.
+
+- [The Source Server (Mode A)](docs/source-server/overview.md): how it works, with diagrams
+- [What Each Collection Holds](docs/source-server/collections.md): the content every account gets, and what each collection never shows
+- [The Built-in Demo](docs/source-server/demo.md): public versus LOLA-gated endpoints, in a browser
+- [Source Server Guide (Mode A)](docs/source-server/testing/source-server-guide-mode-a.md): testing your destination against it, with your own code, the Postman collection, or curl
 
 
 ## Installation
