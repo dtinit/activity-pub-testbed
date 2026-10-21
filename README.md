@@ -23,6 +23,7 @@ The testbed runs as a LOLA source at <https://ap-testbed.dtinit.org>.
 - [What Each Collection Holds](docs/source-server/collections.md): the content every account gets, and what each collection never shows
 - [The Built-in Demo](docs/source-server/demo.md): public versus LOLA-gated endpoints, in a browser
 - [Source Server Guide (Mode A)](docs/source-server/testing/source-server-guide-mode-a.md): testing your destination against it, with your own code, the Postman collection, or curl
+- [Test Results (Mode A)](https://wise-twist-ccb.notion.site/Test-Results-Mode-A-3ffc75447a0280cd8e25ee2f9e0a54de): what the October 2026 testing round showed on production, with screenshots
 
 
 ## Installation
