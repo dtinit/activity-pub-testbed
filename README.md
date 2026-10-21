@@ -15,6 +15,10 @@ This tool is especially useful for developers looking to ensure compatibility wi
 - **Data Comparison Tool:** Automated scripts to retrieve ActivityPub data from other servers and compare it against the expected data, logging any discrepancies. 
 - **Endpoint Verification:** Check whether common ActivityPub endpoints (e.g., /inbox, /outbox) behave as expected.
 
+## Testing your LOLA destination
+
+The testbed runs as a LOLA source at <https://ap-testbed.dtinit.org>. To test a destination against it (with your own code, the Postman collection, or curl), see the [Source Server Guide (Mode A)](docs/source-server/testing/source-server-guide-mode-a.md).
+
 
 ## Installation
 
