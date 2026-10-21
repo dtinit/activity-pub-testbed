@@ -42,7 +42,7 @@ class OptionalOAuth2Authentication(OAuth2Authentication):
 
         It is NOT part of the LOLA source-server contract. It is demo-scoped by construction.
         Only the demo flow populates the session, it is cookie-bound, and it is suppressed by ?public_only.
-        See docs/lola-authentication.md.
+        See docs/source-server/demo.md.
 
         Both enabled paths produce the same (user, token) shape and set
         request.auth to the AccessToken instance. The actor binding check in
