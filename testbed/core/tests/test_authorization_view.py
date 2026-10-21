@@ -205,6 +205,31 @@ def test_fatal_error_renders_the_error_not_the_consent_form():
 
 
 @pytest.mark.django_db
+def test_prompt_none_never_redirects_to_an_unregistered_uri():
+    # Anonymous prompt=none used to redirect to any redirect_uri before any client check
+    response = Client().get(
+        reverse("oauth2_provider:authorize"),
+        data={"prompt": "none", "redirect_uri": "https://attacker.example/landing", "state": "abc"},
+    )
+
+    assert response.status_code == 400
+    assert not response.has_header("Location")
+
+
+@pytest.mark.django_db
+def test_prompt_none_redirects_a_registered_client_with_login_required():
+    application = _make_application(UserWithActorsFactory())
+
+    response = Client().get(
+        reverse("oauth2_provider:authorize"), data=_authorize_params(application, prompt="none")
+    )
+
+    assert response.status_code == 302
+    assert response["Location"].startswith(REDIRECT_URI)
+    assert _redirect_query(response) == {"error": ["login_required"], "state": ["state-xyz"]}
+
+
+@pytest.mark.django_db
 def test_consent_screen_names_the_actor_the_redirect_returns():
     # The screen and the approval redirect build the Actor URL with the same builder and they should match exactly
     user = UserWithActorsFactory()
