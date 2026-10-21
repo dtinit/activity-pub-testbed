@@ -14,7 +14,7 @@ collection first to see a working exchange, then point your own code at the same
 | Method | Good for | You need |
 |---|---|---|
 | **Your own destination** | The real test: your implementation against a compliant source | Your code, an HTTPS callback |
-| **The Postman collection** (`mode-a.postman_collection.json`) | Seeing every request and response, with each step checked for you | [Postman](https://www.postman.com/downloads/) |
+| **The Postman collection** ([`mode-a.postman_collection.json`](mode-a.postman_collection.json)) | Seeing every request and response, with each step checked for you | [Postman](https://www.postman.com/downloads/) |
 | **newman** | Re-running the same collection from a terminal or CI | Node.js and `npm install -g newman` (run with 6.2.3) |
 | **curl, or any HTTP client** | Walking the protocol by hand | A terminal |
 
@@ -147,7 +147,8 @@ LOLA errors are JSON with `error_code`, `detail` and `endpoint`, and carry `Acce
 
 ## Using the Postman collection
 
-Import `mode-a.postman_collection.json` and `mode-a.postman_environment.json`. In the environment, fill in
+Import [`mode-a.postman_collection.json`](mode-a.postman_collection.json) and
+[`mode-a.postman_environment.json`](mode-a.postman_environment.json) from this folder. In the environment, fill in
 `actor_url`, `client_id` and `client_secret` and keep them **local**: in Postman 12 the environment has one
 **Value** column, and a ☁ icon marks a value shared with your workspace. (Older versions have two columns;
 use **Current value**, which stays on your machine.) Keep `redirect_uri` as `https://localhost:9999/callback`,
@@ -204,7 +205,9 @@ rm /tmp/mode-a-run.json   # it holds your client secret and token
 
 ## What you should see
 
-A new account always gets the same content, so the counts are fixed:
+A new account always gets the same content, so the counts are fixed. For a complete run on production to
+compare with yours, every step with its screenshots, see the
+[Test Results (Mode A)](https://wise-twist-ccb.notion.site/Test-Results-Mode-A-3ffc75447a0280cd8e25ee2f9e0a54de).
 
 | Collection | `totalItems` |
 |---|---|
