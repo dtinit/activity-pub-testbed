@@ -17,6 +17,7 @@ absolute URL of the source Actor that just granted portability access)
 import logging
 from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
 
+from oauth2_provider.exceptions import OAuthToolkitError
 from oauth2_provider.views import AuthorizationView
 
 from ..json_ld_utils import build_actor_id
@@ -36,6 +37,15 @@ class PortabilityAuthorizationView(AuthorizationView):
 
     # Set by get(). Stays None when DOT renders the template from a POST (form_invalid)
     portability_actor = None
+
+    def handle_no_permission(self):
+        # TODO: Remove with DOT upgrade
+        if self.request.GET.get("prompt") == "none" and self.request.GET.get("redirect_uri"):
+            try:
+                self.validate_authorization_request(self.request)
+            except OAuthToolkitError as error:
+                return self.error_response(error, application=None)
+        return super().handle_no_permission()
 
     def form_valid(self, form):
         """
