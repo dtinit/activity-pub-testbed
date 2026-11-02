@@ -1,6 +1,7 @@
 {% extends "_base.html" %}
+{% load i18n %}
 
-{% block title %}Sign out · ActivityPub Account Portability Testbed{% endblock title %}
+{% block title %}{% trans "Sign out" %} · ActivityPub Account Portability Testbed{% endblock title %}
 
 {% block content %}
 <main class="account account-signout-page">
@@ -13,15 +14,15 @@
       </svg>
     </span>
 
-    <h1>Sign out?</h1>
-    <p>You'll need to sign in again to manage your testbed account.</p>
+    <h1>{% trans "Sign out?" %}</h1>
+    <p>{% trans "You'll need to sign in again to manage your testbed account." %}</p>
 
     <form method="post" action="{% url 'account_logout' %}">
       {% csrf_token %}
       {{ redirect_field }}
       <div class="account-confirm-actions">
-        <button type="submit" class="account-signout-button">Sign out</button>
-        <a class="btn" href="{% url 'account-management' %}">Cancel</a>
+        <button type="submit" class="account-signout-button">{% trans "Sign out" %}</button>
+        <a class="btn" href="{% url 'account-management' %}">{% trans "Cancel" %}</a>
       </div>
     </form>
   </div>

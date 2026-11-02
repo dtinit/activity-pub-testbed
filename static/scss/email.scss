@@ -1,0 +1,253 @@
+// Email address management
+
+.account.account-auth:has(.account-email) {
+  max-width: 700px;
+}
+
+.account-email {
+  .account-section-note {
+    margin-bottom: 1.25rem;
+  }
+
+  .email-list-form {
+    margin-top: 0;
+  }
+
+  .email-list {
+    display: grid;
+    gap: 0.5rem;
+    padding: 0;
+    margin: 0;
+    border: 0;
+  }
+
+  .email-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid $border-color;
+    border-radius: $small-radius;
+    background: $surface;
+    cursor: pointer;
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+
+  .email-option:hover {
+    border-color: $primary;
+  }
+
+  .email-option:has(input:checked) {
+    border-color: $primary;
+    background: $info-background;
+    box-shadow: inset 0 0 0 1px $primary;
+  }
+
+  .email-option:has(input:focus-visible) {
+    outline: 2px solid $primary;
+    outline-offset: 2px;
+  }
+
+  .email-option input[type="radio"] {
+    flex: 0 0 auto;
+    margin-top: 0.3rem;
+    accent-color: $primary;
+  }
+
+  .email-option-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.65rem;
+    min-width: 0;
+  }
+
+  .email-address {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+
+  .email-badges {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1em 0.55em;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.6;
+    text-transform: uppercase;
+  }
+
+  .badge-primary {
+    border-color: rgba($primary, 0.25);
+    background: #e8f4ec;
+    color: $primary;
+  }
+
+  .badge-verified {
+    border-color: #b7e3bf;
+    background: $success-background;
+    color: #1d4d2a;
+  }
+
+  .badge-unverified {
+    border-color: #f0d78c;
+    background: $warning-background;
+    color: #6b4e00;
+  }
+
+  .email-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid $border-color;
+  }
+
+  .email-actions .button-danger {
+    margin-left: auto;
+  }
+
+  .button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.6rem;
+    padding: 0.55em 1em;
+    border: 2px solid transparent;
+    border-radius: $small-radius;
+    font-size: 0.95rem;
+    font-weight: 500;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .button-primary {
+    border-color: $primary;
+    background: $primary;
+    color: $surface;
+  }
+
+  .button-primary:hover,
+  .button-primary:focus {
+    border-color: $primary;
+    background: transparent;
+    color: $primary;
+  }
+
+  .button-secondary {
+    border-color: $primary;
+    background: transparent;
+    color: $primary;
+  }
+
+  .button-secondary:hover,
+  .button-secondary:focus {
+    background: $primary;
+    color: $surface;
+  }
+
+  .button-danger {
+    border-color: $error-text;
+    background: transparent;
+    color: $error-text;
+  }
+
+  .button-danger:hover,
+  .button-danger:focus {
+    border-color: $error-text;
+    background: $error-text;
+    color: $surface;
+  }
+
+  .email-add {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid $border-color;
+  }
+
+  .email-add h2 {
+    margin-bottom: 0.25rem;
+    font-size: 1.1rem;
+  }
+
+  .email-add .account-section-note {
+    margin-bottom: 0.9rem;
+  }
+
+  .email-add-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.6rem;
+  }
+
+  .email-add-form > .errorlist {
+    flex: 1 0 100%;
+  }
+
+  .email-add-form .form-field {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  .email-add-form label {
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .email-add-form input[type="email"] {
+    width: 100%;
+    padding: 0.6em 0.7em;
+    border: 1px solid #bbb;
+    border-radius: $small-radius;
+    background: $surface;
+    font-size: 1rem;
+  }
+
+  .email-add-form .button {
+    flex: 0 0 auto;
+  }
+
+  .email-add-form .errorlist {
+    margin-top: 0.35rem;
+  }
+
+  @media (max-width: 600px) {
+    .email-actions .button-danger {
+      margin-left: 0;
+    }
+
+    .email-add-form {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .email-add-form .button {
+      width: 100%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .email-option {
+      transition: none;
+    }
+  }
+}

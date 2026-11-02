@@ -1,12 +1,14 @@
 {# Adapted from https://github.com/pennersr/django-allauth/blob/1e72c343752ac244fce92a1829c85bfce90d1309/allauth/templates/allauth/layouts/base.html #}
 {# allauth's account pages render inside the site's own frame. Account actions live on the account management page. #}
 {% extends "_base.html" %}
-{% load i18n %}
 
 {% block title %}{% block head_title %}{% endblock head_title %} · ActivityPub Account Portability Testbed{% endblock title %}
 
 {% block body %}
-    <main class="account account-auth">
+    <main class="account account-auth{% if user.is_authenticated %} account-manage{% endif %}">
+    {% if user.is_authenticated %}
+    <p class="account-back"><a href="{% url 'account-management' %}">&larr; Back to account</a></p>
+    {% endif %}
     {% url 'authorize' as authorize_url %}
     {% if redirect_field_value and authorize_url in redirect_field_value %}
     <p class="note">
