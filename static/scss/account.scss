@@ -159,13 +159,7 @@
 
   // Sign-out confirmation
 
-  .account-confirm {
-    max-width: 480px;
-    margin: 1.5rem auto;
-    padding: 2rem;
-    border: 1px solid $border-color;
-    border-radius: $panel-radius;
-    background: $surface;
+  .account-signout-content {
     text-align: center;
   }
 
@@ -180,12 +174,12 @@
     color: $error-text;
   }
 
-  .account-confirm h1 {
+  .account-signout-content h1 {
     margin-bottom: 0.35rem;
     font-size: 1.5rem;
   }
 
-  .account-confirm p {
+  .account-signout-content p {
     color: #555;
   }
 
@@ -337,4 +331,8 @@
       transform: none;
     }
   }
+}
+
+.account.account-auth:has(> .account-signout-content) {
+  max-width: 480px;
 }
