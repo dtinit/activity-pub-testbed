@@ -17,7 +17,7 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
-from testbed.core.views import oauth_authorization_server_metadata
+from testbed.core.views import account_management, oauth_authorization_server_metadata
 from testbed.core.oauth import PortabilityAuthorizationView
 
 urlpatterns = [
@@ -31,6 +31,7 @@ urlpatterns = [
     ),
     # API-specific endpoints (prefixed with '/api/')
     path("api/", include("testbed.core.urls.api_urls")),
+    path("account/", account_management, name="account-management"),
     # allauth
     path("account/", include("allauth.urls")),
     # LOLA authorization override
