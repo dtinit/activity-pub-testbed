@@ -1,5 +1,6 @@
 from django.urls import path
 from testbed.core.views import (
+    account_management,
     deactivate_account,
     index,
     trigger_account,
@@ -11,6 +12,8 @@ from testbed.core.views import (
 
 urlpatterns = [
     path("", index, name="home"),
+    # Account management: account actions for signed-in users
+    path("account/", account_management, name="account-management"),
     # Trigger Account: Form to trigger copying an account
     path("trigger-account/", trigger_account, name="trigger-account"),
     # Report Activity: Form to report activity results

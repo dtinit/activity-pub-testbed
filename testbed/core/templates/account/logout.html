@@ -1,0 +1,29 @@
+{% extends "_base.html" %}
+
+{% block title %}Sign out · ActivityPub Account Portability Testbed{% endblock title %}
+
+{% block content %}
+<main class="account account-signout-page">
+  <div class="account-confirm">
+    <span class="account-confirm-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" focusable="false">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <path d="m16 17 5-5-5-5"></path>
+        <path d="M21 12H9"></path>
+      </svg>
+    </span>
+
+    <h1>Sign out?</h1>
+    <p>You'll need to sign in again to manage your testbed account.</p>
+
+    <form method="post" action="{% url 'account_logout' %}">
+      {% csrf_token %}
+      {{ redirect_field }}
+      <div class="account-confirm-actions">
+        <button type="submit" class="account-signout-button">Sign out</button>
+        <a class="btn" href="{% url 'account-management' %}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</main>
+{% endblock content %}
