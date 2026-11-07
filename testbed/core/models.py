@@ -683,7 +683,18 @@ class TransferJob(models.Model):
             "The Actor URL the source returned in `activitypub_actor` on the callback (LOLA §5.3)."
         ),
     )
-
+    authorization_endpoint = models.URLField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="The source's portability authorization endpoint, as discovered.",
+    )
+    token_endpoint = models.URLField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="The source's token endpoint, from its RFC 8414 metadata.",
+    )
     state = models.CharField(
         max_length=16,
         choices=State.choices,
@@ -716,7 +727,7 @@ class TransferJob(models.Model):
         default=dict,
         blank=True,
         help_text=(
-            "References to captured raw payloads, never the payload bodies."
+            "Raw responses kept as evidence, by name: url, status and text. Never headers."
         ),
     )
     error = models.TextField(
