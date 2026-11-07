@@ -100,7 +100,7 @@ def get(url, *, token):
         headers["Authorization"] = f"Bearer {token}"
 
     try:
-        _check_url(url)
+        check_url(url)
         try:
             with requests.get(
                 url, headers=headers, timeout=TIMEOUT, allow_redirects=False, stream=True
@@ -150,7 +150,7 @@ def retry_when_from(value, *, now):
         return now + DEFAULT_RETRY_AFTER
     return min(max(datetime.fromtimestamp(timestamp, tz=UTC), now), latest)
 
-def _check_url(url):
+def check_url(url):
     """
     Apply the URL policy, raising TransportError for a URL that may not be fetched.
 
