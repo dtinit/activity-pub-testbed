@@ -3,7 +3,7 @@ Turning a source server into a set of URLs, by asking it rather than assuming.
 
 Owns
     - Fetching `/.well-known/oauth-authorization-server` (RFC 8414)
-    - Reading 'token_endpoint` and `activitypub_account_portability`, once `issuer` matches (RFC 8414 §3.3)
+    - Reading `token_endpoint` and `activitypub_account_portability`, once `issuer` matches (RFC 8414 §3.3)
     - Fetching the public Actor and reading `endpoints.oauthMigrationEndpoint`
     - Re-fetching the Actor with the token
     - And resolving the scope-gated `migration` object into the four collection URLs (outbox, content, following, blocked)
@@ -39,7 +39,7 @@ def discover(job):
     Ask the source for its portability authorization endpoint and its token endpoint. Save both on the job.
 
     Raises DiscoveryError when its documents do not give them.
-    TransportError and RateLimited propgate because recording a failure or a pause is the job owner's
+    TransportError and RateLimited propagate because recording a failure or a pause is the job owner's
     """
     try:
         authorization_endpoint, token_endpoint = _endpoints(job)
@@ -60,7 +60,7 @@ def discover(job):
 
 
 def _endpoints(job):
-    issuer = job.source_base_url.strip("/")
+    issuer = job.source_base_url.rstrip("/")
 
     metadata = _fetch(job, METADATA_ARTIFACT, _metadata_url(issuer))
     if metadata is None:
@@ -89,7 +89,7 @@ def _endpoints(job):
         try:
             transport.check_url(endpoint)
         except transport.TransportError as exc:
-            raise DiscoveryError(f"a discovered endpoint in unusable: {exc}") from exc
+            raise DiscoveryError(f"a discovered endpoint is unusable: {exc}") from exc
 
     return authorization_endpoint, token_endpoint
 
