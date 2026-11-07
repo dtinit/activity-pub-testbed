@@ -716,7 +716,7 @@ class TransferJob(models.Model):
         default=dict,
         blank=True,
         help_text=(
-            "References to captured raw payloads, never the payload bodies."
+            "Raw responses kept as evidence, by name: url, status and text. Never headers."
         ),
     )
     error = models.TextField(
