@@ -113,6 +113,25 @@ def set_collection_progress(job, collection, **values):
 
     return dict(entry)
 
+def record_artifact(job, name, fetched):
+    """
+    Keep one response as evidence under `name`, replacing an earlier one, and persist immediately.
+
+    Only `url`, `status` and `text` are kept. A Fetched carries no headers, so no artifact can hold the token.
+    """
+    artifacts = dict(job.artifacts or {})
+    artifacts[name] = {"url": fetched.url, "status": fetched.status, "text": fetched.text}
+
+    job.artifacts = artifacts
+    job.save(update_fields=["artifacts", "updated_at"])
+
+    logger.debug(
+        "Transfer job %s: recorded artifact '%s' (status %s, %d characters)",
+        job.pk,
+        name,
+        fetched.status,
+        len(fetched.text),
+    )
 
 def pause_until(job, retry_when):
     """

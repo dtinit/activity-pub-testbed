@@ -6,8 +6,8 @@ from django.utils import timezone
 from testbed.core.factories import TransferJobFactory
 from testbed.core.models import TransferJob
 from testbed.core.transfer import transport
-from testbed.core.transfer.jobs import Collection
-from testbed.core.transfer.transport import RateLimited
+from testbed.core.transfer.jobs import Collection, record_artifact
+from testbed.core.transfer.transport import Fetched, RateLimited
 
 
 # The collection vocabulary
@@ -147,3 +147,17 @@ def test_a_429_from_the_source_pauses_the_job(fake_source):
     assert job.retry_when > timezone.now() + timedelta(seconds=100)  # the source's 120 s, not the default
     assert job.state == TransferJob.State.ACTIVE
     assert job.error == ""
+
+
+# Raw responses kept as evidence
+
+def test_recording_a_response_again_replaces_the_earlier_one():
+    # Discovery reruns after a 429 pause. The stale copy must not survive beside the new one
+    job = TransferJobFactory()
+    url = f"{job.source_base_url}/.well-known/oauth-authorization-server"
+
+    record_artifact(job, "well-known", Fetched(url=url, status=503, body=None, text="busy"))
+    record_artifact(job, "well-known", Fetched(url=url, status=200, body={}, text="{}"))
+
+    job.refresh_from_db()
+    assert job.artifacts == {"well-known": {"url": url, "status": 200, "text": "{}"}}                                               
