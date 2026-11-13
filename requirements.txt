@@ -13,7 +13,7 @@ html-sanitizer==2.6.0
 libsass==0.23.0
 Markdown==3.11
 pip-tools==7.6.2
-pre_commit==4.6.2
+pre_commit==4.7.0
 psycopg2-binary==2.9.13
 pytest==9.1.1
 pytest-cov==7.1.0
