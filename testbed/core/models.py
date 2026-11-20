@@ -619,6 +619,37 @@ class TokenActorBinding(models.Model):
         return f"TokenActorBinding(token_id={self.token_id}, actor_id={self.actor_id})"
 
 
+class SourceClientCredentials(models.Model):
+    """
+    The client a user registered at a source server, which this destination authenticates as.
+
+    Not OAuthClientCredentials, which is this server's own copy of a secret it issued as a source.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="source_clients")
+    source_base_url = models.URLField(
+        max_length=500,
+        help_text="Matched exactly against TransferJob.source_base_url.",
+    )
+    client_id = models.CharField(max_length=255)
+    encrypted_client_secret = models.TextField(help_text="Fernet-encrypted. Read through get_client_secret().")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "source_base_url"], name="unique_source_client_per_user"),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}'s client at {self.source_base_url}"
+
+    def set_client_secret(self, raw_secret):
+        self.encrypted_client_secret = _fernet().encrypt(raw_secret.encode("utf-8")).decode("utf-8")
+
+    def get_client_secret(self):
+        return _fernet().decrypt(self.encrypted_client_secret.encode("utf-8")).decode("utf-8")
+
+
 def default_transfer_policy():
     return {"dry_run": True}
 
@@ -678,6 +709,24 @@ class TransferJob(models.Model):
         null=True,
         blank=True,
         help_text="The source's token endpoint, from its RFC 8414 metadata.",
+    )
+    oauth_state = models.CharField(
+        max_length=64,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text="The OAuth state of the authorization in progress. Cleared when the callback uses it.",
+    )
+    pkce_verifier = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        help_text="The PKCE code verifier (RFC 7636). Cleared after the token exchange.",
+    )
+    encrypted_access_token = models.TextField(
+        blank=True,
+        default="",
+        help_text="The portability access token, Fernet-encrypted. Read through get_access_token().",
     )
     state = models.CharField(
         max_length=16,
@@ -768,6 +817,15 @@ class TransferJob(models.Model):
         from testbed.core.transfer import jobs
 
         return jobs.pause_until(self, retry_when)
+
+    def set_access_token(self, token):
+        self.encrypted_access_token = _fernet().encrypt(token.encode("utf-8")).decode("utf-8")
+
+    def get_access_token(self):
+        # None until the job is authorized
+        if not self.encrypted_access_token:
+            return None
+        return _fernet().decrypt(self.encrypted_access_token.encode("utf-8")).decode("utf-8")
 
 
 class PortabilityOutbox(models.Model):

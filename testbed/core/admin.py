@@ -166,6 +166,11 @@ class TransferJobAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
+    exclude = (
+        "oauth_state",
+        "pkce_verifier",
+        "encrypted_access_token",
+    )
 
     list_select_related = ("destination_actor", "destination_actor__user")
 

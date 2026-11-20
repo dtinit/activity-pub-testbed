@@ -4,8 +4,8 @@ import pytest
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from testbed.core.factories import TransferJobFactory
-from testbed.core.models import TransferJob
+from testbed.core.factories import SourceClientCredentialsFactory, TransferJobFactory
+from testbed.core.models import SourceClientCredentials, TransferJob
 from testbed.core.tests.helpers import destination_actor_for
 
 
@@ -114,3 +114,26 @@ def test_deleting_the_user_deletes_their_jobs():
     job.user.delete()
 
     assert TransferJob.objects.count() == 0
+
+
+# Secrets at rest
+
+
+def test_secrets_are_stored_encrypted():
+    job = TransferJobFactory()
+    assert job.get_access_token() is None
+    job.set_access_token("access-token-value-1234")
+    job.save()
+    client = SourceClientCredentialsFactory(user=job.user, client_secret="client-secret-value-5678")
+
+    stored = str(
+        [
+            *TransferJob.objects.filter(pk=job.pk).values(),
+            *SourceClientCredentials.objects.filter(pk=client.pk).values(),
+        ]
+    )
+
+    assert "access-token-value-1234" not in stored
+    assert "client-secret-value-5678" not in stored
+    assert TransferJob.objects.get(pk=job.pk).get_access_token() == "access-token-value-1234"
+    assert SourceClientCredentials.objects.get(pk=client.pk).get_client_secret() == "client-secret-value-5678"

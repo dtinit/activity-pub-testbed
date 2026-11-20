@@ -53,3 +53,15 @@ def test_the_admin_cannot_edit_what_discovery_and_the_callback_wrote(admin_clien
 
     assert [field for field in written if f'name="{field}"' in page] == []
     assert all(value in page for value in written.values())
+
+# A job's OAuth state, PKCE verifier and token never reach the page, not even encrypted
+def test_the_admin_never_shows_a_jobs_credentials(admin_client):
+    job = TransferJobFactory(oauth_state="st4te-value-1234", pkce_verifier="ver1fier-value-5678")
+    job.set_access_token("access-token-value-9012")
+    job.save()
+    secrets = ["st4te-value-1234", "ver1fier-value-5678", job.encrypted_access_token, "access-token-value-9012"]
+
+    page = admin_client.get(reverse("admin:core_transferjob_change", args=[job.pk])).content.decode()
+
+    assert job.source_base_url in page
+    assert [secret for secret in secrets if secret in page] == []
