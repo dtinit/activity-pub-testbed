@@ -510,6 +510,11 @@ class Blocked(models.Model):
         return f'{self.actor.username} blocks {username} (remote)'
 
 
+def _fernet():
+    key_material = settings.SECRET_KEY.encode('utf-8')[:32].ljust(32, b'0')
+    return Fernet(base64.urlsafe_b64encode(key_material))
+
+
 class OAuthClientCredentials(models.Model):
     """
     Encrypted storage for OAuth client secrets to solve "Token Exchange Failed" issues.
@@ -531,27 +536,6 @@ class OAuthClientCredentials(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-    def _get_encryption_key(self):
-        """
-        Generate encryption key from Django SECRET_KEY.
-        
-        Uses first 32 bytes of SECRET_KEY (padded if necessary) to create
-        a valid Fernet key for symmetric encryption.
-        """
-        # Use Django's SECRET_KEY as the basis for encryption
-        key_material = settings.SECRET_KEY.encode('utf-8')
-        
-        # Fernet requires exactly 32 bytes, URL-safe base64 encoded
-        if len(key_material) < 32:
-            # Pad with zeros if SECRET_KEY is shorter than 32 bytes
-            key_material = key_material.ljust(32, b'0')
-        else:
-            # Use first 32 bytes if longer
-            key_material = key_material[:32]
-        
-        # Encode as URL-safe base64 (required by Fernet)
-        return base64.urlsafe_b64encode(key_material)
-    
     def set_client_secret(self, raw_secret):
         """
         Encrypt and store client secret.
@@ -563,7 +547,7 @@ class OAuthClientCredentials(models.Model):
             raise ValueError("Client secret cannot be empty")
             
         # Create Fernet cipher with our encryption key
-        f = Fernet(self._get_encryption_key())
+        f = _fernet()
         
         # Encrypt the secret and store as base64 string
         encrypted_bytes = f.encrypt(raw_secret.encode('utf-8'))
@@ -586,7 +570,7 @@ class OAuthClientCredentials(models.Model):
         
         try:
             # Create Fernet cipher with our encryption key
-            f = Fernet(self._get_encryption_key())
+            f = _fernet()
             
             # Decrypt the secret
             encrypted_bytes = self.encrypted_client_secret.encode('utf-8')
