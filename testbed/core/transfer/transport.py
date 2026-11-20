@@ -98,38 +98,7 @@ def get(url, *, token):
     headers = {"Accept": ACCEPT, "User-Agent": USER_AGENT}
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
-
-    try:
-        check_url(url)
-        try:
-            with requests.get(
-                url, headers=headers, timeout=TIMEOUT, allow_redirects=False, stream=True
-            ) as response:
-                if response.status_code == 429:
-                    retry_when = retry_when_from(response.headers.get("Retry-After"), now=timezone.now())
-                    raise RateLimited(f"{url} answered 429, asking us to wait until {retry_when.isoformat()}", retry_when)
-                content = _read_body(response)
-        except requests.RequestException as exc:
-            # Connecting, timing out or failing mid-body
-            raise TransportError(f"could not fetch {url} ({type(exc).__name__})") from exc
-    except TransportError as exc:
-        logger.warning("Transport GET did not complete: %s", exc)
-        raise
-
-    text = content.decode("utf-8", errors="replace")
-    logger.info(
-        "Transport GET %s -> %s (%d bytes, %d ms)",
-        response.url,
-        response.status_code,
-        len(content),
-        response.elapsed.total_seconds() * 1000,
-    )
-    return Fetched(
-        url=response.url,
-        status=response.status_code,
-        body=_parse_json(text),
-        text=text,
-    )
+    return _request("GET", url, headers=headers)
 
 def retry_when_from(value, *, now):
     """
@@ -178,6 +147,41 @@ def check_url(url):
     
     elif parts.scheme != "https":
         raise TransportError(f"refused {url}: scheme {parts.scheme!r} is not https")
+
+def _request(method, url, **kwargs):
+    # Every request's one path: URL policy, fixed timeout, no redirect followed, capped body, 429
+    try:
+        check_url(url)
+        try:
+            with requests.request(
+                method, url, timeout=TIMEOUT, allow_redirects=False, stream=True, **kwargs
+            ) as response:
+                if response.status_code == 429:
+                    retry_when = retry_when_from(response.headers.get("Retry-After"), now=timezone.now())
+                    raise RateLimited(f"{url} answered 429, asking us to wait until {retry_when.isoformat()}", retry_when)
+                content = _read_body(response)
+        except requests.RequestException as exc:
+            # Connecting, timing out or failing mid-body
+            raise TransportError(f"could not fetch {url} ({type(exc).__name__})") from exc
+    except TransportError as exc:
+        logger.warning("Transport %s did not complete: %s", method, exc)
+        raise
+
+    text = content.decode("utf-8", errors="replace")
+    logger.info(
+        "Transport %s %s -> %s (%d bytes, %d ms)",
+        method,
+        response.url,
+        response.status_code,
+        len(content),
+        response.elapsed.total_seconds() * 1000,
+    )
+    return Fetched(
+        url=response.url,
+        status=response.status_code,
+        body=_parse_json(text),
+        text=text,
+    )
 
 def _read_body(response):
     # A declared length over the cap is refused before anything is read
