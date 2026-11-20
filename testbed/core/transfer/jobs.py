@@ -7,8 +7,8 @@ Owns
       support. Only the coarse `TransferJob.state` is persisted, and only because a computed
       property cannot be indexed or filtered. The five conditions, and what each one reads:
 
-          no endpoints              -> discover              (no field yet)
-          endpoints, no token       -> a human is clicking   (no field yet)
+          no endpoints              -> discover              `authorization_endpoint`
+          endpoints, no token       -> a human is clicking   `encrypted_access_token`
           collections remaining     -> fetch the next one    `progress`
           none remaining            -> finished              `progress`
           retry_when in the future  -> not ready, come back  `retry_when`
@@ -141,3 +141,25 @@ def pause_until(job, retry_when):
     job.retry_when = retry_when
     job.save(update_fields=["retry_when", "updated_at"])
     logger.info("Transfer job %s: paused until %s", job.pk, retry_when.isoformat())
+
+def fail(job, reason):
+    """
+    Record why the job cannot go on, and drop every credential it holds.
+    `reason` is shown to the user, so it must hold no secret.
+    """
+    job.state = job.State.FAILED
+    job.error = reason
+    job.oauth_state = None
+    job.pkce_verifier = ""
+    job.encrypted_access_token = ""
+    job.save(
+        update_fields=[
+            "state",
+            "error",
+            "oauth_state",
+            "pkce_verifier",
+            "encrypted_access_token",
+            "updated_at",
+        ]
+    )
+    logger.warning("Transfer job %s failed: %s", job.pk, reason)

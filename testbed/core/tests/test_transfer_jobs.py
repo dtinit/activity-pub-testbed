@@ -6,7 +6,7 @@ from django.utils import timezone
 from testbed.core.factories import TransferJobFactory
 from testbed.core.models import TransferJob
 from testbed.core.transfer import transport
-from testbed.core.transfer.jobs import Collection, record_artifact
+from testbed.core.transfer.jobs import Collection, fail, record_artifact
 from testbed.core.transfer.transport import Fetched, RateLimited
 
 
@@ -147,6 +147,26 @@ def test_a_429_from_the_source_pauses_the_job(fake_source):
     assert job.retry_when > timezone.now() + timedelta(seconds=100)  # the source's 120 s, not the default
     assert job.state == TransferJob.State.ACTIVE
     assert job.error == ""
+
+
+# A failure ends the job
+
+def test_failing_a_job_records_why_and_drops_its_credentials():
+    job = TransferJobFactory(oauth_state="st4te-value-1234", pkce_verifier="ver1fier-value-5678")
+    job.set_access_token("access-token-value-9012")
+    job.save()
+    before = job.updated_at
+    # Progress the failed step never committed
+    job.progress = {"collections": {"outbox": {"cursor": "page-9"}}}
+
+    fail(job, "the source refused authorization (access_denied)")
+
+    job.refresh_from_db()
+    assert job.state == TransferJob.State.FAILED
+    assert job.error == "the source refused authorization (access_denied)"
+    assert (job.oauth_state, job.pkce_verifier, job.get_access_token()) == (None, "", None)
+    assert job.progress == {}
+    assert job.updated_at > before
 
 
 # Raw responses kept as evidence
