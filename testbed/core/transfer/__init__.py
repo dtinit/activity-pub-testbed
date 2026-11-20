@@ -5,13 +5,13 @@ Everything under `testbed/core/` outside this package is the source server. This
 
 Module ownership:
 
-    transport.py   HTTP client, URL policy, same-origin redirects, 429 detection (no retry, no backoff)
+    transport.py   HTTP client, URL policy, no redirects followed, 429 detection (no retry, no backoff)
     discovery.py   RFC8414 metadata, public Actor, authenticated Actor, migration URL resolution
     auth.py        Authorization URL construction, state, callback parsing, token exchange
     fetch.py       Collection walking, pagination traversal, raw artifact capture
     transform.py   ID generation, breadcrumbs, metadata preservation, wrapper activities
     storage.py     Persisting transformed objects to destination models
-    jobs.py        The Collection vocabulary, and the two progress accessors
+    jobs.py        The Collection vocabulary, progress accessors, pause_until, record_artifact
 
 `Actor` already carries `ROLE_DESTINATION`, and a destination Actor is created for every user at signup.
 This package is what will eventually give them behaviour.
