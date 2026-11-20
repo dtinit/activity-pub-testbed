@@ -1,5 +1,7 @@
+import base64
 import gzip
 import io
+import logging
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -60,6 +62,25 @@ def test_the_token_travels_only_in_the_authorization_header(fake_source):
     sent = fake_source.sent[0]
     assert sent.headers["Authorization"] == f"Bearer {TOKEN}"
     assert TOKEN not in sent.url
+
+
+# The client credentials go in the Basic header and the code in the body, and the log holds neither
+def test_a_post_sends_its_form_with_basic_credentials_and_logs_neither(fake_source, caplog):
+    fake_source.respond(json={})
+
+    with caplog.at_level(logging.DEBUG):
+        transport.post(f"{SOURCE}/oauth/token/", data={"code": "c0de"}, auth=("client", "s3cret"))
+
+    sent = fake_source.sent[0]
+    assert sent.method == "POST"
+    assert sent.url == f"{SOURCE}/oauth/token/"
+    assert sent.headers["Authorization"] == "Basic " + base64.b64encode(b"client:s3cret").decode()
+    assert sent.headers["Accept"] == "application/json"
+    assert sent.headers["Content-Type"] == "application/x-www-form-urlencoded"
+    assert sent.body == "code=c0de"
+    assert f"Transport POST {SOURCE}/oauth/token/ -> 200" in caplog.text
+    assert "c0de" not in caplog.text
+    assert "s3cret" not in caplog.text
 
 
 # What every request carries
@@ -126,6 +147,24 @@ def test_every_status_comes_back_for_the_caller_to_judge(fake_source):
     assert fetched.status == 404
     assert fetched.body is None
     assert fetched.text == "<html>Not Found</html>"
+
+
+# Following a redirect would resend the token, or a POST's form and credentials, wherever it points
+@pytest.mark.parametrize(
+    "send",
+    [
+        lambda url: transport.get(url, token=TOKEN),
+        lambda url: transport.post(url, data={"code": "c0de"}, auth=("client", "s3cret")),
+    ],
+    ids=["get", "post"],
+)
+def test_a_redirect_comes_back_unfollowed(fake_source, send):
+    fake_source.respond(307, headers={"Location": "https://elsewhere.example/collect"})
+
+    fetched = send(f"{SOURCE}/oauth/token/")
+
+    assert fetched.status == 307
+    assert len(fake_source.sent) == 1
 
 
 # A 429

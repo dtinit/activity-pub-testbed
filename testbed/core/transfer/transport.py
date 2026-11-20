@@ -4,7 +4,7 @@ The one HTTP client every destination module uses to reach a source server.
 Owns
     - The URL policy, checked before any socket opens: `https` always; `http` only to a loopback
       host, and only where the environment permits it
-    - The `Authorization: Bearer` header
+    - The `Authorization` header: Bearer on every GET, Basic client credentials on the token POST
     - `Accept` negotiation for ActivityPub content types, with an `application/json` fallback
     - A fixed timeout on every call, and a cap on the decoded size of every body
     - Detection of `429`, with `Retry-After` turned into when the source asked us to come back
@@ -99,6 +99,18 @@ def get(url, *, token):
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
     return _request("GET", url, headers=headers)
+
+def post(url, *, data, auth):
+    """
+    POST a form to a source's token endpoint (RFC 6749 §4.1.3).
+
+    `auth` is (client_id, client_secret), sent as HTTP Basic (RFC 6749 §2.3.1).
+    
+    Returns a Fetched whatever the status, except a 429, which raises RateLimited.
+    Raises TransportError when no usable response arrived.
+    """
+    headers = {"Accept": "application/json", "User-Agent": USER_AGENT}
+    return _request("POST", url, headers=headers, data=data, auth=auth)
 
 def retry_when_from(value, *, now):
     """
