@@ -14,6 +14,7 @@ from testbed.core.models import (
     Following,
     Followers,
     TokenActorBinding,
+    SourceClientCredentials,
     TransferJob,
 )
 
@@ -332,5 +333,23 @@ class TransferJobFactory(DjangoModelFactory):
 
     source_base_url = "https://source.example"
     policy = factory.LazyFunction(lambda: {"dry_run": True})
+
+
+class SourceClientCredentialsFactory(DjangoModelFactory):
+    """A user's client at a source. Pass `client_secret` in plain text; only its ciphertext is stored."""
+
+    class Meta:
+        model = SourceClientCredentials
+        skip_postgeneration_save = True
+
+    user = factory.SubFactory(UserOnlyFactory)
+    source_base_url = "https://source.example"
+    client_id = factory.Sequence(lambda n: f"client-{n}")
+
+    @factory.post_generation
+    def client_secret(self, create, extracted, **kwargs):
+        self.set_client_secret(extracted or "client-secret")
+        if create:
+            self.save(update_fields=["encrypted_client_secret"])
 
 

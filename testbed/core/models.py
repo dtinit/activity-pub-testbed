@@ -510,6 +510,11 @@ class Blocked(models.Model):
         return f'{self.actor.username} blocks {username} (remote)'
 
 
+def _fernet():
+    key_material = settings.SECRET_KEY.encode('utf-8')[:32].ljust(32, b'0')
+    return Fernet(base64.urlsafe_b64encode(key_material))
+
+
 class OAuthClientCredentials(models.Model):
     """
     Encrypted storage for OAuth client secrets to solve "Token Exchange Failed" issues.
@@ -531,27 +536,6 @@ class OAuthClientCredentials(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-    def _get_encryption_key(self):
-        """
-        Generate encryption key from Django SECRET_KEY.
-        
-        Uses first 32 bytes of SECRET_KEY (padded if necessary) to create
-        a valid Fernet key for symmetric encryption.
-        """
-        # Use Django's SECRET_KEY as the basis for encryption
-        key_material = settings.SECRET_KEY.encode('utf-8')
-        
-        # Fernet requires exactly 32 bytes, URL-safe base64 encoded
-        if len(key_material) < 32:
-            # Pad with zeros if SECRET_KEY is shorter than 32 bytes
-            key_material = key_material.ljust(32, b'0')
-        else:
-            # Use first 32 bytes if longer
-            key_material = key_material[:32]
-        
-        # Encode as URL-safe base64 (required by Fernet)
-        return base64.urlsafe_b64encode(key_material)
-    
     def set_client_secret(self, raw_secret):
         """
         Encrypt and store client secret.
@@ -563,7 +547,7 @@ class OAuthClientCredentials(models.Model):
             raise ValueError("Client secret cannot be empty")
             
         # Create Fernet cipher with our encryption key
-        f = Fernet(self._get_encryption_key())
+        f = _fernet()
         
         # Encrypt the secret and store as base64 string
         encrypted_bytes = f.encrypt(raw_secret.encode('utf-8'))
@@ -586,7 +570,7 @@ class OAuthClientCredentials(models.Model):
         
         try:
             # Create Fernet cipher with our encryption key
-            f = Fernet(self._get_encryption_key())
+            f = _fernet()
             
             # Decrypt the secret
             encrypted_bytes = self.encrypted_client_secret.encode('utf-8')
@@ -633,6 +617,37 @@ class TokenActorBinding(models.Model):
 
     def __str__(self):
         return f"TokenActorBinding(token_id={self.token_id}, actor_id={self.actor_id})"
+
+
+class SourceClientCredentials(models.Model):
+    """
+    The client a user registered at a source server, which this destination authenticates as.
+
+    Not OAuthClientCredentials, which is this server's own copy of a secret it issued as a source.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="source_clients")
+    source_base_url = models.URLField(
+        max_length=500,
+        help_text="Matched exactly against TransferJob.source_base_url.",
+    )
+    client_id = models.CharField(max_length=255)
+    encrypted_client_secret = models.TextField(help_text="Fernet-encrypted. Read through get_client_secret().")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "source_base_url"], name="unique_source_client_per_user"),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}'s client at {self.source_base_url}"
+
+    def set_client_secret(self, raw_secret):
+        self.encrypted_client_secret = _fernet().encrypt(raw_secret.encode("utf-8")).decode("utf-8")
+
+    def get_client_secret(self):
+        return _fernet().decrypt(self.encrypted_client_secret.encode("utf-8")).decode("utf-8")
 
 
 def default_transfer_policy():
@@ -694,6 +709,24 @@ class TransferJob(models.Model):
         null=True,
         blank=True,
         help_text="The source's token endpoint, from its RFC 8414 metadata.",
+    )
+    oauth_state = models.CharField(
+        max_length=64,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text="The OAuth state of the authorization in progress. Cleared when the callback uses it.",
+    )
+    pkce_verifier = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        help_text="The PKCE code verifier (RFC 7636). Cleared after the token exchange.",
+    )
+    encrypted_access_token = models.TextField(
+        blank=True,
+        default="",
+        help_text="The portability access token, Fernet-encrypted. Read through get_access_token().",
     )
     state = models.CharField(
         max_length=16,
@@ -784,6 +817,15 @@ class TransferJob(models.Model):
         from testbed.core.transfer import jobs
 
         return jobs.pause_until(self, retry_when)
+
+    def set_access_token(self, token):
+        self.encrypted_access_token = _fernet().encrypt(token.encode("utf-8")).decode("utf-8")
+
+    def get_access_token(self):
+        # None until the job is authorized
+        if not self.encrypted_access_token:
+            return None
+        return _fernet().decrypt(self.encrypted_access_token.encode("utf-8")).decode("utf-8")
 
 
 class PortabilityOutbox(models.Model):

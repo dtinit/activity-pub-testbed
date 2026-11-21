@@ -11,7 +11,7 @@ Module ownership:
     fetch.py       Collection walking, pagination traversal, raw artifact capture
     transform.py   ID generation, breadcrumbs, metadata preservation, wrapper activities
     storage.py     Persisting transformed objects to destination models
-    jobs.py        The Collection vocabulary, progress accessors, pause_until, record_artifact
+    jobs.py        The Collection vocabulary, progress accessors, pause_until, record_artifact, fail
 
 `Actor` already carries `ROLE_DESTINATION`, and a destination Actor is created for every user at signup.
 This package is what will eventually give them behaviour.

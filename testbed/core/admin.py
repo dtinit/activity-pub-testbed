@@ -156,7 +156,21 @@ class TransferJobAdmin(admin.ModelAdmin):
         "source_actor_url",
         "authorized_actor_url",
     )
-    readonly_fields = ("policy", "progress", "artifacts", "created_at", "updated_at")
+    readonly_fields = (
+        "authorization_endpoint",
+        "token_endpoint",
+        "authorized_actor_url",
+        "policy",
+        "progress",
+        "artifacts",
+        "created_at",
+        "updated_at",
+    )
+    exclude = (
+        "oauth_state",
+        "pkce_verifier",
+        "encrypted_access_token",
+    )
 
     list_select_related = ("destination_actor", "destination_actor__user")
 
