@@ -16,13 +16,16 @@ Must not
     - Accept a callback whose `state` does not match the one issued for that job
 """
 
+import base64
+import hashlib
 import logging
-from urllib.parse import quote_plus, urlsplit
+import secrets
+from urllib.parse import parse_qsl, quote_plus, urlencode, urlsplit, urlunsplit
 
 from django.conf import settings
 from django.urls import reverse
 
-from testbed.core.oauth.scopes import scope_grants_portability
+from testbed.core.oauth.scopes import LOLA_PORTABILITY_SCOPE, scope_grants_portability
 from testbed.core.transfer import transport
 
 logger = logging.getLogger(__name__)
@@ -50,6 +53,40 @@ class AuthorizationError(Exception):
 
 def callback_url():
     return f"{settings.BASE_URL}{reverse('transfer-callback')}"
+
+
+def authorization_url(job):
+    """
+    Issue the job's state and PKCE verifier, and return the URL to send the user's browser to.
+
+    Raises AuthorizationError when the job cannot be authorized.
+    """
+    if job.state != job.State.ACTIVE or job.encrypted_access_token:
+        raise AuthorizationError("this job is not waiting for authorization")
+    if not job.authorization_endpoint:
+        raise AuthorizationError("the source's endpoints have not been discovered")
+    _require_source_origin(job, job.authorization_endpoint, "the authorization endpoint")
+    client = _client(job)
+
+    job.oauth_state = secrets.token_urlsafe(32)
+    job.pkce_verifier = secrets.token_urlsafe(64)
+    job.save(update_fields=["oauth_state", "pkce_verifier", "updated_at"])
+
+    params = {
+        "response_type": "code",
+        "client_id": client.client_id,
+        "redirect_uri": callback_url(),
+        "scope": LOLA_PORTABILITY_SCOPE,
+        "state": job.oauth_state,
+        "code_challenge": _challenge(job.pkce_verifier),
+        "code_challenge_method": "S256",
+    }
+    # RFC 6749 §3.1: a query the endpoint already has MUST be retained but never one of ours
+    parts = urlsplit(job.authorization_endpoint)
+    kept = [(name, value) for name, value in parse_qsl(parts.query, keep_blank_values=True) if name not in params]
+    query = kept + list(params.items())
+    logger.info("Transfer job %s: authorization started at %s", job.pk, job.authorization_endpoint)
+    return urlunsplit(parts._replace(query=urlencode(query)))
 
 
 def complete_authorization(job, params):
@@ -146,3 +183,9 @@ def _require_source_origin(job, url, what):
 
 def _error_code(value):
     return value if value in OAUTH_ERRORS else "unrecognised error"
+
+
+def _challenge(verifier):
+    # RFC 7636 §4.2: BASE64URL(SHA256(verifier)) without padding
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
