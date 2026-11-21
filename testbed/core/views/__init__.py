@@ -26,6 +26,8 @@ from .oauth_demo import (
     test_token_exchange_view,
 )
 
+from .transfer import transfer_callback
+
 __all__ = [
     "actor_required",
     "lola_scope_required",
@@ -48,4 +50,5 @@ __all__ = [
     "oauth_callback",
     "test_authorization_view",
     "test_token_exchange_view",
+    "transfer_callback",
 ]

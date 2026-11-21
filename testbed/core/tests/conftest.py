@@ -8,6 +8,8 @@ from testbed.core.factories import (
     CreateActivityFactory,
     LikeActivityFactory,
     FollowActivityFactory,
+    SourceClientCredentialsFactory,
+    TransferJobFactory,
 )
 from testbed.core.models import Actor, User
 from testbed.core.tests.helpers import FakeSource
@@ -206,3 +208,24 @@ def fake_source(monkeypatch):
 @pytest.fixture
 def https_only(settings):
     settings.OAUTH2_PROVIDER = {**settings.OAUTH2_PROVIDER, "ALLOWED_REDIRECT_URI_SCHEMES": ["https"]}
+
+
+# A job discovery has run for, whose owner registered a client at the source
+@pytest.fixture
+def discovered_job():
+    job = TransferJobFactory(
+        authorization_endpoint="https://source.example/oauth/authorize/",
+        token_endpoint="https://source.example/oauth/token/",
+    )
+    # `+` and `/` change under form-encoding, which RFC 6749 §2.3.1 applies before Basic
+    SourceClientCredentialsFactory(user=job.user, client_secret="client+secret/value")
+    return job
+
+
+# A job whose user was sent to the source and has not come back yet
+@pytest.fixture
+def waiting_job(discovered_job):
+    discovered_job.oauth_state = "issued-state-value"
+    discovered_job.pkce_verifier = "issued-verifier-value"
+    discovered_job.save()
+    return discovered_job
