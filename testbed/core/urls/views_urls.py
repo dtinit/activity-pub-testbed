@@ -7,6 +7,7 @@ from testbed.core.views import (
     test_authorization_view,
     oauth_callback,
     test_token_exchange_view,
+    transfer_callback,
 )
 
 urlpatterns = [
@@ -19,6 +20,8 @@ urlpatterns = [
     path("test/oauth/authorize/", test_authorization_view, name="test-oauth-authorize"),
     path("test/oauth/token/", test_token_exchange_view, name="test-oauth-token"),
     path("callback", oauth_callback, name="oauth-callback"),
+    # Destination: a source sends the user back here after consent
+    path("transfer/callback/", transfer_callback, name="transfer-callback"),
     # Staff-only admin action: deactivate a user account
     path(
         "actors/<int:actor_id>/deactivate/",
