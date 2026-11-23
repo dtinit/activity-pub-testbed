@@ -1,0 +1,107 @@
+{% extends "account/base_manage_email.html" %}
+{% load static i18n %}
+
+{# A custom layout for allauth's email management view. The flow, form actions and scripts stay the same. #}
+
+{% block head_title %}{% trans "Email Addresses" %}{% endblock head_title %}
+
+{% block content %}
+<div class="account-email">
+  <div class="account-email-header">
+    <h1>{% trans "Email Addresses" %}</h1>
+    <p class="account-section-note">
+      {% trans "Select an address below to make it primary, resend verification, or remove it." %}
+    </p>
+  </div>
+
+  {% if emailaddresses %}
+  <form method="post" action="{% url 'account_email' %}" class="email-list-form">
+    {% csrf_token %}
+    <fieldset class="email-list">
+      <legend class="visually-hidden">{% trans "Email addresses" %}</legend>
+
+      {% for radio in emailaddress_radios %}
+      {% with emailaddress=radio.emailaddress %}
+      <label class="email-option" for="{{ radio.id }}">
+        <input type="radio" name="email" id="{{ radio.id }}" value="{{ emailaddress.email }}"{% if radio.checked %} checked{% endif %}>
+        <span class="email-option-body">
+          <span class="email-address">{{ emailaddress.email }}</span>
+          <span class="email-badges">
+            {% if emailaddress.primary %}
+            <span class="badge badge-primary">{% trans "Primary" %}</span>
+            {% endif %}
+            {% if emailaddress.verified %}
+            <span class="badge badge-verified">{% trans "Verified" %}</span>
+            {% else %}
+            <span class="badge badge-unverified">{% trans "Unverified" %}</span>
+            {% endif %}
+          </span>
+        </span>
+      </label>
+      {% endwith %}
+      {% endfor %}
+    </fieldset>
+
+    <div class="email-actions">
+      <button type="submit" name="action_primary" class="button button-primary">
+        {% trans "Make primary" %}
+      </button>
+      <button type="submit" name="action_send" class="button button-secondary">
+        {% trans "Re-send verification" %}
+      </button>
+      <button type="submit" name="action_remove" class="button button-danger">
+        {% trans "Remove" %}
+      </button>
+    </div>
+  </form>
+  {% else %}
+  {% include "account/snippets/warn_no_email.html" %}
+  {% endif %}
+
+  {% if can_add_email %}
+  <section class="email-add" aria-labelledby="add-email-heading">
+    <h2 id="add-email-heading">{% trans "Add email address" %}</h2>
+    <p class="account-section-note">
+      {% trans "We'll send a verification link to the new address." %}
+    </p>
+
+    <form method="post" action="{% url 'account_email' %}" class="email-add-form">
+      {% csrf_token %}
+      {% if add_email_form.non_field_errors %}
+      <ul class="errorlist">
+        {% for error in add_email_form.non_field_errors %}
+        <li>{{ error }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      {% with field=add_email_form.email error_id=add_email_form.email.id_for_label|add:"_error" %}
+      <div class="form-field">
+        <label for="{{ field.id_for_label }}">{% trans "New email address" %}</label>
+        {{ field }}
+        {% if field.errors %}
+        <ul class="errorlist" id="{{ error_id }}">
+          {% for error in field.errors %}
+          <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+      {% endwith %}
+
+      <button type="submit" name="action_add" class="button button-primary">
+        {% trans "Add email" %}
+      </button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock content %}
+
+{% block extra_body %}
+<script src="{% static 'account/js/account.js' %}"></script>
+<script src="{% static 'account/js/onload.js' %}"></script>
+<script data-allauth-onload="allauth.account.forms.manageEmailForm" type="application/json">{
+  "i18n": {"confirmDelete": "{% trans 'Do you really want to remove the selected email address?' %}"}
+}</script>
+{% endblock extra_body %}

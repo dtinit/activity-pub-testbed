@@ -1,0 +1,123 @@
+{% extends "_base.html" %}
+
+{% block title %}Account · ActivityPub Account Portability Testbed{% endblock title %}
+
+{% block content %}
+<main class="account account-management">
+  <header class="account-hero">
+    <span class="account-avatar" aria-hidden="true">{{ user.email|default:user.username|first|upper }}</span>
+    <div>
+      <h1>Account</h1>
+      <p class="account-subtitle">
+        Signed in as <strong>{{ user.email|default:user.username }}</strong>
+      </p>
+    </div>
+  </header>
+
+  <section class="account-section" aria-labelledby="account-settings-heading">
+    <h2 id="account-settings-heading">Account settings</h2>
+    <p class="account-section-note">
+      Update how you sign in and keep your account secure.
+    </p>
+
+    <div class="account-action-list">
+      {% url 'account_email' as email_url %}
+      {% if email_url %}
+      <a class="account-action" href="{{ email_url }}">
+        <span class="account-action-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+            <path d="m4 7 8 6 8-6"></path>
+          </svg>
+        </span>
+        <span class="account-action-copy">
+          <span class="account-action-title">Change email</span>
+          <span class="account-action-description">Update the address you use to sign in.</span>
+        </span>
+        <span class="account-action-arrow" aria-hidden="true">→</span>
+      </a>
+      {% endif %}
+
+      {% url 'account_change_password' as change_password_url %}
+      {% if change_password_url %}
+      <a class="account-action" href="{{ change_password_url }}">
+        <span class="account-action-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <rect x="5" y="10" width="14" height="10" rx="2"></rect>
+            <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+          </svg>
+        </span>
+        <span class="account-action-copy">
+          <span class="account-action-title">Change password</span>
+          <span class="account-action-description">Choose a new password for your account.</span>
+        </span>
+        <span class="account-action-arrow" aria-hidden="true">→</span>
+      </a>
+      {% endif %}
+
+      {% url 'socialaccount_connections' as connections_url %}
+      {% if connections_url %}
+      <a class="account-action" href="{{ connections_url }}">
+        <span class="account-action-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M10 13a5 5 0 0 0 7.07 0l2-2a5 5 0 0 0-7.07-7.07l-1.1 1.1"></path>
+            <path d="M14 11a5 5 0 0 0-7.07 0l-2 2a5 5 0 0 0 7.07 7.07l1.1-1.1"></path>
+          </svg>
+        </span>
+        <span class="account-action-copy">
+          <span class="account-action-title">Connected accounts</span>
+          <span class="account-action-description">Manage the accounts you use to sign in.</span>
+        </span>
+        <span class="account-action-arrow" aria-hidden="true">→</span>
+      </a>
+      {% endif %}
+
+      {% url 'mfa_index' as mfa_url %}
+      {% if mfa_url %}
+      <a class="account-action" href="{{ mfa_url }}">
+        <span class="account-action-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M12 3 5 6v5c0 4.5 3 8.1 7 9 4-.9 7-4.5 7-9V6l-7-3Z"></path>
+            <path d="m9 12 2 2 4-4"></path>
+          </svg>
+        </span>
+        <span class="account-action-copy">
+          <span class="account-action-title">Two-factor authentication</span>
+          <span class="account-action-description">Add an extra layer of security when signing in.</span>
+        </span>
+        <span class="account-action-arrow" aria-hidden="true">→</span>
+      </a>
+      {% endif %}
+
+      {% url 'usersessions_list' as usersessions_list_url %}
+      {% if usersessions_list_url %}
+      <a class="account-action" href="{{ usersessions_list_url }}">
+        <span class="account-action-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <rect x="3" y="4" width="18" height="12" rx="2"></rect>
+            <path d="M8 20h8"></path>
+            <path d="M12 16v4"></path>
+          </svg>
+        </span>
+        <span class="account-action-copy">
+          <span class="account-action-title">Sessions</span>
+          <span class="account-action-description">Review and end your active sessions.</span>
+        </span>
+        <span class="account-action-arrow" aria-hidden="true">→</span>
+      </a>
+      {% endif %}
+    </div>
+  </section>
+
+  {% url 'account_logout' as logout_url %}
+  {% if logout_url %}
+  <section class="account-section account-signout" aria-labelledby="account-signout-heading">
+    <h2 id="account-signout-heading">Sign out</h2>
+    <p class="account-section-note">
+      Sign out of the testbed on this device. You can sign back in at any time.
+    </p>
+    <a class="account-signout-button" href="{{ logout_url }}">Sign out</a>
+  </section>
+  {% endif %}
+</main>
+{% endblock content %}

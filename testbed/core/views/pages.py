@@ -2,6 +2,7 @@
 Standard Django page views — template rendering and redirect endpoints.
 
 Contains:
+- account_management: signed-in users' account actions
 - deactivate_account: staff-only action to deactivate a user account
 - trigger_account: stub form for triggering account copy
 - report_activity: stub form for reporting activity results
@@ -15,7 +16,7 @@ produce merge conflicts in the same file as these page views.
 import logging
 
 from django.contrib import messages
-from django.contrib.auth.decorators import user_passes_test
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.cache import never_cache
@@ -36,6 +37,11 @@ def deactivate_account(request, actor_id):
     actor.user.is_active = False
     actor.user.save()
     return redirect("admin:index")  # Redirect to admin interface
+
+
+@login_required
+def account_management(request):
+    return render(request, "account_management.html")
 
 
 def trigger_account(request):

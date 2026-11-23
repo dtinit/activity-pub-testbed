@@ -15,9 +15,11 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
+from allauth.account.views import confirm_email
+from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include
-from testbed.core.views import oauth_authorization_server_metadata
+from testbed.core.views import account_management, oauth_authorization_server_metadata
 from testbed.core.oauth import PortabilityAuthorizationView
 
 urlpatterns = [
@@ -31,6 +33,20 @@ urlpatterns = [
     ),
     # API-specific endpoints (prefixed with '/api/')
     path("api/", include("testbed.core.urls.api_urls")),
+    path("account/", account_management, name="account-management"),
+    # Allauth omits the link route when verification by code is enabled.
+    # Register it so verification emails can offer both a code and a link.
+    *(
+        [
+            path(
+                "account/confirm-email/<str:key>/",
+                confirm_email,
+                name="account_confirm_email",
+            )
+        ]
+        if getattr(settings, "ACCOUNT_EMAIL_VERIFICATION_BY_CODE_ENABLED", False)
+        else []
+    ),
     # allauth
     path("account/", include("allauth.urls")),
     # LOLA authorization override

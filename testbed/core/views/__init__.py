@@ -18,7 +18,13 @@ from .api import (
     portability_outbox_detail,
 )
 
-from .pages import deactivate_account, index, report_activity, trigger_account
+from .pages import (
+    account_management,
+    deactivate_account,
+    index,
+    report_activity,
+    trigger_account,
+)
 
 from .oauth_demo import (
     oauth_callback,
@@ -41,6 +47,7 @@ __all__ = [
     "blocked_collection",
     "object_detail",
     "oauth_authorization_server_metadata",
+    "account_management",
     "deactivate_account",
     "trigger_account",
     "report_activity",

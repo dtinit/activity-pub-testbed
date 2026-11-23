@@ -1,4 +1,212 @@
 .account {
+  max-width: 760px;
+  margin: 0 auto;
+
+  // Account management
+
+  .account-hero {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
+    border-bottom: 1px solid $border-color;
+  }
+
+  .account-avatar {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 3.25rem;
+    height: 3.25rem;
+    border: 1px solid rgba($primary, 0.25);
+    border-radius: 50%;
+    background: $info-background;
+    color: $primary;
+    font-size: 1.35rem;
+    font-weight: 700;
+  }
+
+  .account-subtitle {
+    margin-top: 0.15rem;
+    color: #555;
+    font-size: 0.95rem;
+  }
+
+  .account-section {
+    margin-top: 1.75rem;
+  }
+
+  .account-section h2 {
+    margin-bottom: 0.2rem;
+    font-size: 1.1rem;
+  }
+
+  .account-section-note {
+    margin-bottom: 0.9rem;
+    color: #555;
+    font-size: 0.92rem;
+  }
+
+  .account-action-list {
+    display: grid;
+    gap: 0.65rem;
+  }
+
+  .account-action {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid $border-color;
+    border-radius: $panel-radius;
+    background: $surface;
+    color: inherit;
+    text-decoration: none;
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease,
+      box-shadow 0.15s ease,
+      transform 0.15s ease;
+  }
+
+  .account-action:hover,
+  .account-action:focus-visible {
+    border-color: $primary;
+    background: $info-background;
+    color: inherit;
+    box-shadow: 0 2px 8px rgba($primary, 0.1);
+    transform: translateY(-1px);
+  }
+
+  .account-action-icon {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 50%;
+    background: $info-background;
+    color: $primary;
+  }
+
+  .account-action-icon svg,
+  .account-confirm-icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .account-action-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+  }
+
+  .account-action-title {
+    font-weight: 600;
+  }
+
+  .account-action-description {
+    color: #5f5f5f;
+    font-size: 0.9rem;
+  }
+
+  .account-action-arrow {
+    margin-left: auto;
+    color: #8a8a8a;
+    font-size: 1.1rem;
+    transition:
+      color 0.15s ease,
+      transform 0.15s ease;
+  }
+
+  .account-action:hover .account-action-arrow,
+  .account-action:focus-visible .account-action-arrow {
+    color: $primary;
+    transform: translateX(2px);
+  }
+
+  .account-signout {
+    padding-top: 1.5rem;
+    border-top: 1px solid $border-color;
+  }
+
+  // Used on the management page and the sign-out confirmation
+  .account-signout-button {
+    display: inline-block;
+    padding: 0.5em 1.25em;
+    border: 2px solid $error-text;
+    border-radius: $small-radius;
+    background: transparent;
+    color: $error-text;
+    font-weight: 500;
+    line-height: 1.5;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .account-signout-button:hover,
+  .account-signout-button:focus {
+    background: $error-text;
+    color: $surface;
+  }
+
+  // Sign-out confirmation
+
+  .account-signout-content {
+    text-align: center;
+  }
+
+  .account-confirm-icon {
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    margin: 0 auto 1rem;
+    border-radius: 50%;
+    background: $error-background;
+    color: $error-text;
+  }
+
+  .account-signout-content h1 {
+    margin-bottom: 0.35rem;
+    font-size: 1.5rem;
+  }
+
+  .account-signout-content p {
+    color: #555;
+  }
+
+  .account-confirm-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+
+  @media (max-width: 600px) {
+    .account-hero {
+      align-items: flex-start;
+    }
+
+    .account-avatar {
+      width: 2.75rem;
+      height: 2.75rem;
+      font-size: 1.15rem;
+    }
+
+    .account-action-arrow {
+      display: none;
+    }
+  }
+
   .note {
     background-color: $info-background;
     padding: 0.8em;
@@ -10,10 +218,9 @@
   // A form with field rows lays them out as two columns: labels as wide as the form's longest label, then the boxes
   form:has(> p > label:first-child) {
     display: grid;
-    grid-template-columns: max-content auto;
-    gap: 0.5em;
-    align-items: center;
-    justify-content: start;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.9em 1em;
+    align-items: start;
   }
 
   form:has(> p > label:first-child) > * {
@@ -28,22 +235,58 @@
 
   form > p > label:first-child {
     grid-column: 1;
+    padding-top: 0.55em;
+    font-weight: 600;
   }
 
   form > p > label:first-child + input {
     grid-column: 2;
-    justify-self: start;
+    justify-self: stretch;
+    width: 100%;
+    padding: 0.55em 0.7em;
+    border: 1px solid #bbb;
+    border-radius: $small-radius;
+    background: $surface;
+    font-size: 1rem;
   }
 
   .helptext,
-  form:has(> p > label:first-child) > ul {
+  form:has(> p > label:first-child) > ul:not(.errorlist) {
     grid-column: 2;
     font-size: 0.85em;
+    line-height: 1.45;
     color: #555;
   }
 
-  form:has(> p > label:first-child) > ul {
-    padding-left: 1.2em;
+  .helptext {
+    padding-top: 0.35em;
+  }
+
+  .helptext ul {
+    margin: 0;
+    padding-left: 1.1em;
+  }
+
+  .helptext li + li {
+    margin-top: 0.15em;
+  }
+
+  // Browsers close the field paragraph around the block-level password guidance,
+  // so style the list where it lands as a direct child of the form
+  form:has(> p > label:first-child) > ul:not(.errorlist) {
+    margin: 0;
+    padding-left: 2.2em;
+  }
+
+  // Form-wide errors appear before their field, as a full-width alert
+  form .errorlist {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    margin: 0;
+    padding: 0.65em 0.8em 0.65em 2.2em;
+    border-radius: $small-radius;
+    background: $error-background;
+    color: $error-text;
   }
 
   .helptext:empty,
@@ -59,8 +302,37 @@
     form > p > label:first-child,
     form > p > label:first-child + input,
     .helptext,
-    form:has(> p > label:first-child) > ul {
+    form:has(> p > label:first-child) > ul:not(.errorlist) {
       grid-column: 1;
     }
+
+    form .errorlist {
+      grid-column: 1;
+    }
+
+    form > p > label:first-child {
+      padding-top: 0;
+    }
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    .account-action,
+    .account-action-arrow {
+      transition: none;
+    }
+
+    .account-action:hover,
+    .account-action:focus-visible {
+      transform: none;
+    }
+
+    .account-action:hover .account-action-arrow,
+    .account-action:focus-visible .account-action-arrow {
+      transform: none;
+    }
+  }
+}
+
+.account.account-auth:has(> .account-signout-content) {
+  max-width: 480px;
 }
